@@ -26,10 +26,9 @@ public:
   Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const);
 
   double update(double error, double dt);
-
   void reset(double last_error);
-
   void setParams(double kp, double kd, double ki, double integral_saturation, double exp_filter_const);
+  bool isSaturated(void);
 
 private:
   double integral;
@@ -44,6 +43,8 @@ private:
   double integral_saturation;
   double saturation;
   double difference;
+
+  double saturated;
 
   std::string name;
 };
@@ -71,6 +72,8 @@ Pid::Pid(std::string name, double kp, double kd, double ki, double integral_satu
   this->integral   = 0;
   this->last_error = 0;
   this->difference = 0;
+
+  this->saturated = false;
 }
 
 double Pid::update(double error, double dt) {
@@ -87,7 +90,6 @@ double Pid::update(double error, double dt) {
   double control_output = p_component + d_component + i_component;
 
   // saturate the control output
-  bool saturated = false;
   if (!std::isfinite(control_output)) {
     control_output = 0;
     ROS_WARN_THROTTLE(1.0, "[PidController]: NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
@@ -115,19 +117,19 @@ double Pid::update(double error, double dt) {
   }
 
   // saturate the integral
-  saturated = false;
+  double integral_saturated = false;
   if (!std::isfinite(integral)) {
     integral = 0;
     ROS_WARN_THROTTLE(1.0, "[PidController]: NaN detected in variable \"integral\", setting it to 0 and returning!!!");
   } else if (integral > integral_saturation) {
-    integral  = integral_saturation;
-    saturated = true;
+    integral           = integral_saturation;
+    integral_saturated = true;
   } else if (integral < -integral_saturation) {
-    integral  = -integral_saturation;
-    saturated = true;
+    integral           = -integral_saturation;
+    integral_saturated = true;
   }
 
-  if (saturated) {
+  if (integral_saturation && integral_saturated) {
     ROS_WARN_THROTTLE(1.0, "[PidController]: The \"%s\" PID's integral is being saturated!", name.c_str());
   }
 
@@ -139,6 +141,12 @@ void Pid::reset(double last_error) {
   this->integral   = 0;
   this->difference = 0;
   this->last_error = last_error;
+  this->saturated  = false;
+}
+
+bool Pid::isSaturated(void) {
+
+  return saturated;
 }
 
 //}
@@ -177,6 +185,7 @@ private:
   Pid *pid_z;
 
   double uav_mass_;
+  double uav_mass_difference;
   double g_;
   double hover_thrust_a_, hover_thrust_b_;
   double hover_thrust;
@@ -185,8 +194,10 @@ private:
 
   // gains
   double kpxy_, kixy_, kdxy_;
-  double kpz_, kiz_, kdz_;
-  double kixy_lim_, kiz_lim_;
+  double kpz_, kdz_;
+  double kixy_lim_;
+
+  double km_, km_lim_;
 
   double max_tilt_angle_;
   double exp_;
@@ -216,14 +227,14 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
   kixy_     = config.kixy;
   kpz_      = config.kpz;
   kdz_      = config.kdz;
-  kiz_      = config.kiz;
   kixy_lim_ = config.kixy_lim;
-  kiz_lim_  = config.kiz_lim;
   exp_      = config.exp;
+  km_lim_   = config.km_lim;
+  km_       = config.km;
 
   pid_pitch->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
   pid_roll->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
-  pid_z->setParams(kpz_, kdz_, kiz_, kiz_lim_, exp_);
+  pid_z->setParams(kpz_, kdz_, 0, 0, exp_);
 }
 
 //}
@@ -249,9 +260,9 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   nh_.param("kixy", kixy_, -1.0);
   nh_.param("kpz", kpz_, -1.0);
   nh_.param("kdz", kdz_, -1.0);
-  nh_.param("kiz", kiz_, -1.0);
+  nh_.param("km", km_, -1.0);
   nh_.param("kixy_lim", kixy_lim_, -1.0);
-  nh_.param("kiz_lim", kiz_lim_, -1.0);
+  nh_.param("km_lim", km_lim_, -1.0);
   nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
   nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
   nh_.param("uav_mass", uav_mass_, -1.0);
@@ -283,8 +294,8 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  if (kiz_ < 0) {
-    ROS_ERROR("[PidController]: kiz is not specified!");
+  if (km_ < 0) {
+    ROS_ERROR("[PidController]: km is not specified!");
     ros::shutdown();
   }
 
@@ -293,8 +304,8 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  if (kiz_lim_ < 0) {
-    ROS_ERROR("[PidController]: kiz_lim is not specified!");
+  if (km_lim_ < 0) {
+    ROS_ERROR("[PidController]: km_lim is not specified!");
     ros::shutdown();
   }
 
@@ -334,8 +345,11 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
 
   ROS_INFO("[PidController]: PidController was launched with gains:");
   ROS_INFO("[PidController]: horizontal: kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kdxy_, kixy_, kixy_lim_);
-  ROS_INFO("[PidController]: vertical:   kpz: %3.5f, kdz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kdz_, kiz_, kiz_lim_);
+  ROS_INFO("[PidController]: vertical:   kpz: %3.5f, kdz: %3.5f", kpz_, kdz_);
+  ROS_INFO("[PidController]: mass:       km: %3.5f, km_lim: %3.5f", km_, km_lim_);
   ROS_INFO("[PidController]: other:      exp: %3.5f", exp_);
+
+  uav_mass_difference = 0;
 
   // --------------------------------------------------------------
   // |                 calculate the hover thrust                 |
@@ -349,7 +363,7 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
 
   pid_pitch = new Pid("x", kpxy_, kdxy_, kixy_, kixy_lim_, max_tilt_angle_, exp_);
   pid_roll  = new Pid("y", kpxy_, kdxy_, kixy_, kixy_lim_, max_tilt_angle_, exp_);
-  pid_z     = new Pid("z", kpz_, kdz_, kiz_, kiz_lim_, 1.0, exp_);
+  pid_z     = new Pid("z", kpz_, kdz_, 0, 0, 1.0, exp_);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -360,9 +374,9 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   last_drs_config.kixy     = kixy_;
   last_drs_config.kpz      = kpz_;
   last_drs_config.kdz      = kdz_;
-  last_drs_config.kiz      = kiz_;
+  last_drs_config.km       = km_;
   last_drs_config.kixy_lim = kixy_lim_;
-  last_drs_config.kiz_lim  = kiz_lim_;
+  last_drs_config.km_lim   = km_lim_;
   last_drs_config.exp      = exp_;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
@@ -384,7 +398,15 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
 
 bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
-  activation_control_command_ = *cmd;
+  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+    activation_control_command_ = mrs_msgs::AttitudeCommand();
+    uav_mass_difference         = 0;
+    ROS_WARN("[PidController]: activated without getting the last tracker's command.");
+  } else {
+    activation_control_command_ = *cmd;
+    uav_mass_difference         = cmd->mass_difference;
+    ROS_INFO("[PidController]: activated with a last trackers command.");
+  }
 
   first_iteration = true;
 
@@ -399,7 +421,8 @@ bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
 void PidController::deactivate(void) {
 
-  first_iteration = false;
+  first_iteration     = false;
+  uav_mass_difference = 0;
 
   ROS_INFO("[PidController]: deactivated");
 }
@@ -472,6 +495,40 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
+  // |                recalculate the hover thrust                |
+  // --------------------------------------------------------------
+
+  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * hover_thrust_a_ + hover_thrust_b_;
+
+  // --------------------------------------------------------------
+  // |                integrate the mass difference               |
+  // --------------------------------------------------------------
+
+  if (!pid_z->isSaturated()) {
+
+    uav_mass_difference += km_ * error_z * dt;
+  }
+
+  // saturate the integral
+  bool uav_mass_saturated = false;
+  if (!std::isfinite(uav_mass_difference)) {
+    uav_mass_difference = 0;
+    ROS_WARN_THROTTLE(1.0, "[PidController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
+  } else if (uav_mass_difference > km_lim_) {
+    uav_mass_difference = km_lim_;
+    uav_mass_saturated  = true;
+  } else if (uav_mass_difference < -km_lim_) {
+    uav_mass_difference = -km_lim_;
+    uav_mass_saturated  = true;
+  }
+
+  if (uav_mass_saturated) {
+    ROS_WARN_THROTTLE(1.0, "[PidController]: The uav_mass_difference is being saturated!");
+  }
+
+  ROS_INFO_THROTTLE(1.0, "[PidController]: uav_mass_difference=%2.2f", uav_mass_difference);
+
+  // --------------------------------------------------------------
   // |                     calculate the PIDs                     |
   // --------------------------------------------------------------
 
@@ -486,6 +543,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   output_command->roll   = action_roll * cos(yaw) + action_pitch * sin(yaw);
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
+
+  output_command->mass_difference = uav_mass_difference;
 
   last_output_command = output_command;
 
