@@ -1,0 +1,10 @@
+
+# ignore temp files
+*~
+
+# ignore vim temp files
+*.swp
+*.swo
+
+# Runtime-python
+*.pyc
