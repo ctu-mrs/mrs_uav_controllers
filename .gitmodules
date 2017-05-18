@@ -1,0 +1,3 @@
+[submodule "ros_nodes/mrs_msgs"]
+	path = pes/ros_nodes/mrs_msgs
+	url = git@mrs.felk.cvut.cz:uav/mrs_msgs
