@@ -4,3 +4,6 @@
 [submodule "utils/tmuxinator"]
 	path = pes/utils/tmuxinator
 	url = https://github.com/tmuxinator/tmuxinator
+[submodule "ros_packages/mrs_msgs"]
+	path = pes/ros_packages/mrs_msgs
+	url = https://mrs.felk.cvut.cz/gitlab/uav/mrs_msgs.git
