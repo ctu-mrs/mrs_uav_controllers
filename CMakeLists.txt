@@ -15,10 +15,11 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_msgs
   dynamic_reconfigure
   mrs_uav_manager
+  message_generation
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/Settings.cfg
+  cfg/pid_gains.cfg
   )
 
 add_message_files(
@@ -60,6 +61,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
 
 add_library(pid_controller src/pid_controller.cpp)

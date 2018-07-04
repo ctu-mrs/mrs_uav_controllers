@@ -23,7 +23,10 @@
   <build_depend>quadrotor_msgs</build_depend>
   <build_depend>mrs_msgs</build_depend>
   <build_depend>mrs_uav_manager</build_depend>
-
+  <build_depend>message_generation</build_depend> 
+  <build_depend>dynamic_reconfigure</build_depend>
+  
+  <run_depend>message_generation</run_depend>
   <run_depend>geometry_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>roscpp</run_depend>
@@ -34,6 +37,7 @@
   <run_depend>mrs_msgs</run_depend>
   <run_depend>message_runtime</run_depend>
   <run_depend>mrs_uav_manager</run_depend>
+  <run_depend>dynamic_reconfigure</run_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
