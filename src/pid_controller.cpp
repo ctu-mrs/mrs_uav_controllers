@@ -101,7 +101,7 @@ void InputManage2(const nav_msgs::Odometry &odom) {
       odo.pose.pose.orientation = odom.pose.pose.orientation;
       odo.twist.twist.linear    = odom.twist.twist.linear;
       odo.twist.twist.angular   = odom.twist.twist.angular;
-      //    mrs_msgs::PositionCommand::ConstPtr cmd_ptr(new mrs_msgs::PositionCommand(cmdf));
+      // mrs_uav_manager::PositionCommand::ConstPtr cmd_ptr(new mrs_msgs::PositionCommand(cmdf));
       nav_msgs::Odometry::ConstPtr        odo_ptr(new nav_msgs::Odometry(odo));
       mrs_msgs::PositionCommand::ConstPtr cmd;
       for (int i = 0; i < Trackers.size(); ++i) {
@@ -169,6 +169,7 @@ void InputManage(const geometry_msgs::PoseStamped &pose) {
 }
 
 using namespace std;
+
 void PidController::onInit() {
 
   // initialize node and create no handle

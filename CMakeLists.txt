@@ -69,13 +69,12 @@ add_library(pid_controller src/pid_controller.cpp)
 add_dependencies(pid_controller
   ${${PROJECT_NAME}_EXPORTED_TARGETS} 
   ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
   )
 
 target_link_libraries(pid_controller
   ${catkin_LIBRARIES}
   )
-
-add_dependencies(pid_controller ${PROJECT_NAME}_gencfg)
 
 install(TARGETS
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
