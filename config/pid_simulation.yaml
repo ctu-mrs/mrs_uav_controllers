@@ -1,10 +1,11 @@
-Kp: 1.0
-Kd: 0.08
-Ki: 0.00075
+kpxy: 1.0
+kdxy: 0.08
+kixy: 0.00075
 
-KpA: 0.04
-KdA: 0.009
-KiA: 0.0001
+kpz: 0.04
+kdz: 0.009
+kiz: 0.0001
 
-thrust_hover: 0.375
-SmallKpA: 0.0
+hover_thrust: 0.375
+
+max_tilt_angle: 15 # [deg]
