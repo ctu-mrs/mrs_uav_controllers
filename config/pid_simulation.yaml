@@ -1,0 +1,10 @@
+Kp: 1.0
+Kd: 0.08
+Ki: 0.00075
+
+KpA: 0.04
+KdA: 0.009
+KiA: 0.0001
+
+thrustHover: 0.375
+SmallKpA: 0.0
