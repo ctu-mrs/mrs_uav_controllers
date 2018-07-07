@@ -10,7 +10,6 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   std_msgs
   nav_msgs
-  mrs_estimation
   cmake_modules
   mrs_msgs
   dynamic_reconfigure
@@ -44,7 +43,6 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 ###################################
 
 catkin_package(
-  INCLUDE_DIRS include
   CATKIN_DEPENDS message_runtime roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager
   DEPENDS Eigen
   )
@@ -57,25 +55,26 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
-  include
   ${catkin_INCLUDE_DIRS}
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
 
-add_library(pid_controller src/pid_controller.cpp)
+add_library(PidController
+  src/pid_controller/pid_controller.cpp
+  )
 
-add_dependencies(pid_controller
+add_dependencies(PidController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(pid_controller
+target_link_libraries(PidController
   ${catkin_LIBRARIES}
   )
 
 install(TARGETS
-  pid_controller
+  PidController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
