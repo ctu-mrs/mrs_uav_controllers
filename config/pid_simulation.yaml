@@ -1,10 +1,10 @@
-kpxy: 1.0
-kdxy: 0.08
-kixy: 0.00075
+kpxy: 3.0
+kdxy: 0.0
+kixy: 0.0
 
-kpz: 0.04
-kdz: 0.009
-kiz: 0.0001
+kpz: 0.1
+kdz: 0.1
+kiz: 0.0
 
 hover_thrust: 0.375
 

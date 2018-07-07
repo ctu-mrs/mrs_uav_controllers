@@ -61,19 +61,22 @@ Pid::Pid(std::string name, double kp, double kd, double ki, double integral_satu
 
 double Pid::update(double error, double dt) {
 
-  ROS_INFO("PidController: pid: update starts: integral=%f", integral);
-
   // calculate the filtered difference
-  double difference = exp_filter_const * last_error + (1 - exp_filter_const) * ((last_error - error) / dt);
+  double difference = exp_filter_const * last_error + (1 - exp_filter_const) * ((error - last_error) / dt);
+  last_error        = error;
+
+  ROS_INFO("%s error=%f", name.c_str(), error);
 
   // calculate the pid action
-  double control_output = kp * error + kd + difference + ki + integral;
+  double control_output = kp * error + kd * difference + ki * integral;
+
+  ROS_INFO("%s output=%f", name.c_str(), control_output);
 
   // saturate the control output
   bool saturated = false;
   if (!std::isfinite(control_output)) {
     control_output = 0;
-    ROS_ERROR("NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
+    ROS_WARN_THROTTLE(1.0, "NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
   } else if (control_output > saturation) {
     control_output = saturation;
     saturated      = true;
@@ -100,7 +103,7 @@ double Pid::update(double error, double dt) {
   saturated = false;
   if (!std::isfinite(integral)) {
     integral = 0;
-    ROS_ERROR("NaN detected in variable \"integral\", setting it to 0 and returning!!!");
+    ROS_WARN_THROTTLE(1.0, "NaN detected in variable \"integral\", setting it to 0 and returning!!!");
   } else if (integral > integral_saturation) {
     integral  = integral_saturation;
     saturated = true;
@@ -110,11 +113,8 @@ double Pid::update(double error, double dt) {
   }
 
   if (saturated) {
-    ROS_WARN("The '%s' PID's integral is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "The '%s' PID's integral is being saturated!", name.c_str());
   }
-
-  ROS_INFO("PidController: pid: update ends: integral=%f", integral);
-  ROS_INFO("control_output: %f", control_output);
 
   return control_output;
 }
@@ -139,6 +139,8 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr status();
 
+  void dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
+
 private:
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -148,8 +150,8 @@ private:
   typedef mrs_controllers::pid_gainsConfig    Config;
   typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
   boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-  mrs_controllers::pid_gainsConfig            last_drs_config;
-  void dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
+  void drs_callback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
+  mrs_controllers::pid_gainsConfig last_drs_config;
 
 private:
   Pid *pid_x;
@@ -176,7 +178,7 @@ PidController::PidController(void) {
 
 void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level) {
 
-  ROS_INFO("Controller gains were kpxy: %3.5f, kixy: %3.5f, kdxy: %3.5f,kpz: %3.5f, kiz: %3.5f, kdz: %3.5f", kpxy_, kixy_, kdxy_, kpz_, kiz_, kdz_);
+  ROS_INFO("Controller gains were kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kpz: %3.5f, kdz: %3.5f, kiz: %3.5f", kpxy_, kdxy_, kixy_, kpz_, kdz_, kiz_);
   kpxy_         = config.kpxy;
   kdxy_         = config.kdxy;
   kixy_         = config.kixy;
@@ -184,7 +186,7 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
   kdz_          = config.kdz;
   kiz_          = config.kiz;
   hover_thrust_ = config.hover_thrust;
-  ROS_INFO("Controller gains ARE kpxy: %3.5f, kixy: %3.5f, kdxy: %3.5f,kpz: %3.5f, kiz: %3.5f, kdz: %3.5f", kpxy_, kixy_, kdxy_, kpz_, kiz_, kdz_);
+  ROS_INFO("Controller gains ARE kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kpz: %3.5f, kdz: %3.5f, kiz: %3.5f", kpxy_, kdxy_, kixy_, kpz_, kdz_, kiz_);
 }
 
 bool PidController::Activate(void) {
@@ -269,31 +271,31 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  dynamic_reconfigure::Server<mrs_controllers::pid_gainsConfig>               server(config_mutex_);
-  dynamic_reconfigure::Server<mrs_controllers::pid_gainsConfig>::CallbackType f;
+  /* dynamic_reconfigure::Server<mrs_controllers::pid_gainsConfig>               server(config_mutex_); */
+  /* dynamic_reconfigure::Server<mrs_controllers::pid_gainsConfig>::CallbackType f; */
 
-  f = boost::bind(&PidController::dynamicReconfigureCallback, this, _1, _2);
-  server.setCallback(f);
-  mrs_controllers::pid_gainsConfig conf;
-  conf.kpxy         = kpxy_;
-  conf.kdxy         = kdxy_;
-  conf.kixy         = kixy_;
-  conf.kpz          = kpz_;
-  conf.kdz          = kdz_;
-  conf.kiz          = kiz_;
-  conf.hover_thrust = hover_thrust_;
+  /* mrs_controllers::pid_gainsConfig conf; */
 
-  config_mutex_.lock();
-  server.updateConfig(conf);
-  config_mutex_.unlock();
+  last_drs_config.kpxy         = kpxy_;
+  last_drs_config.kdxy         = kdxy_;
+  last_drs_config.kixy         = kixy_;
+  last_drs_config.kpz          = kpz_;
+  last_drs_config.kdz          = kdz_;
+  last_drs_config.kiz          = kiz_;
+  last_drs_config.hover_thrust = hover_thrust_;
+
+  reconfigure_server_.reset(new ReconfigureServer(config_mutex_, priv_nh));
+  reconfigure_server_->updateConfig(last_drs_config);
+  ReconfigureServer::CallbackType f = boost::bind(&PidController::dynamicReconfigureCallback, this, _1, _2);
+  reconfigure_server_->setCallback(f);
 
   // --------------------------------------------------------------
   // |                       initialize pids                      |
   // --------------------------------------------------------------
 
-  pid_x = new Pid("x", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.95);
-  pid_y = new Pid("y", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.95);
-  pid_z = new Pid("z", kpz_, kdz_, kiz_, 0.1, 1.0, 0.95);
+  pid_x = new Pid("x", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
+  pid_y = new Pid("y", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
+  pid_z = new Pid("z", kpz_, kdz_, kiz_, 0.1, 1.0, 0.99);
 }
 
 const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
@@ -306,8 +308,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   double error_x = reference->position.x - odometry->pose.pose.position.x;
   double error_y = reference->position.y - odometry->pose.pose.position.y;
   double error_z = reference->position.z - odometry->pose.pose.position.z;
-
-  ROS_INFO("PidController: Errors calculated");
 
   // --------------------------------------------------------------
   // |                      calculate the dt                      |
@@ -330,9 +330,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
   } else {
 
-    dt = (ros::Time::now() - last_update).toSec();
+    dt          = (ros::Time::now() - last_update).toSec();
     last_update = ros::Time::now();
-    ROS_INFO("PidController: dt=%f", dt);
   }
 
   if (dt <= 0.001) {
@@ -343,8 +342,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   // --------------------------------------------------------------
   // |                 calculate the euler angles                 |
   // --------------------------------------------------------------
-
-  ROS_INFO("PidController: calculating the euler angles");
 
   double         yaw, pitch, roll;
   tf::Quaternion quaternion_odometry;
@@ -358,12 +355,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
   double action_x = pid_x->update(error_x, dt);
   double action_y = pid_y->update(error_y, dt);
-  double action_z = pid_z->update(error_z, dt) * (1 / ((cos(roll) * cos(pitch)))) + hover_thrust_;
+  double action_z = (pid_z->update(error_z, dt) + hover_thrust_) * (1 / ((cos(roll) * cos(pitch))));
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  ROS_INFO("yaw=%f", yaw);
+  /* ROS_INFO("yaw=%f", yaw); */
 
   output_command->pitch  = action_x * cos(yaw) - action_y * sin(yaw);
   output_command->roll   = action_y * cos(yaw) + action_x * sin(yaw);
