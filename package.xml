@@ -13,6 +13,7 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
+  <build_depend>pluginlib</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
@@ -26,6 +27,7 @@
   <build_depend>message_generation</build_depend> 
   <build_depend>dynamic_reconfigure</build_depend>
   
+  <run_depend>pluginlib</run_depend>
   <run_depend>message_generation</run_depend>
   <run_depend>geometry_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
@@ -42,5 +44,7 @@
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->
+    <mrs_uav_manager plugin="${prefix}/pid_controller.xml" />
+
   </export>
 </package>

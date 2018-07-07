@@ -26,6 +26,7 @@ add_message_files(
   FILES
   debug.msg
   )
+
 generate_messages(
   DEPENDENCIES
   std_msgs
@@ -44,11 +45,8 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 
 catkin_package(
   INCLUDE_DIRS include
-  #  LIBRARIES cross_detector
   CATKIN_DEPENDS message_runtime roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager
-  #  DEPENDS system_libi
   DEPENDS Eigen
-  LIBRARIES PidController
   )
 
 ###########
@@ -67,7 +65,7 @@ include_directories(
 add_library(pid_controller src/pid_controller.cpp)
 
 add_dependencies(pid_controller
-  ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
@@ -77,6 +75,7 @@ target_link_libraries(pid_controller
   )
 
 install(TARGETS
+  pid_controller
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -90,4 +89,10 @@ install(DIRECTORY include/${PROJECT_NAME}/
 
 install(DIRECTORY doc
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  )
+
+install(FILES
+  pid_controller.xml
+  DESTINATION
+  ${CATKIN_PACKAGE_SHARE_DESTINATION}
   )

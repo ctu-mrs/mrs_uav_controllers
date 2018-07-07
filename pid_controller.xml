@@ -1,0 +1,5 @@
+<library path="lib/libPidController">
+  <class name="mrs_controllers/PidController" type="mrs_controllers::PidController" base_class_type="mrs_uav_manager::Controller">
+    <description>This is PID controller.</description>
+  </class>
+</library>

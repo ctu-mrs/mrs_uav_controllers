@@ -1,61 +1,83 @@
-#include <ros/ros.h>
 #include <ros/package.h>
+#include <ros/ros.h>
 
 #include <dynamic_reconfigure/server.h>
-#include <tf/transform_datatypes.h>
-#include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <mavros_msgs/AttitudeTarget.h>
+#include <nav_msgs/Odometry.h>
+#include <tf/transform_datatypes.h>
 
 #include <pluginlib/class_list_macros.h>
 #include <pluginlib/class_loader.h>
 
-#include <nodelet/nodelet.h>
 #include <nodelet/loader.h>
+#include <nodelet/nodelet.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fstream>
 #include <iostream>
 #include <list>
-#include <math.h>
 
-#include <mrs_controllers/pid_gainsConfig.h>
 #include <mrs_controllers/debug.h>
+#include <mrs_controllers/pid_gainsConfig.h>
+#include <mrs_msgs/ControllerStatus.h>
 #include <mrs_msgs/TrackerPointStamped.h>
-#include <mrs_uav_manager/Tracker.h>
+#include <mrs_uav_manager/Controller.h>
 
-#include <pid_controller.h>
+#include <dynamic_reconfigure/server.h>
+#include <mrs_controllers/pid_gainsConfig.h>
+#include <std_srvs/SetBool.h>
 
-PLUGINLIB_EXPORT_CLASS(PidController, nodelet::Nodelet)
 using namespace std;
 
-tf::Quaternion q_orig, q_rot;
-ros::Publisher cmd_publisher;
+namespace mrs_controllers
+{
 
-ros::Publisher  debugPub;
-ros::Subscriber input_subscriber;
-ros::Subscriber input_subscriber2;
-ros::Subscriber input_points;
-double          x, y, z, TH;
-double          roll, pitch, yaw, yawD, oldPitch;
-double          elx, ely, elz, lz, lx, ly, SmallKpA;
-double          ez, ex, ey, dez, dex, dey, dz, dx, dy, iez, iex, iey;
-// ofstream myfile,myfile2,myfile3;
-double      hz = 200;
-double      Kp, KI, Kd;
-double      KpA, KIA, KdA;
-double      dT = 1 / hz;
-int         aTracker;
-std::string tracker_list;
-double      setPointZ = 3, setPointX = 2, setPointY = 2;
-// for trackers
-bool trackerReady = false;
-// boost::shared_ptr <mrs_uav_manager::Tracker> tracker;
-std::vector<boost::shared_ptr<mrs_uav_manager::Tracker>> Trackers;
-mrs_msgs::PositionCommand::ConstPtr                      lastCommand;
-std::vector<std::string>                                 vectorOfTrackers;
-double IsReal(double number) {
+class PIDControllClass : public mrs_uav_manager::Controller {
+public:
+  virtual void onInit();
+  virtual bool SwitchState(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
+  virtual bool AngleSwitchState(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
+
+  boost::recursive_mutex                      config_mutex_;
+  typedef mrs_controllers::pid_gainsConfig    Config;
+  typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
+  boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
+  void drs_callback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
+  mrs_controllers::pid_gainsConfig last_drs_config;
+
+private:
+  tf::Quaternion q_orig, q_rot;
+  ros::Publisher cmd_publisher;
+
+  ros::Publisher  debugPub;
+  ros::Subscriber input_subscriber;
+  ros::Subscriber input_subscriber2;
+  ros::Subscriber input_points;
+  double          x, y, z, TH;
+  double          roll, pitch, yaw, yawD, oldPitch;
+  double          elx, ely, elz, lz, lx, ly, SmallKpA;
+  double          ez, ex, ey, dez, dex, dey, dz, dx, dy, iez, iex, iey;
+  // ofstream myfile,myfile2,myfile3;
+  double      hz = 200;
+  double      Kp, KI, Kd;
+  double      KpA, KIA, KdA;
+  double      dT = 1 / hz;
+  int         aTracker;
+  std::string tracker_list;
+  double      setPointZ = 3, setPointX = 2, setPointY = 2;
+  // for trackers
+  bool trackerReady = false;
+  // boost::shared_ptr <mrs_uav_manager::Tracker> tracker;
+  std::vector<boost::shared_ptr<mrs_uav_manager::Tracker>> Trackers;
+  mrs_msgs::PositionCommand::ConstPtr                      lastCommand;
+  std::vector<std::string>                                 vectorOfTrackers;
+}
+
+double
+IsReal(double number) {
   if (isnan(number) || number == INFINITY)
     return 0;
   return number;
@@ -84,13 +106,13 @@ void SetGainsDRS(mrs_controllers::pid_gainsConfig &config, uint32_t level) {
     TH       = config.trustHover;
     SmallKpA = config.Pags;
     ROS_INFO("Controller constants ARE Kp: %3.5f, KI: %3.5f, Kd: %3.5f,KpA: %3.5f, KIA: %3.5f, KdA: %3.5f", Kp, KI, Kd, KpA, KIA, KdA);
-
   }
 }
 
 double lastTime;
 
 void InputManage2(const nav_msgs::Odometry &odom) {
+
   if (trackerReady) {
 
     try {
@@ -302,7 +324,7 @@ void PidController::onInit() {
 
     ros::spinOnce();
     mavros_msgs::AttitudeTarget newCommand;
-    mrs_controllers::debug          debugmsg;
+    mrs_controllers::debug      debugmsg;
     newCommand.header.stamp = ros::Time::now();
     newCommand.type_mask    = 0;
 
@@ -397,3 +419,7 @@ void PidController::onInit() {
     r.sleep();
   }
 }
+}
+
+#include <pluginlib/class_list_macros.h>
+PLUGINLIB_EXPORT_CLASS(mrs_controllers::PidController, mrs_uav_manager::Controller)
