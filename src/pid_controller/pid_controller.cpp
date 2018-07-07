@@ -29,6 +29,8 @@ public:
 
   void reset(double last_error);
 
+  void setGains(double kp, double kd, double ki);
+
 private:
   double integral;
   double last_error;
@@ -43,6 +45,13 @@ private:
 
   std::string name;
 };
+
+void Pid::setGains(double kp, double kd, double ki) {
+
+  this->kp = kp;
+  this->kd = kd;
+  this->ki = ki;
+}
 
 Pid::Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const) {
 
@@ -65,12 +74,12 @@ double Pid::update(double error, double dt) {
   double difference = exp_filter_const * last_error + (1 - exp_filter_const) * ((error - last_error) / dt);
   last_error        = error;
 
-  ROS_INFO("%s error=%f", name.c_str(), error);
+  /* ROS_INFO("%s error=%f", name.c_str(), error); */
 
   // calculate the pid action
   double control_output = kp * error + kd * difference + ki * integral;
 
-  ROS_INFO("%s output=%f", name.c_str(), control_output);
+  /* ROS_INFO("%s output=%f", name.c_str(), control_output); */
 
   // saturate the control output
   bool saturated = false;
@@ -86,7 +95,7 @@ double Pid::update(double error, double dt) {
   }
 
   if (saturated) {
-    ROS_WARN("The '%s' PID is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "The '%s' PID is being saturated!", name.c_str());
 
     // integrate only in the direction oposite to the saturation (antiwindup)
     if (control_output > 0 && error < 0) {
@@ -187,6 +196,10 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
   kiz_          = config.kiz;
   hover_thrust_ = config.hover_thrust;
   ROS_INFO("Controller gains ARE kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kpz: %3.5f, kdz: %3.5f, kiz: %3.5f", kpxy_, kdxy_, kixy_, kpz_, kdz_, kiz_);
+
+  pid_x->setGains(kpxy_, kdxy_, kixy_);
+  pid_y->setGains(kpxy_, kdxy_, kixy_);
+  pid_z->setGains(kpz_, kdz_, kiz_);
 }
 
 bool PidController::Activate(void) {
@@ -268,13 +281,16 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   ROS_INFO("vertical:   kpz: %3.5f, kdz: %3.5f, kiz: %3.5f", kpz_, kdz_, kiz_);
 
   // --------------------------------------------------------------
-  // |                     dynamic reconfigure                    |
+  // |                       initialize pids                      |
   // --------------------------------------------------------------
 
-  /* dynamic_reconfigure::Server<mrs_controllers::pid_gainsConfig>               server(config_mutex_); */
-  /* dynamic_reconfigure::Server<mrs_controllers::pid_gainsConfig>::CallbackType f; */
+  pid_x = new Pid("x", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
+  pid_y = new Pid("y", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
+  pid_z = new Pid("z", kpz_, kdz_, kiz_, 0.1, 1.0, 0.99);
 
-  /* mrs_controllers::pid_gainsConfig conf; */
+  // --------------------------------------------------------------
+  // |                     dynamic reconfigure                    |
+  // --------------------------------------------------------------
 
   last_drs_config.kpxy         = kpxy_;
   last_drs_config.kdxy         = kdxy_;
@@ -289,13 +305,6 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   ReconfigureServer::CallbackType f = boost::bind(&PidController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
 
-  // --------------------------------------------------------------
-  // |                       initialize pids                      |
-  // --------------------------------------------------------------
-
-  pid_x = new Pid("x", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
-  pid_y = new Pid("y", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
-  pid_z = new Pid("z", kpz_, kdz_, kiz_, 0.1, 1.0, 0.99);
 }
 
 const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
