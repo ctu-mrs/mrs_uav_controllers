@@ -34,7 +34,7 @@ namespace mrs_controllers
 
       PidController(void);
 
-      void Initialize(const ros::NodeHandle &priv_nh, const ros::NodeHandle &parent_nh);
+      void Initialize(const ros::NodeHandle &parent_nh);
       bool Activate(void);
       void Deactivate(void);
 
@@ -96,52 +96,10 @@ namespace mrs_controllers
     KpA      = config.Pa;
     KdA      = config.Da;
     KIA      = config.Ia;
-    TH       = config.trustHover;
+    TH       = config.thrustHover;
     SmallKpA = config.Pags;
     ROS_INFO("Controller constants ARE Kp: %3.5f, KI: %3.5f, Kd: %3.5f,KpA: %3.5f, KIA: %3.5f, KdA: %3.5f", Kp, KI, Kd, KpA, KIA, KdA);
   }
-
-  /* void PidController::InputManage2(const nav_msgs::OdometryConstPtr &odom) { */
-
-  /*   if (trackerReady) { */
-
-  /*     try { */
-
-  /*       nav_msgs::Odometry odo; */
-  /*       odo.header.stamp          = ros::Time::now(); */
-  /*       odo.pose.pose.position    = odom.pose.pose.position; */
-  /*       odo.pose.pose.orientation = odom.pose.pose.orientation; */
-  /*       odo.twist.twist.linear    = odom.twist.twist.linear; */
-  /*       odo.twist.twist.angular   = odom.twist.twist.angular; */
-  /*       // mrs_uav_manager::PositionCommand::ConstPtr cmd_ptr(new mrs_msgs::PositionCommand(cmdf)); */
-  /*       nav_msgs::Odometry::ConstPtr        odo_ptr(new nav_msgs::Odometry(odo)); */
-  /*       mrs_msgs::PositionCommand::ConstPtr cmd; */
-
-  /*       for (int i = 0; i < Trackers.size(); ++i) { */
-  /*         if (i == aTracker) { */
-  /*           cmd = (*Trackers[i]).update(odo_ptr); */
-  /*         } else { */
-  /*           (*Trackers[i]).update(odo_ptr); */
-  /*         } */
-  /*       } */
-
-  /*       lastCommand = cmd; */
-
-  /*       if (mrs_msgs::PositionCommand::Ptr() != cmd) { */
-  /*         yawD      = cmd->yaw; */
-  /*         setPointX = cmd->position.x; */
-  /*         setPointY = cmd->position.y; */
-  /*         setPointZ = cmd->position.z; */
-  /*       } else { */
-  /*         ROS_DEBUG_THROTTLE(2, "Nothing to command"); */
-  /*       } */
-  /*     } */
-  /*     catch (std::runtime_error &exrun) { */
-  /*       ROS_INFO("MPC tracker NOT initialized"); */
-  /*       ROS_ERROR("Exeption: %s", exrun.what()); */
-  /*     } */
-  /*   } */
-  /* } */
 
   /* void PidController::InputManage(const geometry_msgs::PoseStampedConstPtr &pose) { */
 
@@ -191,9 +149,11 @@ namespace mrs_controllers
   void PidController::Deactivate(void) {
   }
 
-  void PidController::Initialize(const ros::NodeHandle &nh_, const ros::NodeHandle &parent_nh) {
+  void PidController::Initialize(const ros::NodeHandle &parent_nh) {
 
-    ros::NodeHandle priv_nh(nh_, "pid_controller");
+    ros::NodeHandle priv_nh(parent_nh, "pid_controller");
+
+    ros::Time::waitForValid();
 
     double u;
 
@@ -205,14 +165,54 @@ namespace mrs_controllers
 
     debugPub = priv_nh.advertise<mrs_controllers::debug>("debug", 1);
 
-    priv_nh.getParam("Kp", Kp);
-    priv_nh.getParam("Ki", KI);
-    priv_nh.getParam("Kd", Kd);
-    priv_nh.getParam("KpA", KpA);
-    priv_nh.getParam("KiA", KIA);
-    priv_nh.getParam("KdA", KdA);
-    priv_nh.getParam("trustHover", TH);
-    priv_nh.getParam("SmallKpA", SmallKpA);
+    priv_nh.param("Kp", Kp, -1.0);
+    priv_nh.param("Ki", KI, -1.0);
+    priv_nh.param("Kd", Kd, -1.0);
+    priv_nh.param("KpA", KpA, -1.0);
+    priv_nh.param("KiA", KIA, -1.0);
+    priv_nh.param("KdA", KdA, -1.0);
+    priv_nh.param("thrust_hover", TH, -1.0);
+    priv_nh.param("SmallKpA", SmallKpA, -1.0);
+
+    if (Kp < 0) {
+      ROS_ERROR("PidController: Kp is not specified!");
+      ros::shutdown();
+    }
+
+    if (KI < 0) {
+      ROS_ERROR("PidController: KI is not specified!");
+      ros::shutdown();
+    }
+
+    if (Kd < 0) {
+      ROS_ERROR("PidController: Kd is not specified!");
+      ros::shutdown();
+    }
+
+    if (KpA < 0) {
+      ROS_ERROR("PidController: KpA is not specified!");
+      ros::shutdown();
+    }
+
+    if (KIA < 0) {
+      ROS_ERROR("PidController: KIA is not specified!");
+      ros::shutdown();
+    }
+
+    if (KdA < 0) {
+      ROS_ERROR("PidController: KdA is not specified!");
+      ros::shutdown();
+    }
+
+    if (TH < 0) {
+      ROS_ERROR("PidController: thrust_hover is not specified!");
+      ros::shutdown();
+    }
+
+    if (SmallKpA < 0) {
+      ROS_ERROR("PidController: small_kpa is not specified!");
+      ros::shutdown();
+    }
 
     double Speedx = 0.0, Speedy = 0.0;
     double MaxAngel     = 15;
@@ -237,7 +237,7 @@ namespace mrs_controllers
     conf.Pa         = KpA;
     conf.Da         = KdA;
     conf.Ia         = KIA;
-    conf.trustHover = TH;
+    conf.thrustHover = TH;
     conf.Pags       = SmallKpA;
 
     config_mutex_.lock();
@@ -310,7 +310,8 @@ namespace mrs_controllers
         std::advance(it, 1);
         out = sum / filterFront.size();
       }
-      debugmsg.regoutTrust = out;
+      debugmsg.regoutThrust = out;
+
       // 0.95
       // ROS_INFO("U: %04.5f Z: %03.5f Com: %3.5f " , u,z,newCommand.thrust);
       // ROS_INFO("Kp: %f" , Kp);
@@ -362,6 +363,7 @@ namespace mrs_controllers
   const mrs_msgs::ControllerStatus::Ptr PidController::status() {
     return mrs_msgs::ControllerStatus::Ptr();
   }
+
 }
 
 #include <pluginlib/class_list_macros.h>

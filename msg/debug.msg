@@ -1,1 +1,1 @@
-float64 regoutTrust
+float64 regoutThrust
