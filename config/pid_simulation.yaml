@@ -1,14 +1,16 @@
-kpxy: 0.056
-kdxy: 0.276
-kixy: 0.003
+kpxy: 0.4
+kdxy: 0.14
+kixy: 0.07
 
-kpz: 0.008
-kdz: 0.332
-kiz: 0.003
+kpz: 0.5
+kdz: 0.17
+kiz: 0.06
 
-kixy_lim: 10.0
-kiz_lim: 10.0
+kixy_lim: 3.0
+kiz_lim: 3.0
 
-hover_thrust: 0.60
+hover_thrust: 0.605
+
+exp: 0.95
 
 max_tilt_angle: 60 # [deg]
