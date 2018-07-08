@@ -55,8 +55,6 @@ void Pid::setParams(double kp, double kd, double ki, double integral_saturation,
   this->ki                  = ki;
   this->integral_saturation = integral_saturation;
   this->exp_filter_const    = exp_filter_const;
-
-  ROS_INFO("Params updated");
 }
 
 Pid::Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const) {
