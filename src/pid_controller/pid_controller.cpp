@@ -85,17 +85,8 @@ double Pid::update(double error, double dt) {
   double d_component = kd * difference;
   double i_component = ki * integral;
 
-  if (name.compare(std::string("x")) == 0)
-    ROS_INFO_THROTTLE(1.0, "PID x p=%f, d=%f, i=%f, error=%f", p_component, d_component, i_component, error);
-  else if (name.compare(std::string("y")) == 0)
-    ROS_INFO_THROTTLE(1.0, "PID y p=%f, d=%f, i=%f, error=%f", p_component, d_component, i_component, error);
-  else if (name.compare(std::string("z")) == 0)
-    ROS_INFO_THROTTLE(1.0, "PID z p=%f, d=%f, i=%f, error=%f", p_component, d_component, i_component, error);
-
   // calculate the pid action
   double control_output = p_component + d_component + i_component;
-
-  /* ROS_INFO("%s output=%f", name.c_str(), control_output); */
 
   // saturate the control output
   bool saturated = false;
@@ -112,12 +103,7 @@ double Pid::update(double error, double dt) {
 
   if (saturated) {
 
-    if (name.compare(std::string("x")) == 0)
-      ROS_WARN_THROTTLE(1.0, "The x PID is being saturated!");
-    else if (name.compare(std::string("y")) == 0)
-      ROS_WARN_THROTTLE(1.0, "The y PID is being saturated!");
-    else if (name.compare(std::string("z")) == 0)
-      ROS_WARN_THROTTLE(1.0, "The z PID is being saturated!");
+    ROS_WARN_THROTTLE(1.0, "The \"%s\" PID is being saturated!", name.c_str());
 
     // integrate only in the direction oposite to the saturation (antiwindup)
     if (control_output > 0 && error < 0) {
@@ -144,12 +130,7 @@ double Pid::update(double error, double dt) {
   }
 
   if (saturated) {
-    if (name.compare(std::string("x")) == 0)
-      ROS_WARN_THROTTLE(1.0, "The x PID's integral is being saturated!");
-    else if (name.compare(std::string("y")) == 0)
-      ROS_WARN_THROTTLE(1.0, "The y PID's integral is being saturated!");
-    else if (name.compare(std::string("z")) == 0)
-      ROS_WARN_THROTTLE(1.0, "The z PID's integral is being saturated!");
+    ROS_WARN_THROTTLE(1.0, "The \"%s\" PID's integral is being saturated!", name.c_str());
   }
 
   return control_output;
