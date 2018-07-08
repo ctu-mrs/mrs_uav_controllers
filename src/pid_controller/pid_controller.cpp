@@ -29,7 +29,7 @@ public:
 
   void reset(double last_error);
 
-  void setGains(double kp, double kd, double ki);
+  void setGains(double kp, double kd, double ki, double integral_saturation);
 
 private:
   double integral;
@@ -39,18 +39,21 @@ private:
   double kp;
   double kd;
   double ki;
+
   double exp_filter_const;
   double integral_saturation;
   double saturation;
+  double difference;
 
   std::string name;
 };
 
-void Pid::setGains(double kp, double kd, double ki) {
+void Pid::setGains(double kp, double kd, double ki, double integral_saturation) {
 
   this->kp = kp;
   this->kd = kd;
   this->ki = ki;
+  this->integral_saturation = integral_saturation;
 }
 
 Pid::Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const) {
@@ -66,18 +69,28 @@ Pid::Pid(std::string name, double kp, double kd, double ki, double integral_satu
 
   integral   = 0;
   last_error = 0;
+  difference = 0;
 }
 
 double Pid::update(double error, double dt) {
 
   // calculate the filtered difference
-  double difference = exp_filter_const * last_error + (1 - exp_filter_const) * ((error - last_error) / dt);
-  last_error        = error;
+  difference = exp_filter_const * difference + (1 - exp_filter_const) * ((error - last_error) / dt);
+  last_error = error;
 
-  /* ROS_INFO("%s error=%f", name.c_str(), error); */
+  double p_component = kp * error;
+  double d_component = kd * difference;
+  double i_component = ki * integral;
+
+  if (name.compare(std::string("x")) == 0)
+    ROS_INFO_THROTTLE(1.0, "PID x p=%f, d=%f, i=%f, error=%f", p_component, d_component, i_component, error);
+  else if (name.compare(std::string("y")) == 0)
+    ROS_INFO_THROTTLE(1.0, "PID y p=%f, d=%f, i=%f, error=%f", p_component, d_component, i_component, error);
+  else if (name.compare(std::string("z")) == 0)
+    ROS_INFO_THROTTLE(1.0, "PID z p=%f, d=%f, i=%f, error=%f", p_component, d_component, i_component, error);
 
   // calculate the pid action
-  double control_output = kp * error + kd * difference + ki * integral;
+  double control_output = p_component + d_component + i_component;
 
   /* ROS_INFO("%s output=%f", name.c_str(), control_output); */
 
@@ -95,17 +108,23 @@ double Pid::update(double error, double dt) {
   }
 
   if (saturated) {
-    ROS_WARN_THROTTLE(1.0, "The '%s' PID is being saturated!", name.c_str());
+
+    if (name.compare(std::string("x")) == 0)
+      ROS_WARN_THROTTLE(1.0, "The x PID is being saturated!");
+    else if (name.compare(std::string("y")) == 0)
+      ROS_WARN_THROTTLE(1.0, "The y PID is being saturated!");
+    else if (name.compare(std::string("z")) == 0)
+      ROS_WARN_THROTTLE(1.0, "The z PID is being saturated!");
 
     // integrate only in the direction oposite to the saturation (antiwindup)
     if (control_output > 0 && error < 0) {
-      integral += error;
+      integral += error*dt;
     } else if (control_output < 0 && error > 0) {
-      integral += error;
+      integral += error*dt;
     }
   } else {
     // if the output is not saturated, we do not care in which direction do we integrate
-    integral += error;
+    integral += error*dt;
   }
 
   // saturate the integral
@@ -122,7 +141,12 @@ double Pid::update(double error, double dt) {
   }
 
   if (saturated) {
-    ROS_WARN_THROTTLE(1.0, "The '%s' PID's integral is being saturated!", name.c_str());
+    if (name.compare(std::string("x")) == 0)
+      ROS_WARN_THROTTLE(1.0, "The x PID's integral is being saturated!");
+    else if (name.compare(std::string("y")) == 0)
+      ROS_WARN_THROTTLE(1.0, "The y PID's integral is being saturated!");
+    else if (name.compare(std::string("z")) == 0)
+      ROS_WARN_THROTTLE(1.0, "The z PID's integral is being saturated!");
   }
 
   return control_output;
@@ -131,6 +155,7 @@ double Pid::update(double error, double dt) {
 void Pid::reset(double last_error) {
 
   integral         = 0;
+  difference       = 0;
   this->last_error = last_error;
 }
 
@@ -163,8 +188,8 @@ private:
   mrs_controllers::pid_gainsConfig last_drs_config;
 
 private:
-  Pid *pid_x;
-  Pid *pid_y;
+  Pid *pid_pitch;
+  Pid *pid_roll;
   Pid *pid_z;
 
   double hover_thrust_;
@@ -173,6 +198,7 @@ private:
   // gains
   double kpxy_, kixy_, kdxy_;
   double kpz_, kiz_, kdz_;
+  double kixy_lim_, kiz_lim_;
 
   double max_tilt_angle_;
 
@@ -194,12 +220,14 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
   kpz_          = config.kpz;
   kdz_          = config.kdz;
   kiz_          = config.kiz;
+  kixy_lim_     = config.kixy_lim;
+  kiz_lim_      = config.kiz_lim;
   hover_thrust_ = config.hover_thrust;
   ROS_INFO("Controller gains ARE kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kpz: %3.5f, kdz: %3.5f, kiz: %3.5f", kpxy_, kdxy_, kixy_, kpz_, kdz_, kiz_);
 
-  pid_x->setGains(kpxy_, kdxy_, kixy_);
-  pid_y->setGains(kpxy_, kdxy_, kixy_);
-  pid_z->setGains(kpz_, kdz_, kiz_);
+  pid_pitch->setGains(kpxy_, kdxy_, kixy_, kixy_lim_);
+  pid_roll->setGains(kpxy_, kdxy_, kixy_, kixy_lim_);
+  pid_z->setGains(kpz_, kdz_, kiz_, kiz_lim_);
 }
 
 bool PidController::Activate(void) {
@@ -230,6 +258,8 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   priv_nh.param("kpz", kpz_, -1.0);
   priv_nh.param("kdz", kdz_, -1.0);
   priv_nh.param("kiz", kiz_, -1.0);
+  priv_nh.param("kixy_lim", kixy_lim_, -1.0);
+  priv_nh.param("kiz_lim", kiz_lim_, -1.0);
   priv_nh.param("hover_thrust", hover_thrust_, -1.0);
 
   if (kpxy_ < 0) {
@@ -262,6 +292,16 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
+  if (kixy_lim_ < 0) {
+    ROS_ERROR("PidController: kixy_lim is not specified!");
+    ros::shutdown();
+  }
+
+  if (kiz_lim_ < 0) {
+    ROS_ERROR("PidController: kiz_lim is not specified!");
+    ros::shutdown();
+  }
+
   if (hover_thrust_ < 0) {
     ROS_ERROR("PidController: hover_thrust is not specified!");
     ros::shutdown();
@@ -274,19 +314,19 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 360) * 2 * 3.1459;
+  max_tilt_angle_ = max_tilt_angle_ * (3.141592 / 180);
 
   ROS_INFO("PidController was launched with gains:");
-  ROS_INFO("horizontal: kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f", kpxy_, kdxy_, kixy_);
-  ROS_INFO("vertical:   kpz: %3.5f, kdz: %3.5f, kiz: %3.5f", kpz_, kdz_, kiz_);
+  ROS_INFO("horizontal: kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kdxy_, kixy_, kixy_lim_);
+  ROS_INFO("vertical:   kpz: %3.5f, kdz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kdz_, kiz_, kiz_lim_);
 
   // --------------------------------------------------------------
   // |                       initialize pids                      |
   // --------------------------------------------------------------
 
-  pid_x = new Pid("x", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
-  pid_y = new Pid("y", kpxy_, kdxy_, kixy_, 0.1, max_tilt_angle_, 0.99);
-  pid_z = new Pid("z", kpz_, kdz_, kiz_, 0.1, 1.0, 0.99);
+  pid_pitch = new Pid("x", kpxy_, kdxy_, kixy_, kixy_lim_, max_tilt_angle_, 0.99);
+  pid_roll  = new Pid("y", kpxy_, kdxy_, kixy_, kixy_lim_, max_tilt_angle_, 0.99);
+  pid_z     = new Pid("z", kpz_, kdz_, kiz_, kiz_lim_, 1.0, 0.99);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -298,13 +338,14 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   last_drs_config.kpz          = kpz_;
   last_drs_config.kdz          = kdz_;
   last_drs_config.kiz          = kiz_;
+  last_drs_config.kixy_lim     = kixy_lim_;
+  last_drs_config.kiz_lim      = kiz_lim_;
   last_drs_config.hover_thrust = hover_thrust_;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, priv_nh));
   reconfigure_server_->updateConfig(last_drs_config);
   ReconfigureServer::CallbackType f = boost::bind(&PidController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
-
 }
 
 const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
@@ -326,8 +367,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
   if (first_iteration) {
 
-    pid_x->reset(error_x);
-    pid_y->reset(error_y);
+    pid_pitch->reset(error_x);
+    pid_roll->reset(error_y);
     pid_z->reset(error_z);
     last_update = ros::Time::now();
 
@@ -362,17 +403,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   // |                     calculate the PIDs                     |
   // --------------------------------------------------------------
 
-  double action_x = pid_x->update(error_x, dt);
-  double action_y = pid_y->update(error_y, dt);
-  double action_z = (pid_z->update(error_z, dt) + hover_thrust_) * (1 / ((cos(roll) * cos(pitch))));
+  double action_pitch = pid_pitch->update(error_x, dt);
+  double action_roll  = pid_roll->update(-error_y, dt);
+  double action_z     = (pid_z->update(error_z, dt) + hover_thrust_) * (1 / (cos(roll) * cos(pitch)));;
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
   /* ROS_INFO("yaw=%f", yaw); */
 
-  output_command->pitch  = action_x * cos(yaw) - action_y * sin(yaw);
-  output_command->roll   = action_y * cos(yaw) + action_x * sin(yaw);
+  output_command->pitch  = action_pitch * cos(yaw) - action_roll * sin(yaw);
+  output_command->roll   = action_roll * cos(yaw) + action_pitch * sin(yaw);
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
 
