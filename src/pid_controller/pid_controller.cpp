@@ -29,7 +29,7 @@ public:
 
   void reset(double last_error);
 
-  void setGains(double kp, double kd, double ki, double integral_saturation);
+  void setParams(double kp, double kd, double ki, double integral_saturation, double exp_filter_const);
 
 private:
   double integral;
@@ -48,12 +48,15 @@ private:
   std::string name;
 };
 
-void Pid::setGains(double kp, double kd, double ki, double integral_saturation) {
+void Pid::setParams(double kp, double kd, double ki, double integral_saturation, double exp_filter_const) {
 
   this->kp                  = kp;
   this->kd                  = kd;
   this->ki                  = ki;
   this->integral_saturation = integral_saturation;
+  this->exp_filter_const    = exp_filter_const;
+
+  ROS_INFO("Params updated");
 }
 
 Pid::Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const) {
@@ -67,9 +70,9 @@ Pid::Pid(std::string name, double kp, double kd, double ki, double integral_satu
   this->saturation          = saturation;
   this->exp_filter_const    = exp_filter_const;
 
-  integral   = 0;
-  last_error = 0;
-  difference = 0;
+  this->integral   = 0;
+  this->last_error = 0;
+  this->difference = 0;
 }
 
 double Pid::update(double error, double dt) {
@@ -154,8 +157,8 @@ double Pid::update(double error, double dt) {
 
 void Pid::reset(double last_error) {
 
-  integral         = 0;
-  difference       = 0;
+  this->integral   = 0;
+  this->difference = 0;
   this->last_error = last_error;
 }
 
@@ -225,9 +228,9 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
   hover_thrust_ = config.hover_thrust;
   exp_          = config.exp;
 
-  pid_pitch->setGains(kpxy_, kdxy_, kixy_, kixy_lim_);
-  pid_roll->setGains(kpxy_, kdxy_, kixy_, kixy_lim_);
-  pid_z->setGains(kpz_, kdz_, kiz_, kiz_lim_);
+  pid_pitch->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
+  pid_roll->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
+  pid_z->setParams(kpz_, kdz_, kiz_, kiz_lim_, exp_);
 }
 
 bool PidController::Activate(void) {
