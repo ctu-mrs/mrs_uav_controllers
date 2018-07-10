@@ -405,6 +405,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
 
+  last_output_command = output_command;
+
   return output_command;
 }
 
