@@ -90,7 +90,7 @@ double Pid::update(double error, double dt) {
   bool saturated = false;
   if (!std::isfinite(control_output)) {
     control_output = 0;
-    ROS_WARN_THROTTLE(1.0, "NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
+    ROS_WARN_THROTTLE(1.0, "[PidController]: NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
   } else if (control_output > saturation) {
     control_output = saturation;
     saturated      = true;
@@ -101,7 +101,7 @@ double Pid::update(double error, double dt) {
 
   if (saturated) {
 
-    ROS_WARN_THROTTLE(1.0, "The \"%s\" PID is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "[PidController]: The \"%s\" PID is being saturated!", name.c_str());
 
     // integrate only in the direction oposite to the saturation (antiwindup)
     if (control_output > 0 && error < 0) {
@@ -118,7 +118,7 @@ double Pid::update(double error, double dt) {
   saturated = false;
   if (!std::isfinite(integral)) {
     integral = 0;
-    ROS_WARN_THROTTLE(1.0, "NaN detected in variable \"integral\", setting it to 0 and returning!!!");
+    ROS_WARN_THROTTLE(1.0, "[PidController]: NaN detected in variable \"integral\", setting it to 0 and returning!!!");
   } else if (integral > integral_saturation) {
     integral  = integral_saturation;
     saturated = true;
@@ -128,7 +128,7 @@ double Pid::update(double error, double dt) {
   }
 
   if (saturated) {
-    ROS_WARN_THROTTLE(1.0, "The \"%s\" PID's integral is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "[PidController]: The \"%s\" PID's integral is being saturated!", name.c_str());
   }
 
   return control_output;
@@ -216,7 +216,7 @@ bool PidController::Activate(void) {
 
   first_iteration = true;
 
-  ROS_INFO("The PidController was activated.");
+  ROS_INFO("[PidController]: activated");
 
   return true;
 }
@@ -246,68 +246,68 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   priv_nh.param("exp", exp_, -1.0);
 
   if (kpxy_ < 0) {
-    ROS_ERROR("PidController: kpxy is not specified!");
+    ROS_ERROR("[PidController]: kpxy is not specified!");
     ros::shutdown();
   }
 
   if (kdxy_ < 0) {
-    ROS_ERROR("PidController: kdxy is not specified!");
+    ROS_ERROR("[PidController]: kdxy is not specified!");
     ros::shutdown();
   }
 
   if (kixy_ < 0) {
-    ROS_ERROR("PidController: kixy is not specified!");
+    ROS_ERROR("[PidController]: kixy is not specified!");
     ros::shutdown();
   }
 
   if (kpz_ < 0) {
-    ROS_ERROR("PidController: kpz is not specified!");
+    ROS_ERROR("[PidController]: kpz is not specified!");
     ros::shutdown();
   }
 
   if (kdz_ < 0) {
-    ROS_ERROR("PidController: kdz is not specified!");
+    ROS_ERROR("[PidController]: kdz is not specified!");
     ros::shutdown();
   }
 
   if (kiz_ < 0) {
-    ROS_ERROR("PidController: kiz is not specified!");
+    ROS_ERROR("[PidController]: kiz is not specified!");
     ros::shutdown();
   }
 
   if (kixy_lim_ < 0) {
-    ROS_ERROR("PidController: kixy_lim is not specified!");
+    ROS_ERROR("[PidController]: kixy_lim is not specified!");
     ros::shutdown();
   }
 
   if (kiz_lim_ < 0) {
-    ROS_ERROR("PidController: kiz_lim is not specified!");
+    ROS_ERROR("[PidController]: kiz_lim is not specified!");
     ros::shutdown();
   }
 
   if (hover_thrust_ < 0) {
-    ROS_ERROR("PidController: hover_thrust is not specified!");
+    ROS_ERROR("[PidController]: hover_thrust is not specified!");
     ros::shutdown();
   }
 
   if (exp_ < 0) {
-    ROS_ERROR("PidController: exp is not specified!");
+    ROS_ERROR("[PidController]: exp is not specified!");
     ros::shutdown();
   }
 
   priv_nh.param("max_tilt_angle", max_tilt_angle_, -1.0);
   if (max_tilt_angle_ < 0) {
-    ROS_ERROR("PidController: max_tilt_angle is not specified!");
+    ROS_ERROR("[PidController]: max_tilt_angle is not specified!");
     ros::shutdown();
   }
 
   // convert to radians
   max_tilt_angle_ = max_tilt_angle_ * (3.141592 / 180);
 
-  ROS_INFO("PidController was launched with gains:");
-  ROS_INFO("horizontal: kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kdxy_, kixy_, kixy_lim_);
-  ROS_INFO("vertical:   kpz: %3.5f, kdz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kdz_, kiz_, kiz_lim_);
-  ROS_INFO("other:      exp: %3.5f", exp_);
+  ROS_INFO("[PidController]: PidController was launched with gains:");
+  ROS_INFO("[PidController]: horizontal: kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kdxy_, kixy_, kixy_lim_);
+  ROS_INFO("[PidController]: vertical:   kpz: %3.5f, kdz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kdz_, kiz_, kiz_lim_);
+  ROS_INFO("[PidController]: other:      exp: %3.5f", exp_);
 
   // --------------------------------------------------------------
   // |                       initialize pids                      |
@@ -362,8 +362,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
     pid_z->reset(error_z);
     last_update = ros::Time::now();
 
-    ROS_INFO("PidController: first iteration, reseting pids");
-
     first_iteration = false;
 
     return mrs_msgs::AttitudeCommand::Ptr();
@@ -375,7 +373,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   }
 
   if (dt <= 0.001) {
-    ROS_WARN("PidController: the update was called with too small dt!");
+    ROS_WARN("[PidController]: the update was called with too small dt!");
     return last_output_command;
   }
 
