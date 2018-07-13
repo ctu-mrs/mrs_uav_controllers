@@ -41,10 +41,10 @@
   <run_depend>mrs_mav_manager</run_depend>
   <run_depend>dynamic_reconfigure</run_depend>
 
-  <!-- The export tag contains other, unspecified, tags -->
   <export>
-    <!-- Other tools can request additional information be placed here -->
+
     <mrs_mav_manager plugin="${prefix}/pid_controller.xml" />
+    <mrs_mav_manager plugin="${prefix}/lsf_controller.xml" />
 
   </export>
 </package>

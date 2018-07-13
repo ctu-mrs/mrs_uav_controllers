@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 generate_dynamic_reconfigure_options(
   cfg/pid_gains.cfg
+  cfg/lsf_gains.cfg
   )
 
 add_message_files(
@@ -59,6 +60,8 @@ include_directories(
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
 
+# PID controller
+
 add_library(PidController
   src/pid_controller/pid_controller.cpp
   )
@@ -73,25 +76,18 @@ target_link_libraries(PidController
   ${catkin_LIBRARIES}
   )
 
-install(TARGETS
-  PidController
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# LSF controller
+
+add_library(LsfController
+  src/lsf_controller/lsf_controller.cpp
   )
 
-install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-  FILES_MATCHING PATTERN "*.h"
-  PATTERN ".svn" EXCLUDE
+add_dependencies(LsfController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
   )
 
-install(DIRECTORY doc
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-  )
-
-install(FILES
-  pid_controller.xml
-  DESTINATION
-  ${CATKIN_PACKAGE_SHARE_DESTINATION}
+target_link_libraries(LsfController
+  ${catkin_LIBRARIES}
   )

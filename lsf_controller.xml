@@ -1,0 +1,5 @@
+<library path="lib/libLsfController">
+  <class name="mrs_controllers/LsfController" type="mrs_controllers::LsfController" base_class_type="mrs_mav_manager::Controller">
+    <description>This is LSF controller.</description>
+  </class>
+</library>

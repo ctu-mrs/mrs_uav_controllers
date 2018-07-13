@@ -11,86 +11,75 @@
 #include <mrs_msgs/ControllerStatus.h>
 #include <mrs_mav_manager/Controller.h>
 
-#include <mrs_controllers/pid_gainsConfig.h>
+#include <mrs_controllers/lsf_gainsConfig.h>
 
 using namespace std;
 
 namespace mrs_controllers
 {
 
-//{ PID
+//{ LSF
 
-class Pid {
+class Lsf {
 
 public:
-  Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const);
+  Lsf(std::string name, double kp, double kv, double ki, double integral_saturation, double saturation);
 
-  double update(double error, double dt);
+  double update(double position_error, double speed_error, double dt);
 
-  void reset(double last_error);
+  void reset(void);
 
-  void setParams(double kp, double kd, double ki, double integral_saturation, double exp_filter_const);
+  void setParams(double kp, double kv, double ki, double integral_saturation);
 
 private:
   double integral;
-  double last_error;
 
   // gains
   double kp;
-  double kd;
+  double kv;
   double ki;
 
-  double exp_filter_const;
   double integral_saturation;
   double saturation;
-  double difference;
 
   std::string name;
 };
 
-void Pid::setParams(double kp, double kd, double ki, double integral_saturation, double exp_filter_const) {
+void Lsf::setParams(double kp, double kv, double ki, double integral_saturation) {
 
   this->kp                  = kp;
-  this->kd                  = kd;
+  this->kv                  = kv;
   this->ki                  = ki;
   this->integral_saturation = integral_saturation;
-  this->exp_filter_const    = exp_filter_const;
 }
 
-Pid::Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const) {
+Lsf::Lsf(std::string name, double kp, double kv, double ki, double integral_saturation, double saturation) {
 
   this->name = name;
 
   this->kp                  = kp;
-  this->kd                  = kd;
+  this->kv                  = kv;
   this->ki                  = ki;
   this->integral_saturation = integral_saturation;
   this->saturation          = saturation;
-  this->exp_filter_const    = exp_filter_const;
 
   this->integral   = 0;
-  this->last_error = 0;
-  this->difference = 0;
 }
 
-double Pid::update(double error, double dt) {
+double Lsf::update(double position_error, double speed_error, double dt) {
 
-  // calculate the filtered difference
-  difference = (1 - exp_filter_const) * difference + exp_filter_const * ((error - last_error) / dt);
-  last_error = error;
-
-  double p_component = kp * error;
-  double d_component = kd * difference;
+  double p_component = kp * position_error;
+  double v_component = kv * speed_error;
   double i_component = ki * integral;
 
-  // calculate the pid action
-  double control_output = p_component + d_component + i_component;
+  // calculate the lsf action
+  double control_output = p_component + v_component + i_component;
 
   // saturate the control output
   bool saturated = false;
   if (!std::isfinite(control_output)) {
     control_output = 0;
-    ROS_WARN_THROTTLE(1.0, "[PidController]: NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
   } else if (control_output > saturation) {
     control_output = saturation;
     saturated      = true;
@@ -101,24 +90,24 @@ double Pid::update(double error, double dt) {
 
   if (saturated) {
 
-    ROS_WARN_THROTTLE(1.0, "[PidController]: The \"%s\" PID is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: The \"%s\" LSF is being saturated!", name.c_str());
 
     // integrate only in the direction oposite to the saturation (antiwindup)
-    if (control_output > 0 && error < 0) {
-      integral += error * dt;
-    } else if (control_output < 0 && error > 0) {
-      integral += error * dt;
+    if (control_output > 0 && position_error < 0) {
+      integral += position_error * dt;
+    } else if (control_output < 0 && position_error > 0) {
+      integral += position_error * dt;
     }
   } else {
     // if the output is not saturated, we do not care in which direction do we integrate
-    integral += error * dt;
+    integral += position_error * dt;
   }
 
   // saturate the integral
   saturated = false;
   if (!std::isfinite(integral)) {
     integral = 0;
-    ROS_WARN_THROTTLE(1.0, "[PidController]: NaN detected in variable \"integral\", setting it to 0 and returning!!!");
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"integral\", setting it to 0 and returning!!!");
   } else if (integral > integral_saturation) {
     integral  = integral_saturation;
     saturated = true;
@@ -128,25 +117,23 @@ double Pid::update(double error, double dt) {
   }
 
   if (saturated) {
-    ROS_WARN_THROTTLE(1.0, "[PidController]: The \"%s\" PID's integral is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: The \"%s\" LSF's integral is being saturated!", name.c_str());
   }
 
   return control_output;
 }
 
-void Pid::reset(double last_error) {
+void Lsf::reset(void) {
 
   this->integral   = 0;
-  this->difference = 0;
-  this->last_error = last_error;
 }
 
 //}
 
-class PidController : public mrs_mav_manager::Controller {
+class LsfController : public mrs_mav_manager::Controller {
 
 public:
-  PidController(void);
+  LsfController(void);
 
   void Initialize(const ros::NodeHandle &parent_nh);
   bool Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
@@ -155,7 +142,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr status();
 
-  void dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
+  void dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig &config, uint32_t level);
 
 private:
   // --------------------------------------------------------------
@@ -163,27 +150,26 @@ private:
   // --------------------------------------------------------------
 
   boost::recursive_mutex                      config_mutex_;
-  typedef mrs_controllers::pid_gainsConfig    Config;
+  typedef mrs_controllers::lsf_gainsConfig    Config;
   typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
   boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-  void drs_callback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
-  mrs_controllers::pid_gainsConfig last_drs_config;
+  void drs_callback(mrs_controllers::lsf_gainsConfig &config, uint32_t level);
+  mrs_controllers::lsf_gainsConfig last_drs_config;
 
 private:
-  Pid *pid_pitch;
-  Pid *pid_roll;
-  Pid *pid_z;
+  Lsf *lsf_pitch;
+  Lsf *lsf_roll;
+  Lsf *lsf_z;
 
   double hover_thrust_;
   double roll, pitch, yaw;
 
   // gains
-  double kpxy_, kixy_, kdxy_;
-  double kpz_, kiz_, kdz_;
+  double kpxy_, kixy_, kvxy_;
+  double kpz_, kiz_, kvz_;
   double kixy_lim_, kiz_lim_;
 
   double max_tilt_angle_;
-  double exp_;
 
   mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
 
@@ -191,42 +177,41 @@ private:
   bool      first_iteration = true;
 };
 
-PidController::PidController(void) {
+LsfController::LsfController(void) {
 }
 
-void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level) {
+void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig &config, uint32_t level) {
 
   kpxy_         = config.kpxy;
-  kdxy_         = config.kdxy;
+  kvxy_         = config.kvxy;
   kixy_         = config.kixy;
   kpz_          = config.kpz;
-  kdz_          = config.kdz;
+  kvz_          = config.kvz;
   kiz_          = config.kiz;
   kixy_lim_     = config.kixy_lim;
   kiz_lim_      = config.kiz_lim;
   hover_thrust_ = config.hover_thrust;
-  exp_          = config.exp;
 
-  pid_pitch->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
-  pid_roll->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
-  pid_z->setParams(kpz_, kdz_, kiz_, kiz_lim_, exp_);
+  lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
+  lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
+  lsf_z->setParams(kpz_, kvz_, kiz_, kiz_lim_);
 }
 
-bool PidController::Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool LsfController::Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   first_iteration = true;
 
-  ROS_INFO("[PidController]: activated");
+  ROS_INFO("[LsfController]: activated");
 
   return true;
 }
 
-void PidController::Deactivate(void) {
+void LsfController::Deactivate(void) {
 }
 
-void PidController::Initialize(const ros::NodeHandle &parent_nh) {
+void LsfController::Initialize(const ros::NodeHandle &parent_nh) {
 
-  ros::NodeHandle priv_nh(parent_nh, "pid_controller");
+  ros::NodeHandle priv_nh(parent_nh, "lsf_controller");
 
   ros::Time::waitForValid();
 
@@ -235,119 +220,115 @@ void PidController::Initialize(const ros::NodeHandle &parent_nh) {
   // --------------------------------------------------------------
 
   priv_nh.param("kpxy", kpxy_, -1.0);
-  priv_nh.param("kdxy", kdxy_, -1.0);
+  priv_nh.param("kvxy", kvxy_, -1.0);
   priv_nh.param("kixy", kixy_, -1.0);
   priv_nh.param("kpz", kpz_, -1.0);
-  priv_nh.param("kdz", kdz_, -1.0);
+  priv_nh.param("kvz", kvz_, -1.0);
   priv_nh.param("kiz", kiz_, -1.0);
   priv_nh.param("kixy_lim", kixy_lim_, -1.0);
   priv_nh.param("kiz_lim", kiz_lim_, -1.0);
   priv_nh.param("hover_thrust", hover_thrust_, -1.0);
-  priv_nh.param("exp", exp_, -1.0);
 
   if (kpxy_ < 0) {
-    ROS_ERROR("[PidController]: kpxy is not specified!");
+    ROS_ERROR("[LsfController]: kpxy is not specified!");
     ros::shutdown();
   }
 
-  if (kdxy_ < 0) {
-    ROS_ERROR("[PidController]: kdxy is not specified!");
+  if (kvxy_ < 0) {
+    ROS_ERROR("[LsfController]: kvxy is not specified!");
     ros::shutdown();
   }
 
   if (kixy_ < 0) {
-    ROS_ERROR("[PidController]: kixy is not specified!");
+    ROS_ERROR("[LsfController]: kixy is not specified!");
     ros::shutdown();
   }
 
   if (kpz_ < 0) {
-    ROS_ERROR("[PidController]: kpz is not specified!");
+    ROS_ERROR("[LsfController]: kpz is not specified!");
     ros::shutdown();
   }
 
-  if (kdz_ < 0) {
-    ROS_ERROR("[PidController]: kdz is not specified!");
+  if (kvz_ < 0) {
+    ROS_ERROR("[LsfController]: kvz is not specified!");
     ros::shutdown();
   }
 
   if (kiz_ < 0) {
-    ROS_ERROR("[PidController]: kiz is not specified!");
+    ROS_ERROR("[LsfController]: kiz is not specified!");
     ros::shutdown();
   }
 
   if (kixy_lim_ < 0) {
-    ROS_ERROR("[PidController]: kixy_lim is not specified!");
+    ROS_ERROR("[LsfController]: kixy_lim is not specified!");
     ros::shutdown();
   }
 
   if (kiz_lim_ < 0) {
-    ROS_ERROR("[PidController]: kiz_lim is not specified!");
+    ROS_ERROR("[LsfController]: kiz_lim is not specified!");
     ros::shutdown();
   }
 
   if (hover_thrust_ < 0) {
-    ROS_ERROR("[PidController]: hover_thrust is not specified!");
-    ros::shutdown();
-  }
-
-  if (exp_ < 0) {
-    ROS_ERROR("[PidController]: exp is not specified!");
+    ROS_ERROR("[LsfController]: hover_thrust is not specified!");
     ros::shutdown();
   }
 
   priv_nh.param("max_tilt_angle", max_tilt_angle_, -1.0);
   if (max_tilt_angle_ < 0) {
-    ROS_ERROR("[PidController]: max_tilt_angle is not specified!");
+    ROS_ERROR("[LsfController]: max_tilt_angle is not specified!");
     ros::shutdown();
   }
 
   // convert to radians
   max_tilt_angle_ = max_tilt_angle_ * (3.141592 / 180);
 
-  ROS_INFO("[PidController]: PidController was launched with gains:");
-  ROS_INFO("[PidController]: horizontal: kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kdxy_, kixy_, kixy_lim_);
-  ROS_INFO("[PidController]: vertical:   kpz: %3.5f, kdz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kdz_, kiz_, kiz_lim_);
-  ROS_INFO("[PidController]: other:      exp: %3.5f", exp_);
+  ROS_INFO("[LsfController]: LsfController was launched with gains:");
+  ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kixy_, kixy_lim_);
+  ROS_INFO("[LsfController]: vertical:   kpz: %3.5f, kvz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kvz_, kiz_, kiz_lim_);
 
   // --------------------------------------------------------------
-  // |                       initialize pids                      |
+  // |                       initialize lsfs                      |
   // --------------------------------------------------------------
 
-  pid_pitch = new Pid("x", kpxy_, kdxy_, kixy_, kixy_lim_, max_tilt_angle_, exp_);
-  pid_roll  = new Pid("y", kpxy_, kdxy_, kixy_, kixy_lim_, max_tilt_angle_, exp_);
-  pid_z     = new Pid("z", kpz_, kdz_, kiz_, kiz_lim_, 1.0, exp_);
+  lsf_pitch = new Lsf("x", kpxy_, kvxy_, kixy_, kixy_lim_, max_tilt_angle_);
+  lsf_roll  = new Lsf("y", kpxy_, kvxy_, kixy_, kixy_lim_, max_tilt_angle_);
+  lsf_z     = new Lsf("z", kpz_, kvz_, kiz_, kiz_lim_, 1.0);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
   last_drs_config.kpxy         = kpxy_;
-  last_drs_config.kdxy         = kdxy_;
+  last_drs_config.kvxy         = kvxy_;
   last_drs_config.kixy         = kixy_;
   last_drs_config.kpz          = kpz_;
-  last_drs_config.kdz          = kdz_;
+  last_drs_config.kvz          = kvz_;
   last_drs_config.kiz          = kiz_;
   last_drs_config.kixy_lim     = kixy_lim_;
   last_drs_config.kiz_lim      = kiz_lim_;
   last_drs_config.hover_thrust = hover_thrust_;
-  last_drs_config.exp          = exp_;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, priv_nh));
   reconfigure_server_->updateConfig(last_drs_config);
-  ReconfigureServer::CallbackType f = boost::bind(&PidController::dynamicReconfigureCallback, this, _1, _2);
+  ReconfigureServer::CallbackType f = boost::bind(&LsfController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
 }
 
-const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
+const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
   // --------------------------------------------------------------
 
-  double error_x = reference->position.x - odometry->pose.pose.position.x;
-  double error_y = reference->position.y - odometry->pose.pose.position.y;
-  double error_z = reference->position.z - odometry->pose.pose.position.z;
+  double position_error_x = reference->position.x - odometry->pose.pose.position.x;
+  double position_error_y = reference->position.y - odometry->pose.pose.position.y;
+  double position_error_z = reference->position.z - odometry->pose.pose.position.z;
+
+  double speed_error_x = reference->velocity.x - odometry->twist.twist.linear.x;
+  double speed_error_y = reference->velocity.y - odometry->twist.twist.linear.y;
+  double speed_error_z = reference->velocity.z - odometry->twist.twist.linear.z;
 
   // --------------------------------------------------------------
   // |                      calculate the dt                      |
@@ -357,9 +338,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
   if (first_iteration) {
 
-    pid_pitch->reset(error_x);
-    pid_roll->reset(error_y);
-    pid_z->reset(error_z);
+    lsf_pitch->reset();
+    lsf_roll->reset();
+    lsf_z->reset();
     last_update = ros::Time::now();
 
     first_iteration = false;
@@ -373,7 +354,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   }
 
   if (dt <= 0.001) {
-    ROS_WARN("[PidController]: the update was called with too small dt!");
+    ROS_WARN("[LsfController]: the update was called with too small dt!");
     return last_output_command;
   }
 
@@ -388,12 +369,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
-  // |                     calculate the PIDs                     |
+  // |                     calculate the LSFs                     |
   // --------------------------------------------------------------
 
-  double action_pitch = pid_pitch->update(error_x, dt);
-  double action_roll  = pid_roll->update(-error_y, dt);
-  double action_z     = (pid_z->update(error_z, dt) + hover_thrust_) * (1 / (cos(roll) * cos(pitch)));
+  double action_pitch = lsf_pitch->update(position_error_x, speed_error_x, dt);
+  double action_roll  = lsf_roll->update(-position_error_y, -speed_error_y, dt);
+  double action_z     = (lsf_z->update(position_error_z, speed_error_z, dt) + hover_thrust_) * (1 / (cos(roll) * cos(pitch)));
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
@@ -408,11 +389,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   return output_command;
 }
 
-const mrs_msgs::ControllerStatus::Ptr PidController::status() {
+const mrs_msgs::ControllerStatus::Ptr LsfController::status() {
 
   return mrs_msgs::ControllerStatus::Ptr();
 }
 }
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mrs_controllers::PidController, mrs_mav_manager::Controller)  //<reformat_checkpoint>
+PLUGINLIB_EXPORT_CLASS(mrs_controllers::LsfController, mrs_mav_manager::Controller)
