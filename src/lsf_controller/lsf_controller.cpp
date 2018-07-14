@@ -63,7 +63,7 @@ Lsf::Lsf(std::string name, double kp, double kv, double ki, double integral_satu
   this->integral_saturation = integral_saturation;
   this->saturation          = saturation;
 
-  this->integral   = 0;
+  this->integral = 0;
 }
 
 double Lsf::update(double position_error, double speed_error, double dt) {
@@ -125,7 +125,7 @@ double Lsf::update(double position_error, double speed_error, double dt) {
 
 void Lsf::reset(void) {
 
-  this->integral   = 0;
+  this->integral = 0;
 }
 
 //}
@@ -135,9 +135,9 @@ class LsfController : public mrs_mav_manager::Controller {
 public:
   LsfController(void);
 
-  void Initialize(const ros::NodeHandle &parent_nh);
-  bool Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
-  void Deactivate(void);
+  void initialize(const ros::NodeHandle &parent_nh);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
+  void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr status();
@@ -172,6 +172,7 @@ private:
   double max_tilt_angle_;
 
   mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
+  mrs_msgs::AttitudeCommand           activation_control_command_;
 
   ros::Time last_update;
   bool      first_iteration = true;
@@ -197,7 +198,13 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
   lsf_z->setParams(kpz_, kvz_, kiz_, kiz_lim_);
 }
 
-bool LsfController::Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+
+  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+    ROS_INFO("[Lsf]: pes"); 
+  }
+
+  activation_control_command_ = *cmd;
 
   first_iteration = true;
 
@@ -206,10 +213,10 @@ bool LsfController::Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   return true;
 }
 
-void LsfController::Deactivate(void) {
+void LsfController::deactivate(void) {
 }
 
-void LsfController::Initialize(const ros::NodeHandle &parent_nh) {
+void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   ros::NodeHandle priv_nh(parent_nh, "lsf_controller");
 
@@ -345,18 +352,24 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
 
     first_iteration = false;
 
-    return mrs_msgs::AttitudeCommand::Ptr();
+    return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
 
-    dt          = (ros::Time::now() - last_update).toSec();
-    last_update = ros::Time::now();
+    dt = (ros::Time::now() - last_update).toSec();
   }
 
   if (dt <= 0.001) {
+
     ROS_WARN("[LsfController]: the update was called with too small dt!");
-    return last_output_command;
+    if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
+      return last_output_command;
+    } else {
+      return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
+    }
   }
+
+  last_update = ros::Time::now();
 
   // --------------------------------------------------------------
   // |                 calculate the euler angles                 |

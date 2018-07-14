@@ -148,9 +148,9 @@ class PidController : public mrs_mav_manager::Controller {
 public:
   PidController(void);
 
-  void Initialize(const ros::NodeHandle &parent_nh);
-  bool Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
-  void Deactivate(void);
+  void initialize(const ros::NodeHandle &parent_nh);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
+  void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr status();
@@ -186,6 +186,7 @@ private:
   double exp_;
 
   mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
+  mrs_msgs::AttitudeCommand           activation_control_command_;
 
   ros::Time last_update;
   bool      first_iteration = true;
@@ -212,7 +213,9 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
   pid_z->setParams(kpz_, kdz_, kiz_, kiz_lim_, exp_);
 }
 
-bool PidController::Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+
+  activation_control_command_ = *cmd;
 
   first_iteration = true;
 
@@ -221,10 +224,10 @@ bool PidController::Activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   return true;
 }
 
-void PidController::Deactivate(void) {
+void PidController::deactivate(void) {
 }
 
-void PidController::Initialize(const ros::NodeHandle &parent_nh) {
+void PidController::initialize(const ros::NodeHandle &parent_nh) {
 
   ros::NodeHandle priv_nh(parent_nh, "pid_controller");
 
@@ -364,18 +367,24 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
     first_iteration = false;
 
-    return mrs_msgs::AttitudeCommand::Ptr();
+    return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
 
-    dt          = (ros::Time::now() - last_update).toSec();
-    last_update = ros::Time::now();
+    dt = (ros::Time::now() - last_update).toSec();
   }
 
   if (dt <= 0.001) {
+
     ROS_WARN("[PidController]: the update was called with too small dt!");
-    return last_output_command;
+    if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
+      return last_output_command;
+    } else {
+      return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
+    }
   }
+
+  last_update = ros::Time::now();
 
   // --------------------------------------------------------------
   // |                 calculate the euler angles                 |
