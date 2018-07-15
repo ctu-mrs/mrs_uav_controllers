@@ -201,10 +201,12 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
 bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
-    ROS_INFO("[Lsf]: pes"); 
+    activation_control_command_ = mrs_msgs::AttitudeCommand();
+    ROS_WARN("[LsfController]: activated without getting the last tracker's command.");
+  } else {
+    activation_control_command_ = *cmd;
+    ROS_INFO("[LsfController]: activated with a last trackers command.");
   }
-
-  activation_control_command_ = *cmd;
 
   first_iteration = true;
 
