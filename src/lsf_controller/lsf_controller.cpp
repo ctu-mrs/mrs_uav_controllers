@@ -311,7 +311,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   }
 
   // convert to radians
-  max_tilt_angle_ = max_tilt_angle_ * (3.141592 / 180);
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
 
   ROS_INFO("[LsfController]: LsfController was launched with gains:");
   ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kixy_, kixy_lim_);

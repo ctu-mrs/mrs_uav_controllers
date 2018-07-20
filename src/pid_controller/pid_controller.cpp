@@ -326,7 +326,7 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   }
 
   // convert to radians
-  max_tilt_angle_ = max_tilt_angle_ * (3.141592 / 180);
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
 
   ROS_INFO("[PidController]: PidController was launched with gains:");
   ROS_INFO("[PidController]: horizontal: kpxy: %3.5f, kdxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kdxy_, kixy_, kixy_lim_);

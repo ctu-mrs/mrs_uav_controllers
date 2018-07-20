@@ -15,4 +15,4 @@ hover_thrust:
 
 g : 9.8
 
-max_tilt_angle: 80 # [deg]
+max_tilt_angle: 90 # [deg]
