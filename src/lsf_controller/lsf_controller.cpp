@@ -161,7 +161,11 @@ private:
   Lsf *lsf_roll;
   Lsf *lsf_z;
 
-  double hover_thrust_;
+  double uav_mass_;
+  double g_;
+  double hover_thrust_a_, hover_thrust_b_;
+  double hover_thrust;
+
   double roll, pitch, yaw;
 
   // gains
@@ -191,7 +195,6 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
   kiz_          = config.kiz;
   kixy_lim_     = config.kixy_lim;
   kiz_lim_      = config.kiz_lim;
-  hover_thrust_ = config.hover_thrust;
 
   lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
   lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
@@ -236,7 +239,11 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   priv_nh.param("kiz", kiz_, -1.0);
   priv_nh.param("kixy_lim", kixy_lim_, -1.0);
   priv_nh.param("kiz_lim", kiz_lim_, -1.0);
-  priv_nh.param("hover_thrust", hover_thrust_, -1.0);
+  priv_nh.param("hover_thrust/a", hover_thrust_a_, -1000.0);
+  priv_nh.param("hover_thrust/b", hover_thrust_b_, -1000.0);
+  priv_nh.param("uav_mass", uav_mass_, -1.0);
+  priv_nh.param("g", g_, -1.0);
+  priv_nh.param("max_tilt_angle", max_tilt_angle_, -1.0);
 
   if (kpxy_ < 0) {
     ROS_ERROR("[LsfController]: kpxy is not specified!");
@@ -278,12 +285,26 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  if (hover_thrust_ < 0) {
-    ROS_ERROR("[LsfController]: hover_thrust is not specified!");
+  if (hover_thrust_a_ < -999) {
+    ROS_ERROR("[LsfController]: hover_thrust/a is not specified!");
     ros::shutdown();
   }
 
-  priv_nh.param("max_tilt_angle", max_tilt_angle_, -1.0);
+  if (hover_thrust_b_ < -999) {
+    ROS_ERROR("[LsfController]: hover_thrust/b is not specified!");
+    ros::shutdown();
+  }
+
+  if (uav_mass_ < 0) {
+    ROS_ERROR("[LsfController]: uav_mass is not specified!");
+    ros::shutdown();
+  }
+
+  if (g_ < 0) {
+    ROS_ERROR("[LsfController]: g is not specified!");
+    ros::shutdown();
+  }
+
   if (max_tilt_angle_ < 0) {
     ROS_ERROR("[LsfController]: max_tilt_angle is not specified!");
     ros::shutdown();
@@ -295,6 +316,12 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   ROS_INFO("[LsfController]: LsfController was launched with gains:");
   ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kixy_, kixy_lim_);
   ROS_INFO("[LsfController]: vertical:   kpz: %3.5f, kvz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kvz_, kiz_, kiz_lim_);
+
+  // --------------------------------------------------------------
+  // |                 calculate the hover thrust                 |
+  // --------------------------------------------------------------
+  
+  hover_thrust = sqrt(uav_mass_*g_)*hover_thrust_a_ + hover_thrust_b_;
 
   // --------------------------------------------------------------
   // |                       initialize lsfs                      |
@@ -316,7 +343,6 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   last_drs_config.kiz          = kiz_;
   last_drs_config.kixy_lim     = kixy_lim_;
   last_drs_config.kiz_lim      = kiz_lim_;
-  last_drs_config.hover_thrust = hover_thrust_;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, priv_nh));
   reconfigure_server_->updateConfig(last_drs_config);
@@ -389,7 +415,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
 
   double action_pitch = lsf_pitch->update(position_error_x, speed_error_x, dt);
   double action_roll  = lsf_roll->update(-position_error_y, -speed_error_y, dt);
-  double action_z     = (lsf_z->update(position_error_z, speed_error_z, dt) + hover_thrust_) * (1 / (cos(roll) * cos(pitch)));
+  double action_z     = (lsf_z->update(position_error_z, speed_error_z, dt) + hover_thrust) * (1 / (cos(roll) * cos(pitch)));
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();

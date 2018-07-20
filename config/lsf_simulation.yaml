@@ -9,6 +9,10 @@ kiz: 0.06
 kixy_lim: 3.0
 kiz_lim: 3.0
 
-hover_thrust: 0.605
+hover_thrust:
+  a: 0.12962
+  b: -0.10624
+
+g : 9.8
 
 max_tilt_angle: 80 # [deg]

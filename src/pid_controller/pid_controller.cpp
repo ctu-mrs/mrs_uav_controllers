@@ -174,7 +174,11 @@ private:
   Pid *pid_roll;
   Pid *pid_z;
 
-  double hover_thrust_;
+  double uav_mass_;
+  double g_;
+  double hover_thrust_a_, hover_thrust_b_;
+  double hover_thrust;
+
   double roll, pitch, yaw;
 
   // gains
@@ -205,7 +209,6 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
   kiz_          = config.kiz;
   kixy_lim_     = config.kixy_lim;
   kiz_lim_      = config.kiz_lim;
-  hover_thrust_ = config.hover_thrust;
   exp_          = config.exp;
 
   pid_pitch->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
@@ -245,7 +248,10 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   priv_nh.param("kiz", kiz_, -1.0);
   priv_nh.param("kixy_lim", kixy_lim_, -1.0);
   priv_nh.param("kiz_lim", kiz_lim_, -1.0);
-  priv_nh.param("hover_thrust", hover_thrust_, -1.0);
+  priv_nh.param("hover_thrust/a", hover_thrust_a_, -1000.0);
+  priv_nh.param("hover_thrust/b", hover_thrust_b_, -1000.0);
+  priv_nh.param("uav_mass", uav_mass_, -1.0);
+  priv_nh.param("g", g_, -1.0);
   priv_nh.param("exp", exp_, -1.0);
 
   if (kpxy_ < 0) {
@@ -288,8 +294,23 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  if (hover_thrust_ < 0) {
-    ROS_ERROR("[PidController]: hover_thrust is not specified!");
+  if (hover_thrust_a_ < -999) {
+    ROS_ERROR("[LsfController]: hover_thrust/a is not specified!");
+    ros::shutdown();
+  }
+
+  if (hover_thrust_b_ < -999) {
+    ROS_ERROR("[LsfController]: hover_thrust/b is not specified!");
+    ros::shutdown();
+  }
+
+  if (uav_mass_ < 0) {
+    ROS_ERROR("[LsfController]: uav_mass is not specified!");
+    ros::shutdown();
+  }
+
+  if (g_ < 0) {
+    ROS_ERROR("[LsfController]: g is not specified!");
     ros::shutdown();
   }
 
@@ -313,6 +334,12 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   ROS_INFO("[PidController]: other:      exp: %3.5f", exp_);
 
   // --------------------------------------------------------------
+  // |                 calculate the hover thrust                 |
+  // --------------------------------------------------------------
+  
+  hover_thrust = sqrt(uav_mass_*g_)*hover_thrust_a_ + hover_thrust_b_;
+
+  // --------------------------------------------------------------
   // |                       initialize pids                      |
   // --------------------------------------------------------------
 
@@ -332,7 +359,6 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   last_drs_config.kiz          = kiz_;
   last_drs_config.kixy_lim     = kixy_lim_;
   last_drs_config.kiz_lim      = kiz_lim_;
-  last_drs_config.hover_thrust = hover_thrust_;
   last_drs_config.exp          = exp_;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, priv_nh));
@@ -402,7 +428,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
   double action_pitch = pid_pitch->update(error_x, dt);
   double action_roll  = pid_roll->update(-error_y, dt);
-  double action_z     = (pid_z->update(error_z, dt) + hover_thrust_) * (1 / (cos(roll) * cos(pitch)));
+  double action_z     = (pid_z->update(error_z, dt) + hover_thrust) * (1 / (cos(roll) * cos(pitch)));
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
