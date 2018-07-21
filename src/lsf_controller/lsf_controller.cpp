@@ -13,12 +13,12 @@
 
 #include <mrs_controllers/lsf_gainsConfig.h>
 
-using namespace std;
+#include <mrs_lib/Profiler.h>
 
 namespace mrs_controllers
 {
 
-//{ LSF
+//{ class LSF
 
 class Lsf {
 
@@ -130,6 +130,8 @@ void Lsf::reset(void) {
 
 //}
 
+//{ class LsfController
+
 class LsfController : public mrs_mav_manager::Controller {
 
 public:
@@ -180,26 +182,22 @@ private:
 
   ros::Time last_update;
   bool      first_iteration = true;
+
+private:
+  mrs_lib::Profiler *profiler;
+  mrs_lib::Routine * routine_update;
 };
 
 LsfController::LsfController(void) {
 }
 
-void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig &config, uint32_t level) {
+//}
 
-  kpxy_         = config.kpxy;
-  kvxy_         = config.kvxy;
-  kixy_         = config.kixy;
-  kpz_          = config.kpz;
-  kvz_          = config.kvz;
-  kiz_          = config.kiz;
-  kixy_lim_     = config.kixy_lim;
-  kiz_lim_      = config.kiz_lim;
+// --------------------------------------------------------------
+// |                   controller's interface                   |
+// --------------------------------------------------------------
 
-  lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
-  lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
-  lsf_z->setParams(kpz_, kvz_, kiz_, kiz_lim_);
-}
+//{ activate()
 
 bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
@@ -218,12 +216,20 @@ bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   return true;
 }
 
+//}
+
+//{ deactivate()
+
 void LsfController::deactivate(void) {
 }
 
+//}
+
+//{ initialize()
+
 void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
-  ros::NodeHandle priv_nh(parent_nh, "lsf_controller");
+  ros::NodeHandle nh_(parent_nh, "lsf_controller");
 
   ros::Time::waitForValid();
 
@@ -231,19 +237,19 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   // |                       load parameters                      |
   // --------------------------------------------------------------
 
-  priv_nh.param("kpxy", kpxy_, -1.0);
-  priv_nh.param("kvxy", kvxy_, -1.0);
-  priv_nh.param("kixy", kixy_, -1.0);
-  priv_nh.param("kpz", kpz_, -1.0);
-  priv_nh.param("kvz", kvz_, -1.0);
-  priv_nh.param("kiz", kiz_, -1.0);
-  priv_nh.param("kixy_lim", kixy_lim_, -1.0);
-  priv_nh.param("kiz_lim", kiz_lim_, -1.0);
-  priv_nh.param("hover_thrust/a", hover_thrust_a_, -1000.0);
-  priv_nh.param("hover_thrust/b", hover_thrust_b_, -1000.0);
-  priv_nh.param("uav_mass", uav_mass_, -1.0);
-  priv_nh.param("g", g_, -1.0);
-  priv_nh.param("max_tilt_angle", max_tilt_angle_, -1.0);
+  nh_.param("kpxy", kpxy_, -1.0);
+  nh_.param("kvxy", kvxy_, -1.0);
+  nh_.param("kixy", kixy_, -1.0);
+  nh_.param("kpz", kpz_, -1.0);
+  nh_.param("kvz", kvz_, -1.0);
+  nh_.param("kiz", kiz_, -1.0);
+  nh_.param("kixy_lim", kixy_lim_, -1.0);
+  nh_.param("kiz_lim", kiz_lim_, -1.0);
+  nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
+  nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
+  nh_.param("uav_mass", uav_mass_, -1.0);
+  nh_.param("g", g_, -1.0);
+  nh_.param("max_tilt_angle", max_tilt_angle_, -1.0);
 
   if (kpxy_ < 0) {
     ROS_ERROR("[LsfController]: kpxy is not specified!");
@@ -320,8 +326,8 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   // --------------------------------------------------------------
   // |                 calculate the hover thrust                 |
   // --------------------------------------------------------------
-  
-  hover_thrust = sqrt(uav_mass_*g_)*hover_thrust_a_ + hover_thrust_b_;
+
+  hover_thrust = sqrt(uav_mass_ * g_) * hover_thrust_a_ + hover_thrust_b_;
 
   // --------------------------------------------------------------
   // |                       initialize lsfs                      |
@@ -335,23 +341,36 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  last_drs_config.kpxy         = kpxy_;
-  last_drs_config.kvxy         = kvxy_;
-  last_drs_config.kixy         = kixy_;
-  last_drs_config.kpz          = kpz_;
-  last_drs_config.kvz          = kvz_;
-  last_drs_config.kiz          = kiz_;
-  last_drs_config.kixy_lim     = kixy_lim_;
-  last_drs_config.kiz_lim      = kiz_lim_;
+  last_drs_config.kpxy     = kpxy_;
+  last_drs_config.kvxy     = kvxy_;
+  last_drs_config.kixy     = kixy_;
+  last_drs_config.kpz      = kpz_;
+  last_drs_config.kvz      = kvz_;
+  last_drs_config.kiz      = kiz_;
+  last_drs_config.kixy_lim = kixy_lim_;
+  last_drs_config.kiz_lim  = kiz_lim_;
 
-  reconfigure_server_.reset(new ReconfigureServer(config_mutex_, priv_nh));
+  reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(last_drs_config);
   ReconfigureServer::CallbackType f = boost::bind(&LsfController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
+
+  // --------------------------------------------------------------
+  // |                          profiler                          |
+  // --------------------------------------------------------------
+
+  profiler       = new mrs_lib::Profiler(nh_, "LsfController");
+  routine_update = profiler->registerRoutine("update");
 }
+
+//}
+
+//{ update()
 
 const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
+
+  routine_update->start();
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -380,6 +399,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
 
     first_iteration = false;
 
+    routine_update->end();
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
@@ -391,8 +411,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
 
     ROS_WARN("[LsfController]: the update was called with too small dt!");
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
+
+      routine_update->end();
       return last_output_command;
+
     } else {
+
+      routine_update->end();
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
@@ -427,13 +452,44 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
 
   last_output_command = output_command;
 
+  routine_update->end();
   return output_command;
 }
+
+//}
+
+//{ status()
 
 const mrs_msgs::ControllerStatus::Ptr LsfController::status() {
 
   return mrs_msgs::ControllerStatus::Ptr();
 }
+
+//}
+
+// --------------------------------------------------------------
+// |                          callbacks                         |
+// --------------------------------------------------------------
+
+//{ dynamicReconfigureCallback()
+
+void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig &config, uint32_t level) {
+
+  kpxy_     = config.kpxy;
+  kvxy_     = config.kvxy;
+  kixy_     = config.kixy;
+  kpz_      = config.kpz;
+  kvz_      = config.kvz;
+  kiz_      = config.kiz;
+  kixy_lim_ = config.kixy_lim;
+  kiz_lim_  = config.kiz_lim;
+
+  lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
+  lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
+  lsf_z->setParams(kpz_, kvz_, kiz_, kiz_lim_);
+}
+
+//}
 }
 
 #include <pluginlib/class_list_macros.h>

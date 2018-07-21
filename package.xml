@@ -24,9 +24,10 @@
   <build_depend>quadrotor_msgs</build_depend>
   <build_depend>mrs_msgs</build_depend>
   <build_depend>mrs_mav_manager</build_depend>
-  <build_depend>message_generation</build_depend> 
+  <build_depend>message_generation</build_depend>
   <build_depend>dynamic_reconfigure</build_depend>
-  
+  <build_depend>mrs_lib</build_depend>
+
   <run_depend>pluginlib</run_depend>
   <run_depend>message_generation</run_depend>
   <run_depend>geometry_msgs</run_depend>
@@ -40,11 +41,10 @@
   <run_depend>message_runtime</run_depend>
   <run_depend>mrs_mav_manager</run_depend>
   <run_depend>dynamic_reconfigure</run_depend>
+  <run_depend>mrs_lib</run_depend>
 
   <export>
-
     <mrs_mav_manager plugin="${prefix}/pid_controller.xml" />
     <mrs_mav_manager plugin="${prefix}/lsf_controller.xml" />
-
   </export>
 </package>

@@ -13,12 +13,10 @@
 
 #include <mrs_controllers/pid_gainsConfig.h>
 
-using namespace std;
-
 namespace mrs_controllers
 {
 
-//{ PID
+//{ class Pid
 
 class Pid {
 
@@ -143,6 +141,8 @@ void Pid::reset(double last_error) {
 
 //}
 
+//{ class PidController
+
 class PidController : public mrs_mav_manager::Controller {
 
 public:
@@ -199,22 +199,34 @@ private:
 PidController::PidController(void) {
 }
 
+//}
+
+//{ dynamicReconfigureCallback()
+
 void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level) {
 
-  kpxy_         = config.kpxy;
-  kdxy_         = config.kdxy;
-  kixy_         = config.kixy;
-  kpz_          = config.kpz;
-  kdz_          = config.kdz;
-  kiz_          = config.kiz;
-  kixy_lim_     = config.kixy_lim;
-  kiz_lim_      = config.kiz_lim;
-  exp_          = config.exp;
+  kpxy_     = config.kpxy;
+  kdxy_     = config.kdxy;
+  kixy_     = config.kixy;
+  kpz_      = config.kpz;
+  kdz_      = config.kdz;
+  kiz_      = config.kiz;
+  kixy_lim_ = config.kixy_lim;
+  kiz_lim_  = config.kiz_lim;
+  exp_      = config.exp;
 
   pid_pitch->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
   pid_roll->setParams(kpxy_, kdxy_, kixy_, kixy_lim_, exp_);
   pid_z->setParams(kpz_, kdz_, kiz_, kiz_lim_, exp_);
 }
+
+//}
+
+// --------------------------------------------------------------
+// |                   controller's interface                   |
+// --------------------------------------------------------------
+
+//{ activate()
 
 bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
@@ -227,12 +239,20 @@ bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   return true;
 }
 
+//}
+
+//{ deactivate()
+
 void PidController::deactivate(void) {
 }
 
+//}
+
+//{ initialize()
+
 void PidController::initialize(const ros::NodeHandle &parent_nh) {
 
-  ros::NodeHandle priv_nh(parent_nh, "pid_controller");
+  ros::NodeHandle nh_(parent_nh, "pid_controller");
 
   ros::Time::waitForValid();
 
@@ -240,19 +260,19 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   // |                       load parameters                      |
   // --------------------------------------------------------------
 
-  priv_nh.param("kpxy", kpxy_, -1.0);
-  priv_nh.param("kdxy", kdxy_, -1.0);
-  priv_nh.param("kixy", kixy_, -1.0);
-  priv_nh.param("kpz", kpz_, -1.0);
-  priv_nh.param("kdz", kdz_, -1.0);
-  priv_nh.param("kiz", kiz_, -1.0);
-  priv_nh.param("kixy_lim", kixy_lim_, -1.0);
-  priv_nh.param("kiz_lim", kiz_lim_, -1.0);
-  priv_nh.param("hover_thrust/a", hover_thrust_a_, -1000.0);
-  priv_nh.param("hover_thrust/b", hover_thrust_b_, -1000.0);
-  priv_nh.param("uav_mass", uav_mass_, -1.0);
-  priv_nh.param("g", g_, -1.0);
-  priv_nh.param("exp", exp_, -1.0);
+  nh_.param("kpxy", kpxy_, -1.0);
+  nh_.param("kdxy", kdxy_, -1.0);
+  nh_.param("kixy", kixy_, -1.0);
+  nh_.param("kpz", kpz_, -1.0);
+  nh_.param("kdz", kdz_, -1.0);
+  nh_.param("kiz", kiz_, -1.0);
+  nh_.param("kixy_lim", kixy_lim_, -1.0);
+  nh_.param("kiz_lim", kiz_lim_, -1.0);
+  nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
+  nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
+  nh_.param("uav_mass", uav_mass_, -1.0);
+  nh_.param("g", g_, -1.0);
+  nh_.param("exp", exp_, -1.0);
 
   if (kpxy_ < 0) {
     ROS_ERROR("[PidController]: kpxy is not specified!");
@@ -319,7 +339,7 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  priv_nh.param("max_tilt_angle", max_tilt_angle_, -1.0);
+  nh_.param("max_tilt_angle", max_tilt_angle_, -1.0);
   if (max_tilt_angle_ < 0) {
     ROS_ERROR("[PidController]: max_tilt_angle is not specified!");
     ros::shutdown();
@@ -336,8 +356,8 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   // --------------------------------------------------------------
   // |                 calculate the hover thrust                 |
   // --------------------------------------------------------------
-  
-  hover_thrust = sqrt(uav_mass_*g_)*hover_thrust_a_ + hover_thrust_b_;
+
+  hover_thrust = sqrt(uav_mass_ * g_) * hover_thrust_a_ + hover_thrust_b_;
 
   // --------------------------------------------------------------
   // |                       initialize pids                      |
@@ -351,21 +371,25 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  last_drs_config.kpxy         = kpxy_;
-  last_drs_config.kdxy         = kdxy_;
-  last_drs_config.kixy         = kixy_;
-  last_drs_config.kpz          = kpz_;
-  last_drs_config.kdz          = kdz_;
-  last_drs_config.kiz          = kiz_;
-  last_drs_config.kixy_lim     = kixy_lim_;
-  last_drs_config.kiz_lim      = kiz_lim_;
-  last_drs_config.exp          = exp_;
+  last_drs_config.kpxy     = kpxy_;
+  last_drs_config.kdxy     = kdxy_;
+  last_drs_config.kixy     = kixy_;
+  last_drs_config.kpz      = kpz_;
+  last_drs_config.kdz      = kdz_;
+  last_drs_config.kiz      = kiz_;
+  last_drs_config.kixy_lim = kixy_lim_;
+  last_drs_config.kiz_lim  = kiz_lim_;
+  last_drs_config.exp      = exp_;
 
-  reconfigure_server_.reset(new ReconfigureServer(config_mutex_, priv_nh));
+  reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(last_drs_config);
   ReconfigureServer::CallbackType f = boost::bind(&PidController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
 }
+
+//}
+
+//{ update()
 
 const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
@@ -443,10 +467,20 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   return output_command;
 }
 
+//}
+
+//{ status()
+
 const mrs_msgs::ControllerStatus::Ptr PidController::status() {
 
   return mrs_msgs::ControllerStatus::Ptr();
 }
+
+//}
+
+// --------------------------------------------------------------
+// |                          callbacks                         |
+// --------------------------------------------------------------
 }
 
 #include <pluginlib/class_list_macros.h>
