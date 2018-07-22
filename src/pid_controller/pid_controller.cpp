@@ -13,6 +13,8 @@
 
 #include <mrs_controllers/pid_gainsConfig.h>
 
+#include <mrs_lib/Profiler.h>
+
 namespace mrs_controllers
 {
 
@@ -194,6 +196,10 @@ private:
 
   ros::Time last_update;
   bool      first_iteration = true;
+
+private:
+  mrs_lib::Profiler *profiler;
+  mrs_lib::Routine * routine_update;
 };
 
 PidController::PidController(void) {
@@ -225,28 +231,6 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
 // --------------------------------------------------------------
 // |                   controller's interface                   |
 // --------------------------------------------------------------
-
-//{ activate()
-
-bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
-
-  activation_control_command_ = *cmd;
-
-  first_iteration = true;
-
-  ROS_INFO("[PidController]: activated");
-
-  return true;
-}
-
-//}
-
-//{ deactivate()
-
-void PidController::deactivate(void) {
-}
-
-//}
 
 //{ initialize()
 
@@ -385,6 +369,35 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   reconfigure_server_->updateConfig(last_drs_config);
   ReconfigureServer::CallbackType f = boost::bind(&PidController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
+
+  // --------------------------------------------------------------
+  // |                          profiler                          |
+  // --------------------------------------------------------------
+
+  profiler       = new mrs_lib::Profiler(nh_, "PidController");
+  routine_update = profiler->registerRoutine("update");
+}
+
+//}
+
+//{ activate()
+
+bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+
+  activation_control_command_ = *cmd;
+
+  first_iteration = true;
+
+  ROS_INFO("[PidController]: activated");
+
+  return true;
+}
+
+//}
+
+//{ deactivate()
+
+void PidController::deactivate(void) {
 }
 
 //}
@@ -393,6 +406,8 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
 
 const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
+
+  routine_update->start();
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -417,6 +432,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
     first_iteration = false;
 
+    routine_update->end();
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
@@ -428,8 +444,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
     ROS_WARN("[PidController]: the update was called with too small dt!");
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
+
+      routine_update->end();
       return last_output_command;
+
     } else {
+
+      routine_update->end();
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
@@ -464,6 +485,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
   last_output_command = output_command;
 
+  routine_update->end();
   return output_command;
 }
 

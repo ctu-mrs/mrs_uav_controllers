@@ -197,34 +197,6 @@ LsfController::LsfController(void) {
 // |                   controller's interface                   |
 // --------------------------------------------------------------
 
-//{ activate()
-
-bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
-
-  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
-    activation_control_command_ = mrs_msgs::AttitudeCommand();
-    ROS_WARN("[LsfController]: activated without getting the last tracker's command.");
-  } else {
-    activation_control_command_ = *cmd;
-    ROS_INFO("[LsfController]: activated with a last trackers command.");
-  }
-
-  first_iteration = true;
-
-  ROS_INFO("[LsfController]: activated");
-
-  return true;
-}
-
-//}
-
-//{ deactivate()
-
-void LsfController::deactivate(void) {
-}
-
-//}
-
 //{ initialize()
 
 void LsfController::initialize(const ros::NodeHandle &parent_nh) {
@@ -361,6 +333,34 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   profiler       = new mrs_lib::Profiler(nh_, "LsfController");
   routine_update = profiler->registerRoutine("update");
+}
+
+//}
+
+//{ activate()
+
+bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+
+  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+    activation_control_command_ = mrs_msgs::AttitudeCommand();
+    ROS_WARN("[LsfController]: activated without getting the last tracker's command.");
+  } else {
+    activation_control_command_ = *cmd;
+    ROS_INFO("[LsfController]: activated with a last trackers command.");
+  }
+
+  first_iteration = true;
+
+  ROS_INFO("[LsfController]: activated");
+
+  return true;
+}
+
+//}
+
+//{ deactivate()
+
+void LsfController::deactivate(void) {
 }
 
 //}
