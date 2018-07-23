@@ -1,5 +1,5 @@
 [submodule "utils/tmux"]
-	path = pes/utils/tmux
+	path = utils/tmux
 	url = https://github.com/tmux/tmux
 [submodule "utils/tmuxinator"]
 	path = pes/utils/tmuxinator
