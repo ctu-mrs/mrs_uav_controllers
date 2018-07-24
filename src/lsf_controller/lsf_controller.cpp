@@ -350,7 +350,7 @@ bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   }
 
   first_iteration = true;
-
+ 
   ROS_INFO("[LsfController]: activated");
 
   return true;
@@ -361,6 +361,10 @@ bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 //{ deactivate()
 
 void LsfController::deactivate(void) {
+
+  first_iteration = false;
+
+  ROS_INFO("[LsfController]: deactivated");
 }
 
 //}

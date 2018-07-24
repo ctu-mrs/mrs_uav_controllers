@@ -398,6 +398,10 @@ bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 //{ deactivate()
 
 void PidController::deactivate(void) {
+
+  first_iteration = false;
+
+  ROS_INFO("[PidController]: deactivated");
 }
 
 //}
