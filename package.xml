@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
 <package>
+
   <name>mrs_controllers</name>
   <version>1.0.0</version>
   <description>The mrs_controllers package</description>
@@ -47,4 +48,5 @@
     <mrs_mav_manager plugin="${prefix}/pid_controller.xml" />
     <mrs_mav_manager plugin="${prefix}/lsf_controller.xml" />
   </export>
+
 </package>
