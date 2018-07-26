@@ -24,12 +24,10 @@ class Lsf {
 
 public:
   Lsf(std::string name, double kp, double kv, double ki, double integral_saturation, double saturation);
-
   double update(double position_error, double speed_error, double dt);
-
   void reset(void);
-
   void setParams(double kp, double kv, double ki, double integral_saturation);
+  bool isSaturated(void);
 
 private:
   double integral;
@@ -41,6 +39,8 @@ private:
 
   double integral_saturation;
   double saturation;
+
+  double saturated;
 
   std::string name;
 };
@@ -63,6 +63,8 @@ Lsf::Lsf(std::string name, double kp, double kv, double ki, double integral_satu
   this->integral_saturation = integral_saturation;
   this->saturation          = saturation;
 
+  this->saturated = false;
+
   this->integral = 0;
 }
 
@@ -76,7 +78,6 @@ double Lsf::update(double position_error, double speed_error, double dt) {
   double control_output = p_component + v_component + i_component;
 
   // saturate the control output
-  bool saturated = false;
   if (!std::isfinite(control_output)) {
     control_output = 0;
     ROS_WARN_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
@@ -104,19 +105,19 @@ double Lsf::update(double position_error, double speed_error, double dt) {
   }
 
   // saturate the integral
-  saturated = false;
+  double integral_saturated = false;
   if (!std::isfinite(integral)) {
     integral = 0;
     ROS_WARN_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"integral\", setting it to 0 and returning!!!");
   } else if (integral > integral_saturation) {
-    integral  = integral_saturation;
-    saturated = true;
+    integral           = integral_saturation;
+    integral_saturated = true;
   } else if (integral < -integral_saturation) {
-    integral  = -integral_saturation;
-    saturated = true;
+    integral           = -integral_saturation;
+    integral_saturated = true;
   }
 
-  if (saturated) {
+  if (integral_saturation > 0 && integral_saturated) {
     ROS_WARN_THROTTLE(1.0, "[LsfController]: The \"%s\" LSF's integral is being saturated!", name.c_str());
   }
 
@@ -126,6 +127,11 @@ double Lsf::update(double position_error, double speed_error, double dt) {
 void Lsf::reset(void) {
 
   this->integral = 0;
+}
+
+bool Lsf::isSaturated(void) {
+
+  return saturated;
 }
 
 //}
@@ -164,6 +170,7 @@ private:
   Lsf *lsf_z;
 
   double uav_mass_;
+  double uav_mass_difference;
   double g_;
   double hover_thrust_a_, hover_thrust_b_;
   double hover_thrust;
@@ -172,8 +179,9 @@ private:
 
   // gains
   double kpxy_, kixy_, kvxy_;
-  double kpz_, kiz_, kvz_;
-  double kixy_lim_, kiz_lim_;
+  double kpz_, kvz_;
+  double kixy_lim_;
+  double km_, km_lim_;
 
   double max_tilt_angle_;
 
@@ -214,9 +222,9 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   nh_.param("kixy", kixy_, -1.0);
   nh_.param("kpz", kpz_, -1.0);
   nh_.param("kvz", kvz_, -1.0);
-  nh_.param("kiz", kiz_, -1.0);
+  nh_.param("km", km_, -1.0);
   nh_.param("kixy_lim", kixy_lim_, -1.0);
-  nh_.param("kiz_lim", kiz_lim_, -1.0);
+  nh_.param("km_lim", km_lim_, -1.0);
   nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
   nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
   nh_.param("uav_mass", uav_mass_, -1.0);
@@ -248,8 +256,8 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  if (kiz_ < 0) {
-    ROS_ERROR("[LsfController]: kiz is not specified!");
+  if (km_ < 0) {
+    ROS_ERROR("[LsfController]: km is not specified!");
     ros::shutdown();
   }
 
@@ -258,8 +266,8 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  if (kiz_lim_ < 0) {
-    ROS_ERROR("[LsfController]: kiz_lim is not specified!");
+  if (km_lim_ < 0) {
+    ROS_ERROR("[LsfController]: km_lim is not specified!");
     ros::shutdown();
   }
 
@@ -293,7 +301,10 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   ROS_INFO("[LsfController]: LsfController was launched with gains:");
   ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kixy_, kixy_lim_);
-  ROS_INFO("[LsfController]: vertical:   kpz: %3.5f, kvz: %3.5f, kiz: %3.5f, kiz_lim: %3.5f", kpz_, kvz_, kiz_, kiz_lim_);
+  ROS_INFO("[LsfController]: vertical:   kpz: %3.5f, kvz: %3.5f", kpz_, kvz_);
+  ROS_INFO("[LsfController]: mass:       km: %3.5f, km_lim: %3.5f", km_, km_lim_);
+
+  uav_mass_difference = 0;
 
   // --------------------------------------------------------------
   // |                 calculate the hover thrust                 |
@@ -307,7 +318,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   lsf_pitch = new Lsf("x", kpxy_, kvxy_, kixy_, kixy_lim_, max_tilt_angle_);
   lsf_roll  = new Lsf("y", kpxy_, kvxy_, kixy_, kixy_lim_, max_tilt_angle_);
-  lsf_z     = new Lsf("z", kpz_, kvz_, kiz_, kiz_lim_, 1.0);
+  lsf_z     = new Lsf("z", kpz_, kvz_, 0, 0, 1.0);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -318,9 +329,9 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   last_drs_config.kixy     = kixy_;
   last_drs_config.kpz      = kpz_;
   last_drs_config.kvz      = kvz_;
-  last_drs_config.kiz      = kiz_;
   last_drs_config.kixy_lim = kixy_lim_;
-  last_drs_config.kiz_lim  = kiz_lim_;
+  last_drs_config.km       = km_;
+  last_drs_config.km_lim   = km_lim_;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(last_drs_config);
@@ -343,14 +354,16 @@ bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
     activation_control_command_ = mrs_msgs::AttitudeCommand();
+    uav_mass_difference         = 0;
     ROS_WARN("[LsfController]: activated without getting the last tracker's command.");
   } else {
     activation_control_command_ = *cmd;
+    uav_mass_difference         = cmd->mass_difference;
     ROS_INFO("[LsfController]: activated with a last trackers command.");
   }
 
   first_iteration = true;
- 
+
   ROS_INFO("[LsfController]: activated");
 
   return true;
@@ -362,7 +375,8 @@ bool LsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
 void LsfController::deactivate(void) {
 
-  first_iteration = false;
+  first_iteration     = false;
+  uav_mass_difference = 0;
 
   ROS_INFO("[LsfController]: deactivated");
 }
@@ -439,6 +453,40 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
+  // |                recalculate the hover thrust                |
+  // --------------------------------------------------------------
+
+  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * hover_thrust_a_ + hover_thrust_b_;
+
+  // --------------------------------------------------------------
+  // |                integrate the mass difference               |
+  // --------------------------------------------------------------
+
+  if (!lsf_z->isSaturated()) {
+
+    uav_mass_difference += km_ * position_error_z * dt;
+  }
+
+  // saturate the integral
+  bool uav_mass_saturated = false;
+  if (!std::isfinite(uav_mass_difference)) {
+    uav_mass_difference = 0;
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
+  } else if (uav_mass_difference > km_lim_) {
+    uav_mass_difference = km_lim_;
+    uav_mass_saturated  = true;
+  } else if (uav_mass_difference < -km_lim_) {
+    uav_mass_difference = -km_lim_;
+    uav_mass_saturated  = true;
+  }
+
+  if (uav_mass_saturated) {
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: The uav_mass_difference is being saturated!");
+  }
+
+  ROS_INFO_THROTTLE(1.0, "[LsfController]: uav_mass_difference=%2.2f", uav_mass_difference);
+
+  // --------------------------------------------------------------
   // |                     calculate the LSFs                     |
   // --------------------------------------------------------------
 
@@ -453,6 +501,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   output_command->roll   = action_roll * cos(yaw) + action_pitch * sin(yaw);
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
+
+  output_command->mass_difference = uav_mass_difference;
 
   last_output_command = output_command;
 
@@ -484,13 +534,13 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
   kixy_     = config.kixy;
   kpz_      = config.kpz;
   kvz_      = config.kvz;
-  kiz_      = config.kiz;
+  km_       = config.km;
   kixy_lim_ = config.kixy_lim;
-  kiz_lim_  = config.kiz_lim;
+  km_lim_   = config.km_lim;
 
   lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
   lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
-  lsf_z->setParams(kpz_, kvz_, kiz_, kiz_lim_);
+  lsf_z->setParams(kpz_, kvz_, 0, 0);
 }
 
 //}

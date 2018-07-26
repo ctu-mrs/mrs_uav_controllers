@@ -92,3 +92,18 @@ add_dependencies(LsfController
 target_link_libraries(LsfController
   ${catkin_LIBRARIES}
   )
+
+# Failsafe controller
+
+add_library(FailsafeController
+  src/failsafe_controller/failsafe_controller.cpp
+  )
+
+add_dependencies(FailsafeController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  )
+
+target_link_libraries(FailsafeController
+  ${catkin_LIBRARIES}
+  )

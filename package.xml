@@ -47,6 +47,7 @@
   <export>
     <mrs_mav_manager plugin="${prefix}/pid_controller.xml" />
     <mrs_mav_manager plugin="${prefix}/lsf_controller.xml" />
+    <mrs_mav_manager plugin="${prefix}/failsafe_controller.xml" />
   </export>
 
 </package>
