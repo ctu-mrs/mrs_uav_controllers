@@ -177,6 +177,8 @@ private:
 
   double roll, pitch, yaw;
 
+  double yaw_offset;
+
   // gains
   double kpxy_, kixy_, kvxy_;
   double kpz_, kvz_;
@@ -230,6 +232,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   nh_.param("uav_mass", uav_mass_, -1.0);
   nh_.param("g", g_, -1.0);
   nh_.param("max_tilt_angle", max_tilt_angle_, -1.0);
+  nh_.param("yaw_offset", yaw_offset, -1000.0);
 
   if (kpxy_ < 0) {
     ROS_ERROR("[LsfController]: kpxy is not specified!");
@@ -296,8 +299,14 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
+  if (yaw_offset < -999.0) {
+    ROS_ERROR("[LsfController]: yaw_offset is not specified!");
+    ros::shutdown();
+  }
+
   // convert to radians
   max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
+  yaw_offset      = (yaw_offset / 180) * 3.141592;
 
   ROS_INFO("[LsfController]: LsfController was launched with gains:");
   ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kixy_, kixy_lim_);
@@ -324,14 +333,15 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  last_drs_config.kpxy     = kpxy_;
-  last_drs_config.kvxy     = kvxy_;
-  last_drs_config.kixy     = kixy_;
-  last_drs_config.kpz      = kpz_;
-  last_drs_config.kvz      = kvz_;
-  last_drs_config.kixy_lim = kixy_lim_;
-  last_drs_config.km       = km_;
-  last_drs_config.km_lim   = km_lim_;
+  last_drs_config.kpxy       = kpxy_;
+  last_drs_config.kvxy       = kvxy_;
+  last_drs_config.kixy       = kixy_;
+  last_drs_config.kpz        = kpz_;
+  last_drs_config.kvz        = kvz_;
+  last_drs_config.kixy_lim   = kixy_lim_;
+  last_drs_config.km         = km_;
+  last_drs_config.km_lim     = km_lim_;
+  last_drs_config.yaw_offset = yaw_offset;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(last_drs_config);
@@ -489,8 +499,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   if (reference->disable_position_gains) {
-    lsf_pitch->setParams(kpxy_/10.0, kvxy_, kixy_, kixy_lim_);
-    lsf_roll->setParams(kpxy_/10.0, kvxy_, kixy_, kixy_lim_);
+    lsf_pitch->setParams(kpxy_ / 10.0, kvxy_, kixy_, kixy_lim_);
+    lsf_roll->setParams(kpxy_ / 10.0, kvxy_, kixy_, kixy_lim_);
     ROS_WARN_THROTTLE(1.0, "[LsfController]: position gains are disabled");
   } else {
     lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
@@ -508,8 +518,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  output_command->pitch  = action_pitch * cos(yaw) - action_roll * sin(yaw);
-  output_command->roll   = action_roll * cos(yaw) + action_pitch * sin(yaw);
+  output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset);
+  output_command->roll   = action_roll * cos(yaw + yaw_offset) + action_pitch * sin(yaw + yaw_offset);
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
 
@@ -540,14 +550,15 @@ const mrs_msgs::ControllerStatus::Ptr LsfController::status() {
 
 void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig &config, uint32_t level) {
 
-  kpxy_     = config.kpxy;
-  kvxy_     = config.kvxy;
-  kixy_     = config.kixy;
-  kpz_      = config.kpz;
-  kvz_      = config.kvz;
-  km_       = config.km;
-  kixy_lim_ = config.kixy_lim;
-  km_lim_   = config.km_lim;
+  kpxy_      = config.kpxy;
+  kvxy_      = config.kvxy;
+  kixy_      = config.kixy;
+  kpz_       = config.kpz;
+  kvz_       = config.kvz;
+  km_        = config.km;
+  kixy_lim_  = config.kixy_lim;
+  km_lim_    = config.km_lim;
+  yaw_offset = (config.yaw_offset / 180) * 3.141592;
 
   lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
   lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
