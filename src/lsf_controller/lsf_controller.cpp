@@ -306,7 +306,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   // convert to radians
   max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
-  yaw_offset      = (yaw_offset / 180) * 3.141592;
+  yaw_offset      = (yaw_offset / 180.0) * 3.141592;
 
   ROS_INFO("[LsfController]: LsfController was launched with gains:");
   ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kixy_, kixy_lim_);
@@ -341,7 +341,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   last_drs_config.kixy_lim   = kixy_lim_;
   last_drs_config.km         = km_;
   last_drs_config.km_lim     = km_lim_;
-  last_drs_config.yaw_offset = (yaw_offset / 180) * 3.1415;
+  last_drs_config.yaw_offset = (yaw_offset / 3.1415) * 180;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(last_drs_config);
@@ -559,6 +559,8 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
   kixy_lim_  = config.kixy_lim;
   km_lim_    = config.km_lim;
   yaw_offset = (config.yaw_offset / 180) * 3.141592;
+
+  ROS_INFO("[LsfController]: yaw_offset update to %2.2f deg", config.yaw_offset);
 
   lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
   lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
