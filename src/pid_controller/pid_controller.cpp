@@ -526,8 +526,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
     ROS_WARN_THROTTLE(1.0, "[PidController]: The uav_mass_difference is being saturated!");
   }
 
-  ROS_INFO_THROTTLE(1.0, "[PidController]: uav_mass_difference=%2.2f", uav_mass_difference);
-
   // --------------------------------------------------------------
   // |                     calculate the PIDs                     |
   // --------------------------------------------------------------

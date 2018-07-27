@@ -484,7 +484,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
     ROS_WARN_THROTTLE(1.0, "[LsfController]: The uav_mass_difference is being saturated!");
   }
 
-  ROS_INFO_THROTTLE(1.0, "[LsfController]: uav_mass_difference=%2.2f", uav_mass_difference);
+  // --------------------------------------------------------------
+  // |                      update parameters                     |
+  // --------------------------------------------------------------
+
+  if (reference->disable_position_gains) {
+    lsf_pitch->setParams(kpxy_/10.0, kvxy_, kixy_, kixy_lim_);
+    lsf_roll->setParams(kpxy_/10.0, kvxy_, kixy_, kixy_lim_);
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: position gains are disabled");
+  } else {
+    lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
+    lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
+  }
 
   // --------------------------------------------------------------
   // |                     calculate the LSFs                     |
