@@ -341,7 +341,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   last_drs_config.kixy_lim   = kixy_lim_;
   last_drs_config.km         = km_;
   last_drs_config.km_lim     = km_lim_;
-  last_drs_config.yaw_offset = yaw_offset;
+  last_drs_config.yaw_offset = (yaw_offset / 180) * 3.1415;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(last_drs_config);

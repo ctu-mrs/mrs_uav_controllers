@@ -18,4 +18,4 @@ g : 9.8
 
 max_tilt_angle: 45.0 # [deg]
 
-yaw_offset: 5.0 # [deg]
+yaw_offset: 10.0 # [deg]
