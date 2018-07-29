@@ -23,10 +23,10 @@ namespace mrs_controllers
 class Lsf {
 
 public:
-  Lsf(std::string name, double kp, double kv, double ki, double integral_saturation, double saturation);
-  double update(double position_error, double speed_error, double dt);
+  Lsf(std::string name, double kp, double kv, double ka, double ki, double integral_saturation, double saturation, double g);
+  double update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt, double hover_thrust);
   void reset(void);
-  void setParams(double kp, double kv, double ki, double integral_saturation);
+  void setParams(double kp, double kv, double ka, double ki, double integral_saturation);
   bool isSaturated(void);
 
 private:
@@ -35,47 +35,62 @@ private:
   // gains
   double kp;
   double kv;
+  double ka;
   double ki;
 
   double integral_saturation;
   double saturation;
+
+  double g;
 
   double saturated;
 
   std::string name;
 };
 
-void Lsf::setParams(double kp, double kv, double ki, double integral_saturation) {
+void Lsf::setParams(double kp, double kv, double ka, double ki, double integral_saturation) {
 
   this->kp                  = kp;
   this->kv                  = kv;
+  this->ka                  = ka;
   this->ki                  = ki;
   this->integral_saturation = integral_saturation;
 }
 
-Lsf::Lsf(std::string name, double kp, double kv, double ki, double integral_saturation, double saturation) {
+Lsf::Lsf(std::string name, double kp, double kv, double ka, double ki, double integral_saturation, double saturation, double g) {
 
   this->name = name;
 
   this->kp                  = kp;
   this->kv                  = kv;
+  this->ka                  = ka;
   this->ki                  = ki;
   this->integral_saturation = integral_saturation;
   this->saturation          = saturation;
+
+  this->g = g;
 
   this->saturated = false;
 
   this->integral = 0;
 }
 
-double Lsf::update(double position_error, double speed_error, double dt) {
+double Lsf::update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt,
+                   double hover_thrust) {
 
   double p_component = kp * position_error;
   double v_component = kv * speed_error;
   double i_component = ki * integral;
+  double a_component;
+
+  if (name.compare(std::string("x")) == 0 || name.compare(std::string("y")) == 0) {
+    a_component = ka * asin((desired_acceleration * cos(pitch) * cos(roll)) / g);
+  } else {
+    a_component = ka * desired_acceleration * (hover_thrust / g);
+  }
 
   // calculate the lsf action
-  double control_output = p_component + v_component + i_component;
+  double control_output = p_component + v_component + a_component + i_component;
 
   // saturate the control output
   if (!std::isfinite(control_output)) {
@@ -180,8 +195,8 @@ private:
   double yaw_offset;
 
   // gains
-  double kpxy_, kixy_, kvxy_;
-  double kpz_, kvz_;
+  double kpxy_, kixy_, kvxy_, kaxy_;
+  double kpz_, kvz_, kaz_;
   double kixy_lim_;
   double km_, km_lim_;
 
@@ -221,9 +236,11 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   nh_.param("kpxy", kpxy_, -1.0);
   nh_.param("kvxy", kvxy_, -1.0);
+  nh_.param("kaxy", kaxy_, -1.0);
   nh_.param("kixy", kixy_, -1.0);
   nh_.param("kpz", kpz_, -1.0);
   nh_.param("kvz", kvz_, -1.0);
+  nh_.param("kaz", kaz_, -1.0);
   nh_.param("km", km_, -1.0);
   nh_.param("kixy_lim", kixy_lim_, -1.0);
   nh_.param("km_lim", km_lim_, -1.0);
@@ -244,6 +261,11 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
+  if (kaxy_ < 0) {
+    ROS_ERROR("[LsfController]: kaxy is not specified!");
+    ros::shutdown();
+  }
+
   if (kixy_ < 0) {
     ROS_ERROR("[LsfController]: kixy is not specified!");
     ros::shutdown();
@@ -256,6 +278,11 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   if (kvz_ < 0) {
     ROS_ERROR("[LsfController]: kvz is not specified!");
+    ros::shutdown();
+  }
+
+  if (kaz_ < 0) {
+    ROS_ERROR("[LsfController]: kaz is not specified!");
     ros::shutdown();
   }
 
@@ -309,8 +336,8 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   yaw_offset      = (yaw_offset / 180.0) * 3.141592;
 
   ROS_INFO("[LsfController]: LsfController was launched with gains:");
-  ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kixy_, kixy_lim_);
-  ROS_INFO("[LsfController]: vertical:   kpz: %3.5f, kvz: %3.5f", kpz_, kvz_);
+  ROS_INFO("[LsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kaxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_);
+  ROS_INFO("[LsfController]: vertical:   kpz: %3.5f, kvz: %3.5f, kaz: %3.3f", kpz_, kvz_, kaz_);
   ROS_INFO("[LsfController]: mass:       km: %3.5f, km_lim: %3.5f", km_, km_lim_);
 
   uav_mass_difference = 0;
@@ -325,9 +352,9 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   // |                       initialize lsfs                      |
   // --------------------------------------------------------------
 
-  lsf_pitch = new Lsf("x", kpxy_, kvxy_, kixy_, kixy_lim_, max_tilt_angle_);
-  lsf_roll  = new Lsf("y", kpxy_, kvxy_, kixy_, kixy_lim_, max_tilt_angle_);
-  lsf_z     = new Lsf("z", kpz_, kvz_, 0, 0, 1.0);
+  lsf_pitch = new Lsf("x", kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_, max_tilt_angle_, g_);
+  lsf_roll  = new Lsf("y", kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_, max_tilt_angle_, g_);
+  lsf_z     = new Lsf("z", kpz_, kvz_, kaz_, 0, 0, 1.0, g_);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -335,9 +362,11 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   last_drs_config.kpxy       = kpxy_;
   last_drs_config.kvxy       = kvxy_;
+  last_drs_config.kaxy       = kaxy_;
   last_drs_config.kixy       = kixy_;
   last_drs_config.kpz        = kpz_;
   last_drs_config.kvz        = kvz_;
+  last_drs_config.kaz        = kaz_;
   last_drs_config.kixy_lim   = kixy_lim_;
   last_drs_config.km         = km_;
   last_drs_config.km_lim     = km_lim_;
@@ -499,21 +528,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   if (reference->disable_position_gains) {
-    lsf_pitch->setParams(kpxy_ / 10.0, kvxy_, kixy_, kixy_lim_);
-    lsf_roll->setParams(kpxy_ / 10.0, kvxy_, kixy_, kixy_lim_);
+    lsf_pitch->setParams(kpxy_ / 10.0, kvxy_, kaxy_, kixy_, kixy_lim_);
+    lsf_roll->setParams(kpxy_ / 10.0, kvxy_, kaxy_, kixy_, kixy_lim_);
     ROS_WARN_THROTTLE(1.0, "[LsfController]: position gains are disabled");
   } else {
-    lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
-    lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
+    lsf_pitch->setParams(kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_);
+    lsf_roll->setParams(kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_);
   }
 
   // --------------------------------------------------------------
   // |                     calculate the LSFs                     |
   // --------------------------------------------------------------
 
-  double action_pitch = lsf_pitch->update(position_error_x, speed_error_x, dt);
-  double action_roll  = lsf_roll->update(-position_error_y, -speed_error_y, dt);
-  double action_z     = (lsf_z->update(position_error_z, speed_error_z, dt) + hover_thrust) * (1 / (cos(roll) * cos(pitch)));
+  double action_pitch =
+      lsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust);
+  double action_roll =
+      lsf_roll->update(-position_error_y, -speed_error_y, -reference->acceleration.y, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust);
+  double action_z = (lsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust) +
+                     hover_thrust) *
+                    (1 / (cos(roll) * cos(pitch)));
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
@@ -552,9 +585,11 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
 
   kpxy_      = config.kpxy;
   kvxy_      = config.kvxy;
+  kaxy_      = config.kaxy;
   kixy_      = config.kixy;
   kpz_       = config.kpz;
   kvz_       = config.kvz;
+  kaz_       = config.kaz;
   km_        = config.km;
   kixy_lim_  = config.kixy_lim;
   km_lim_    = config.km_lim;
@@ -562,9 +597,9 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
 
   ROS_INFO("[LsfController]: yaw_offset update to %2.2f deg", config.yaw_offset);
 
-  lsf_pitch->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
-  lsf_roll->setParams(kpxy_, kvxy_, kixy_, kixy_lim_);
-  lsf_z->setParams(kpz_, kvz_, 0, 0);
+  lsf_pitch->setParams(kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_);
+  lsf_roll->setParams(kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_);
+  lsf_z->setParams(kpz_, kvz_, kaz_, 0, 0);
 }
 
 //}
