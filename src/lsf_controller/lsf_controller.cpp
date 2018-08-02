@@ -95,7 +95,11 @@ double Lsf::update(double position_error, double speed_error, double desired_acc
   // saturate the control output
   if (!std::isfinite(control_output)) {
     control_output = 0;
-    ROS_WARN_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"control_output\", setting it to 0 and returning!!!");
+    ROS_INFO("[LsfController]: p_component=%f", p_component);
+    ROS_INFO("[LsfController]: v_component=%f", v_component);
+    ROS_INFO("[LsfController]: i_component=%f", i_component);
+    ROS_INFO("[LsfController]: a_component=%f", a_component);
+    ROS_ERROR_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"control_output\", setting it to 0!!!");
   } else if (control_output > saturation) {
     control_output = saturation;
     saturated      = true;
@@ -123,7 +127,7 @@ double Lsf::update(double position_error, double speed_error, double desired_acc
   double integral_saturated = false;
   if (!std::isfinite(integral)) {
     integral = 0;
-    ROS_WARN_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"integral\", setting it to 0 and returning!!!");
+    ROS_ERROR_THROTTLE(1.0, "[LsfController]: NaN detected in variable \"integral\", setting it to 0!!!");
   } else if (integral > integral_saturation) {
     integral           = integral_saturation;
     integral_saturated = true;
