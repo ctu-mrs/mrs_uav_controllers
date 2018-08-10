@@ -524,7 +524,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   }
 
   if (uav_mass_saturated) {
-    ROS_WARN_THROTTLE(1.0, "[LsfController]: The uav_mass_difference is being saturated!");
+    ROS_WARN_THROTTLE(1.0, "[LsfController]: The uav_mass_difference is being saturated to %1.3f!", uav_mass_difference);
   }
 
   // --------------------------------------------------------------
@@ -598,8 +598,6 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
   kixy_lim_  = config.kixy_lim;
   km_lim_    = config.km_lim;
   yaw_offset = (config.yaw_offset / 180) * 3.141592;
-
-  ROS_INFO("[LsfController]: yaw_offset update to %2.2f deg", config.yaw_offset);
 
   lsf_pitch->setParams(kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_);
   lsf_roll->setParams(kpxy_, kvxy_, kaxy_, kixy_, kixy_lim_);
