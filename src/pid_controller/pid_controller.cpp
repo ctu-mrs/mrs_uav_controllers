@@ -26,9 +26,9 @@ public:
   Pid(std::string name, double kp, double kd, double ki, double integral_saturation, double saturation, double exp_filter_const);
 
   double update(double error, double dt);
-  void reset(double last_error);
-  void setParams(double kp, double kd, double ki, double integral_saturation, double exp_filter_const);
-  bool isSaturated(void);
+  void   reset(double last_error);
+  void   setParams(double kp, double kd, double ki, double integral_saturation, double exp_filter_const);
+  bool   isSaturated(void);
 
 private:
   double integral;
@@ -163,7 +163,7 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr status();
+  const mrs_msgs::ControllerStatus::Ptr     status();
 
   void dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
 
@@ -176,8 +176,8 @@ private:
   typedef mrs_controllers::pid_gainsConfig    Config;
   typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
   boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-  void drs_callback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
-  mrs_controllers::pid_gainsConfig last_drs_config;
+  void                                        drs_callback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
+  mrs_controllers::pid_gainsConfig            last_drs_config;
 
 private:
   Pid *pid_pitch;
@@ -564,7 +564,7 @@ const mrs_msgs::ControllerStatus::Ptr PidController::status() {
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
-}
+}  // namespace mrs_controllers
 
 #include <pluginlib/class_list_macros.h>
 PLUGINLIB_EXPORT_CLASS(mrs_controllers::PidController, mrs_mav_manager::Controller)  //<reformat_checkpoint>

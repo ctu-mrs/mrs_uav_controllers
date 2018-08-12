@@ -25,9 +25,9 @@ class Lsf {
 public:
   Lsf(std::string name, double kp, double kv, double ka, double ki, double integral_saturation, double saturation, double g);
   double update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt, double hover_thrust);
-  void reset(void);
-  void setParams(double kp, double kv, double ka, double ki, double integral_saturation);
-  bool isSaturated(void);
+  void   reset(void);
+  void   setParams(double kp, double kv, double ka, double ki, double integral_saturation);
+  bool   isSaturated(void);
 
 private:
   double integral;
@@ -167,7 +167,7 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr status();
+  const mrs_msgs::ControllerStatus::Ptr     status();
 
   void dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig &config, uint32_t level);
 
@@ -180,8 +180,8 @@ private:
   typedef mrs_controllers::lsf_gainsConfig    Config;
   typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
   boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-  void drs_callback(mrs_controllers::lsf_gainsConfig &config, uint32_t level);
-  mrs_controllers::lsf_gainsConfig last_drs_config;
+  void                                        drs_callback(mrs_controllers::lsf_gainsConfig &config, uint32_t level);
+  mrs_controllers::lsf_gainsConfig            last_drs_config;
 
 private:
   Lsf *lsf_pitch;
@@ -605,7 +605,7 @@ void LsfController::dynamicReconfigureCallback(mrs_controllers::lsf_gainsConfig 
 }
 
 //}
-}
+}  // namespace mrs_controllers
 
 #include <pluginlib/class_list_macros.h>
 PLUGINLIB_EXPORT_CLASS(mrs_controllers::LsfController, mrs_mav_manager::Controller)

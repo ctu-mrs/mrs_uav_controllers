@@ -27,7 +27,7 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr status();
+  const mrs_msgs::ControllerStatus::Ptr     status();
 
 private:
   double uav_mass_;
@@ -250,7 +250,8 @@ const mrs_msgs::ControllerStatus::Ptr FailsafeController::status() {
 }
 
 //}
-}
+
+}  // namespace mrs_controllers
 
 #include <pluginlib/class_list_macros.h>
 PLUGINLIB_EXPORT_CLASS(mrs_controllers::FailsafeController, mrs_mav_manager::Controller)
