@@ -13,8 +13,8 @@ kixy_lim: 3.0
 km_lim: 1.0 # [kg]
 
 hover_thrust:
-  a: 0.12962
-  b: -0.10624
+  a: 0.2
+  b: -0.83
 
 g : 9.8
 
