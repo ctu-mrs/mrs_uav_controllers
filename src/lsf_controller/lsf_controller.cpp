@@ -162,7 +162,7 @@ class LsfController : public mrs_mav_manager::Controller {
 public:
   LsfController(void);
 
-  void initialize(const ros::NodeHandle &parent_nh);
+  void initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -191,7 +191,7 @@ private:
   double uav_mass_;
   double uav_mass_difference;
   double g_;
-  double hover_thrust_a_, hover_thrust_b_;
+  mrs_mav_manager::MotorParams motor_params_;
   double hover_thrust;
 
   double roll, pitch, yaw;
@@ -228,11 +228,13 @@ LsfController::LsfController(void) {
 
 //{ initialize()
 
-void LsfController::initialize(const ros::NodeHandle &parent_nh) {
+void LsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
 
   ros::NodeHandle nh_(parent_nh, "lsf_controller");
 
   ros::Time::waitForValid();
+
+  this->motor_params_ = motor_params;
 
   // --------------------------------------------------------------
   // |                       load parameters                      |
@@ -248,8 +250,6 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   nh_.param("km", km_, -1.0);
   nh_.param("kixy_lim", kixy_lim_, -1.0);
   nh_.param("km_lim", km_lim_, -1.0);
-  nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
-  nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
   nh_.param("uav_mass", uav_mass_, -1.0);
   nh_.param("g", g_, -1.0);
   nh_.param("max_tilt_angle", max_tilt_angle_, -1.0);
@@ -305,16 +305,6 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
     ros::shutdown();
   }
 
-  if (hover_thrust_a_ < -999) {
-    ROS_ERROR("[LsfController]: hover_thrust/a is not specified!");
-    ros::shutdown();
-  }
-
-  if (hover_thrust_b_ < -999) {
-    ROS_ERROR("[LsfController]: hover_thrust/b is not specified!");
-    ros::shutdown();
-  }
-
   if (uav_mass_ < 0) {
     ROS_ERROR("[LsfController]: uav_mass is not specified!");
     ros::shutdown();
@@ -350,7 +340,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   // |                 calculate the hover thrust                 |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt(uav_mass_ * g_) * hover_thrust_a_ + hover_thrust_b_;
+  hover_thrust = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                       initialize lsfs                      |
@@ -499,7 +489,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   // |                recalculate the hover thrust                |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * hover_thrust_a_ + hover_thrust_b_;
+  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                integrate the mass difference               |

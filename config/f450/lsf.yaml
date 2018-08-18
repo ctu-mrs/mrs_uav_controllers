@@ -12,10 +12,6 @@ km: 1.0
 kixy_lim: 3.0
 km_lim: 1.0 # [kg]
 
-hover_thrust:
-  a: 0.3038
-  b: -0.748
-
 g : 9.8
 
 max_tilt_angle: 45.0 # [deg]
