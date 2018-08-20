@@ -550,6 +550,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
 
+  output_command->yaw_rate = reference->yaw_dot;
+
   output_command->mass_difference = uav_mass_difference;
 
   last_output_command = output_command;
