@@ -12,6 +12,8 @@
 
 #include <mrs_lib/Profiler.h>
 
+#include <mrs_lib/ParamLoader.h>
+
 namespace mrs_controllers
 {
 
@@ -30,12 +32,12 @@ public:
   const mrs_msgs::ControllerStatus::Ptr     status();
 
 private:
-  double uav_mass_;
-  double uav_mass_difference;
-  double g_;
+  double                       uav_mass_;
+  double                       uav_mass_difference;
+  double                       g_;
   mrs_mav_manager::MotorParams motor_params_;
-  double hover_thrust;
-  double thrust_decrease_rate_;
+  double                       hover_thrust;
+  double                       thrust_decrease_rate_;
 
   double roll, pitch, yaw;
   double setpoint_yaw;
@@ -74,24 +76,11 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
   // |                       load parameters                      |
   // --------------------------------------------------------------
 
-  nh_.param("thrust_decrease_rate", thrust_decrease_rate_, -1.0);
-  nh_.param("uav_mass", uav_mass_, -1.0);
-  nh_.param("g", g_, -1.0);
+  mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
 
-  if (thrust_decrease_rate_ < 0) {
-    ROS_ERROR("[FailsafeController]: thrust_decrease_rate is not specified!");
-    ros::shutdown();
-  }
-
-  if (uav_mass_ < 0) {
-    ROS_ERROR("[FailsafeController]: uav_mass is not specified!");
-    ros::shutdown();
-  }
-
-  if (g_ < 0) {
-    ROS_ERROR("[FailsafeController]: g is not specified!");
-    ros::shutdown();
-  }
+  param_loader.load_param("thrust_decrease_rate", thrust_decrease_rate_);
+  param_loader.load_param("uav_mass", uav_mass_);
+  param_loader.load_param("g", g_);
 
   uav_mass_difference = 0;
 
@@ -107,6 +96,12 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
 
   profiler       = new mrs_lib::Profiler(nh_, "FailsafeController");
   routine_update = profiler->registerRoutine("update");
+
+  // | ----------------------- finish init ---------------------- |
+
+  if (!param_loader.loaded_successfully()) {
+    ros::shutdown();
+  }
 
   ROS_INFO("[FailsafeController]: initialized");
 }
