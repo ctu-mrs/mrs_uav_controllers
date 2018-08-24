@@ -1,18 +1,21 @@
 gains:
   horizontal:
-    kpxy: 0.15
-    kvxy: 0.15
-    kaxy: 1.0
+    kp: 0.15
+    kv: 0.15
+    ka: 1.0
 
-    kixy: 0.02
-    kixy_lim: 3.0
+    kib: 0.01
+    kib_lim: 0.15
+
+    kiw: 0.01
+    kiw_lim: 0.3
 
     mute_coefficitent: 0.0
 
   vertical:
-    kpz: 0.6
-    kvz: 0.2
-    kaz: 1.0
+    kp: 0.6
+    kv: 0.2
+    ka: 1.0
 
 weight_estimator:
   km: 1.0

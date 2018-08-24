@@ -25,20 +25,23 @@ namespace mrs_controllers
 class Nsf {
 
 public:
-  Nsf(std::string name, double kp, double kv, double ka, double ki, double integral_saturation, double saturation, double g);
-  double update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt, double hover_thrust);
+  Nsf(std::string name, double kp, double kv, double ka, double kiw, double kib, double integral_saturation, double saturation, double g);
+  double update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt, double hover_thrust,
+                double body_integral);
   void   reset(void);
-  void   setParams(double kp, double kv, double ka, double ki, double integral_saturation);
+  void   setParams(double kp, double kv, double ka, double kiw, double kib, double integral_saturation);
   bool   isSaturated(void);
+  double getWorldIntegral(void);
 
 private:
-  double integral;
+  double world_integral;
 
   // gains
   double kp;
   double kv;
   double ka;
-  double ki;
+  double kiw;
+  double kib;
 
   double integral_saturation;
   double saturation;
@@ -50,23 +53,25 @@ private:
   std::string name;
 };
 
-void Nsf::setParams(double kp, double kv, double ka, double ki, double integral_saturation) {
+void Nsf::setParams(double kp, double kv, double ka, double kiw, double kib, double integral_saturation) {
 
   this->kp                  = kp;
   this->kv                  = kv;
   this->ka                  = ka;
-  this->ki                  = ki;
+  this->kiw                 = kiw;
+  this->kib                 = kib;
   this->integral_saturation = integral_saturation;
 }
 
-Nsf::Nsf(std::string name, double kp, double kv, double ka, double ki, double integral_saturation, double saturation, double g) {
+Nsf::Nsf(std::string name, double kp, double kv, double ka, double kiw, double kib, double integral_saturation, double saturation, double g) {
 
   this->name = name;
 
   this->kp                  = kp;
   this->kv                  = kv;
   this->ka                  = ka;
-  this->ki                  = ki;
+  this->kiw                 = kiw;
+  this->kib                 = kib;
   this->integral_saturation = integral_saturation;
   this->saturation          = saturation;
 
@@ -74,15 +79,15 @@ Nsf::Nsf(std::string name, double kp, double kv, double ka, double ki, double in
 
   this->saturated = false;
 
-  this->integral = 0;
+  this->world_integral = 0;
 }
 
 double Nsf::update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt,
-                   double hover_thrust) {
+                   double hover_thrust, double body_integral) {
 
   double p_component = kp * position_error;
   double v_component = kv * speed_error;
-  double i_component = ki * integral;
+  double i_component = world_integral + body_integral;
   double a_component;
 
   if (name.compare(std::string("x")) == 0 || name.compare(std::string("y")) == 0) {
@@ -116,30 +121,30 @@ double Nsf::update(double position_error, double speed_error, double desired_acc
 
     // integrate only in the direction oposite to the saturation (antiwindup)
     if (control_output > 0 && position_error < 0) {
-      integral += position_error * dt;
+      world_integral += kiw * position_error * dt;
     } else if (control_output < 0 && position_error > 0) {
-      integral += position_error * dt;
+      world_integral += kiw * position_error * dt;
     }
   } else {
     // if the output is not saturated, we do not care in which direction do we integrate
-    integral += position_error * dt;
+    world_integral += kiw * position_error * dt;
   }
 
-  // saturate the integral
+  // saturate the world_integral
   double integral_saturated = false;
-  if (!std::isfinite(integral)) {
-    integral = 0;
-    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"integral\", setting it to 0!!!");
-  } else if (integral > integral_saturation) {
-    integral           = integral_saturation;
+  if (!std::isfinite(world_integral)) {
+    world_integral = 0;
+    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"world_integral\", setting it to 0!!!");
+  } else if (world_integral > integral_saturation) {
+    world_integral     = integral_saturation;
     integral_saturated = true;
-  } else if (integral < -integral_saturation) {
-    integral           = -integral_saturation;
+  } else if (world_integral < -integral_saturation) {
+    world_integral     = -integral_saturation;
     integral_saturated = true;
   }
 
   if (integral_saturation > 0 && integral_saturated) {
-    ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF's integral is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF's world_integral is being saturated!", name.c_str());
   }
 
   return control_output;
@@ -147,12 +152,17 @@ double Nsf::update(double position_error, double speed_error, double desired_acc
 
 void Nsf::reset(void) {
 
-  this->integral = 0;
+  this->world_integral = 0;
 }
 
 bool Nsf::isSaturated(void) {
 
   return saturated;
+}
+
+double Nsf::getWorldIntegral(void) {
+
+  return world_integral;
 }
 
 //}
@@ -203,9 +213,9 @@ private:
   double yaw_offset;
 
   // actual gains (used and already filtered)
-  double kpxy, kixy, kvxy, kaxy;
+  double kpxy, kiwxy, kibxy, kvxy, kaxy;
   double kpz, kvz, kaz;
-  double kixy_lim;
+  double kiwxy_lim, kibxy_lim;
   double km, km_lim;
 
   // desired gains (set by DRS)
@@ -238,6 +248,10 @@ private:
 
   double gains_filter_max_change_;  // calculated from change_rate_/timer_rate_;
   double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
+
+private:
+  double body_integral_pitch;
+  double body_integral_roll;
 };
 
 NsfController::NsfController(void) {
@@ -266,23 +280,27 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   mrs_lib::ParamLoader param_loader(nh_, "NsfController");
 
   // lateral gains
-  param_loader.load_param("gains/horizontal/kpxy", kpxy);
-  param_loader.load_param("gains/horizontal/kvxy", kvxy);
-  param_loader.load_param("gains/horizontal/kaxy", kaxy);
-  param_loader.load_param("gains/horizontal/kixy", kixy);
+  param_loader.load_param("gains/horizontal/kp", kpxy);
+  param_loader.load_param("gains/horizontal/kv", kvxy);
+  param_loader.load_param("gains/horizontal/ka", kaxy);
+
+  param_loader.load_param("gains/horizontal/kiw", kiwxy);
+  param_loader.load_param("gains/horizontal/kib", kibxy);
+
   param_loader.load_param("gains/horizontal/mute_coefficitent", mute_coefficitent_);
 
   // height gains
-  param_loader.load_param("gains/vertical/kpz", kpz);
-  param_loader.load_param("gains/vertical/kvz", kvz);
-  param_loader.load_param("gains/vertical/kaz", kaz);
+  param_loader.load_param("gains/vertical/kp", kpz);
+  param_loader.load_param("gains/vertical/kv", kvz);
+  param_loader.load_param("gains/vertical/ka", kaz);
 
   // mass estimator
   param_loader.load_param("weight_estimator/km", km);
   param_loader.load_param("weight_estimator/km_lim", km_lim);
 
   // integrator limits
-  param_loader.load_param("gains/horizontal/kixy_lim", kixy_lim);
+  param_loader.load_param("gains/horizontal/kiw_lim", kiwxy_lim);
+  param_loader.load_param("gains/horizontal/kib_lim", kibxy_lim);
 
   // physical
   param_loader.load_param("uav_mass", uav_mass_);
@@ -310,11 +328,6 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
   yaw_offset      = (yaw_offset / 180.0) * 3.141592;
 
-  ROS_INFO("[NsfController]: NsfController was launched with gains:");
-  ROS_INFO("[NsfController]: horizontal: kpxy: %3.5f, kvxy: %3.5f, kaxy: %3.5f, kixy: %3.5f, kixy_lim: %3.5f", kpxy, kvxy, kaxy, kixy, kixy_lim);
-  ROS_INFO("[NsfController]: vertical:   kpz: %3.5f, kvz: %3.5f, kaz: %3.3f", kpz, kvz, kaz);
-  ROS_INFO("[NsfController]: mass:       km: %3.5f, km_lim: %3.5f", km, km_lim);
-
   uav_mass_difference = 0;
 
   // --------------------------------------------------------------
@@ -327,9 +340,9 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // |                       initialize nsfs                      |
   // --------------------------------------------------------------
 
-  nsf_pitch = new Nsf("x", kpxy, kvxy, kaxy, kixy, kixy_lim, max_tilt_angle_, g_);
-  nsf_roll  = new Nsf("y", kpxy, kvxy, kaxy, kixy, kixy_lim, max_tilt_angle_, g_);
-  nsf_z     = new Nsf("z", kpz, kvz, kaz, 0, 0, 1.0, g_);
+  nsf_pitch = new Nsf("x", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_);
+  nsf_roll  = new Nsf("y", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_);
+  nsf_z     = new Nsf("z", kpz, kvz, kaz, 0, 0, 0, 1.0, g_);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -338,11 +351,13 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   drs_desired_gains.kpxy       = kpxy;
   drs_desired_gains.kvxy       = kvxy;
   drs_desired_gains.kaxy       = kaxy;
-  drs_desired_gains.kixy       = kixy;
+  drs_desired_gains.kiwxy      = kiwxy;
+  drs_desired_gains.kibxy      = kibxy;
   drs_desired_gains.kpz        = kpz;
   drs_desired_gains.kvz        = kvz;
   drs_desired_gains.kaz        = kaz;
-  drs_desired_gains.kixy_lim   = kixy_lim;
+  drs_desired_gains.kiwxy_lim  = kiwxy_lim;
+  drs_desired_gains.kibxy_lim  = kibxy_lim;
   drs_desired_gains.km         = km;
   drs_desired_gains.km_lim     = km_lim;
   drs_desired_gains.yaw_offset = (yaw_offset / 3.1415) * 180;
@@ -423,11 +438,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   double position_error_x = reference->position.x - odometry->pose.pose.position.x;
-  double position_error_y = reference->position.y - odometry->pose.pose.position.y;
+  double position_error_y = -(reference->position.y - odometry->pose.pose.position.y);
   double position_error_z = reference->position.z - odometry->pose.pose.position.z;
 
   double speed_error_x = reference->velocity.x - odometry->twist.twist.linear.x;
-  double speed_error_y = reference->velocity.y - odometry->twist.twist.linear.y;
+  double speed_error_y = -(reference->velocity.y - odometry->twist.twist.linear.y);
   double speed_error_z = reference->velocity.z - odometry->twist.twist.linear.z;
 
   // --------------------------------------------------------------
@@ -495,7 +510,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     uav_mass_difference += km * position_error_z * dt;
   }
 
-  // saturate the integral
+  // saturate the world_integral
   bool uav_mass_saturated = false;
   if (!std::isfinite(uav_mass_difference)) {
     uav_mass_difference = 0;
@@ -516,15 +531,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                      update parameters                     |
   // --------------------------------------------------------------
 
-  /* if (reference->disable_position_gains) { */
-  /*   nsf_pitch->setParams(kpxy / 10.0, kvxy, kaxy, kixy, kixy_lim); */
-  /*   nsf_roll->setParams(kpxy / 10.0, kvxy, kaxy, kixy, kixy_lim); */
-  /*   ROS_WARN_THROTTLE(1.0, "[NsfController]: position gains are disabled"); */
-  /* } else { */
-  /*   nsf_pitch->setParams(kpxy, kvxy, kaxy, kixy, kixy_lim); */
-  /*   nsf_roll->setParams(kpxy, kvxy, kaxy, kixy, kixy_lim); */
-  /* } */
-
   if (mute_lateral_gains && !reference->disable_position_gains) {
     mutex_lateral_gains_after_toggle = true;
   }
@@ -534,18 +540,78 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                     calculate the NSFs                     |
   // --------------------------------------------------------------
 
-  double action_pitch =
-      nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust);
-  double action_roll =
-      nsf_roll->update(-position_error_y, -speed_error_y, -reference->acceleration.y, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust);
-  double action_z = (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust) +
-                     hover_thrust) *
-                    (1 / (cos(roll) * cos(pitch)));
+  double body_integral_x, body_integral_y;
+  body_integral_x = body_integral_pitch * cos(-yaw) - body_integral_roll * sin(-yaw);
+  body_integral_y = body_integral_pitch * sin(-yaw) + body_integral_roll * cos(-yaw);
+
+  double action_pitch = nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, uav_mass_ + uav_mass_difference, pitch, roll, dt,
+                                          hover_thrust, body_integral_x);
+  double action_roll  = nsf_roll->update(position_error_y, speed_error_y, -reference->acceleration.y, uav_mass_ + uav_mass_difference, pitch, roll, dt,
+                                        hover_thrust, body_integral_y);
+  double action_z =
+      (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust, 0) +
+       hover_thrust) *
+      (1 / (cos(roll) * cos(pitch)));
+
+  // --------------------------------------------------------------
+  // |                       body integrals                       |
+  // --------------------------------------------------------------
+
+  mutex_gains.lock();
+  {
+    // rotate the control errors to the body
+    double body_error_pitch, body_error_roll;
+    body_error_pitch = position_error_x * cos(yaw) - position_error_y * sin(yaw);
+    body_error_roll  = position_error_x * sin(yaw) + position_error_y * cos(yaw);
+
+    body_integral_pitch += kibxy * body_error_pitch * dt;
+    body_integral_roll += kibxy * body_error_roll * dt;
+
+    // saturate the world_integral
+    double integral_saturated = false;
+    if (!std::isfinite(body_integral_pitch)) {
+      body_integral_pitch = 0;
+      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"body_integral_pitch\", setting it to 0!!!");
+    } else if (body_integral_pitch > kibxy_lim) {
+      body_integral_pitch = kibxy_lim;
+      integral_saturated  = true;
+    } else if (body_integral_pitch < -kibxy_lim) {
+      body_integral_pitch = -kibxy_lim;
+      integral_saturated  = true;
+    }
+
+    if (kibxy_lim > 0 && integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's body pitch integral is being saturated!");
+    }
+
+    // saturate the world_integral
+    integral_saturated = false;
+    if (!std::isfinite(body_integral_roll)) {
+      body_integral_roll = 0;
+      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"body_integral_roll\", setting it to 0!!!");
+    } else if (body_integral_roll > kibxy_lim) {
+      body_integral_roll = kibxy_lim;
+      integral_saturated = true;
+    } else if (body_integral_roll < -kibxy_lim) {
+      body_integral_roll = -kibxy_lim;
+      integral_saturated = true;
+    }
+
+    if (kibxy_lim > 0 && integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's body roll integral is being saturated!");
+    }
+  }
+  mutex_gains.unlock();
+
+  ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", nsf_pitch->getWorldIntegral(), nsf_roll->getWorldIntegral(), kiwxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", body_integral_pitch, body_integral_roll, kibxy_lim);
+
+  // | ------------------- produce the output ------------------- |
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset);
+  output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset) + 0.1;
   output_command->roll   = action_roll * cos(yaw + yaw_offset) + action_pitch * sin(yaw + yaw_offset);
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
@@ -608,25 +674,27 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
   mutex_desired_gains.lock();
   mutex_gains.lock();
   {
-    kpxy     = calculateGainChange(kpxy, drs_desired_gains.kpxy * gain_coeff, bypass_filter, "kpxy");
-    kvxy     = calculateGainChange(kvxy, drs_desired_gains.kvxy * gain_coeff, bypass_filter, "kvxy");
-    kaxy     = calculateGainChange(kaxy, drs_desired_gains.kaxy * gain_coeff, bypass_filter, "kaxy");
-    kixy     = calculateGainChange(kixy, drs_desired_gains.kixy * gain_coeff, bypass_filter, "kixy");
-    kpz      = calculateGainChange(kpz, drs_desired_gains.kpz, false, "kpz");
-    kvz      = calculateGainChange(kvz, drs_desired_gains.kvz, false, "kvz");
-    kaz      = calculateGainChange(kaz, drs_desired_gains.kaz, false, "kaz");
-    km       = calculateGainChange(km, drs_desired_gains.km, false, "km");
-    kixy_lim = calculateGainChange(kixy_lim, drs_desired_gains.kixy_lim, false, "kixy_lim");
-    km_lim   = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
+    kpxy      = calculateGainChange(kpxy, drs_desired_gains.kpxy * gain_coeff, bypass_filter, "kpxy");
+    kvxy      = calculateGainChange(kvxy, drs_desired_gains.kvxy * gain_coeff, bypass_filter, "kvxy");
+    kaxy      = calculateGainChange(kaxy, drs_desired_gains.kaxy * gain_coeff, bypass_filter, "kaxy");
+    kiwxy     = calculateGainChange(kiwxy, drs_desired_gains.kiwxy * gain_coeff, bypass_filter, "kiwxy");
+    kibxy     = calculateGainChange(kibxy, drs_desired_gains.kibxy * gain_coeff, bypass_filter, "kibxy");
+    kpz       = calculateGainChange(kpz, drs_desired_gains.kpz, false, "kpz");
+    kvz       = calculateGainChange(kvz, drs_desired_gains.kvz, false, "kvz");
+    kaz       = calculateGainChange(kaz, drs_desired_gains.kaz, false, "kaz");
+    km        = calculateGainChange(km, drs_desired_gains.km, false, "km");
+    kiwxy_lim = calculateGainChange(kiwxy_lim, drs_desired_gains.kiwxy_lim, false, "kiwxy_lim");
+    kibxy_lim = calculateGainChange(kibxy_lim, drs_desired_gains.kibxy_lim, false, "kibxy_lim");
+    km_lim    = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
   }
   mutex_gains.unlock();
   mutex_desired_gains.unlock();
 
   yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592;
 
-  nsf_pitch->setParams(kpxy, kvxy, kaxy, kixy, kixy_lim);
-  nsf_roll->setParams(kpxy, kvxy, kaxy, kixy, kixy_lim);
-  nsf_z->setParams(kpz, kvz, kaz, 0, 0);
+  nsf_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim);
+  nsf_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim);
+  nsf_z->setParams(kpz, kvz, kaz, 0, 0, 0);
 }
 
 //}
@@ -669,7 +737,7 @@ double NsfController::calculateGainChange(const double current_value, const doub
     }
   }
 
-  if (fabs(change) > 1e-10) {
+  if (fabs(change) > 1e-3) {
     ROS_INFO("[NsfController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
   }
 
