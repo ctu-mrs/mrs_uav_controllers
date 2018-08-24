@@ -220,7 +220,8 @@ private:
   ros::Time last_update;
   bool      first_iteration = true;
 
-  bool   mute_lateral_gains = false;
+  bool   mute_lateral_gains               = false;
+  bool   mutex_lateral_gains_after_toggle = false;
   double mute_coefficitent_;
 
 private:
@@ -524,6 +525,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   /*   nsf_roll->setParams(kpxy, kvxy, kaxy, kixy, kixy_lim); */
   /* } */
 
+  if (mute_lateral_gains && !reference->disable_position_gains) {
+    mutex_lateral_gains_after_toggle = true;
+  }
   mute_lateral_gains = reference->disable_position_gains;
 
   // --------------------------------------------------------------
@@ -592,7 +596,10 @@ void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig 
 
 void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  double gain_coeff = 1;
+  double gain_coeff                = 1;
+  bool   bypass_filter             = mute_lateral_gains || mutex_lateral_gains_after_toggle;
+  mutex_lateral_gains_after_toggle = false;
+
   if (mute_lateral_gains) {
     gain_coeff = mute_coefficitent_;
   }
@@ -601,10 +608,10 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
   mutex_desired_gains.lock();
   mutex_gains.lock();
   {
-    kpxy     = calculateGainChange(kpxy, drs_desired_gains.kpxy * gain_coeff, mute_lateral_gains, "kpxy");
-    kvxy     = calculateGainChange(kvxy, drs_desired_gains.kvxy * gain_coeff, mute_lateral_gains, "kvxy");
-    kaxy     = calculateGainChange(kaxy, drs_desired_gains.kaxy * gain_coeff, mute_lateral_gains, "kaxy");
-    kixy     = calculateGainChange(kixy, drs_desired_gains.kixy * gain_coeff, mute_lateral_gains, "kixy");
+    kpxy     = calculateGainChange(kpxy, drs_desired_gains.kpxy * gain_coeff, bypass_filter, "kpxy");
+    kvxy     = calculateGainChange(kvxy, drs_desired_gains.kvxy * gain_coeff, bypass_filter, "kvxy");
+    kaxy     = calculateGainChange(kaxy, drs_desired_gains.kaxy * gain_coeff, bypass_filter, "kaxy");
+    kixy     = calculateGainChange(kixy, drs_desired_gains.kixy * gain_coeff, bypass_filter, "kixy");
     kpz      = calculateGainChange(kpz, drs_desired_gains.kpz, false, "kpz");
     kvz      = calculateGainChange(kvz, drs_desired_gains.kvz, false, "kvz");
     kaz      = calculateGainChange(kaz, drs_desired_gains.kaz, false, "kaz");
