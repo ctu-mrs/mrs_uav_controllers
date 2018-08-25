@@ -117,7 +117,7 @@ double Nsf::update(double position_error, double speed_error, double desired_acc
 
   if (saturated) {
 
-    ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF is being saturated!", name.c_str());
+    ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF is being saturated! value: %f, saturation: %f", name.c_str(), control_output, saturation);
 
     // integrate only in the direction oposite to the saturation (antiwindup)
     if (control_output > 0 && position_error < 0) {
@@ -611,7 +611,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset) + 0.1;
+  output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset);
   output_command->roll   = action_roll * cos(yaw + yaw_offset) + action_pitch * sin(yaw + yaw_offset);
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
