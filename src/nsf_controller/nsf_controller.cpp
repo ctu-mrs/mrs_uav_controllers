@@ -280,27 +280,27 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   mrs_lib::ParamLoader param_loader(nh_, "NsfController");
 
   // lateral gains
-  param_loader.load_param("gains/horizontal/kp", kpxy);
-  param_loader.load_param("gains/horizontal/kv", kvxy);
-  param_loader.load_param("gains/horizontal/ka", kaxy);
+  param_loader.load_param("default_gains/horizontal/kp", kpxy);
+  param_loader.load_param("default_gains/horizontal/kv", kvxy);
+  param_loader.load_param("default_gains/horizontal/ka", kaxy);
 
-  param_loader.load_param("gains/horizontal/kiw", kiwxy);
-  param_loader.load_param("gains/horizontal/kib", kibxy);
+  param_loader.load_param("default_gains/horizontal/kiw", kiwxy);
+  param_loader.load_param("default_gains/horizontal/kib", kibxy);
 
-  param_loader.load_param("gains/horizontal/mute_coefficitent", mute_coefficitent_);
+  param_loader.load_param("lateral_mute_coefficitent", mute_coefficitent_);
 
   // height gains
-  param_loader.load_param("gains/vertical/kp", kpz);
-  param_loader.load_param("gains/vertical/kv", kvz);
-  param_loader.load_param("gains/vertical/ka", kaz);
+  param_loader.load_param("default_gains/vertical/kp", kpz);
+  param_loader.load_param("default_gains/vertical/kv", kvz);
+  param_loader.load_param("default_gains/vertical/ka", kaz);
 
   // mass estimator
-  param_loader.load_param("weight_estimator/km", km);
-  param_loader.load_param("weight_estimator/km_lim", km_lim);
+  param_loader.load_param("default_gains/weight_estimator/km", km);
+  param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim);
 
   // integrator limits
-  param_loader.load_param("gains/horizontal/kiw_lim", kiwxy_lim);
-  param_loader.load_param("gains/horizontal/kib_lim", kibxy_lim);
+  param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim);
+  param_loader.load_param("default_gains/horizontal/kib_lim", kibxy_lim);
 
   // physical
   param_loader.load_param("uav_mass", uav_mass_);
@@ -360,7 +360,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   drs_desired_gains.kibxy_lim  = kibxy_lim;
   drs_desired_gains.km         = km;
   drs_desired_gains.km_lim     = km_lim;
-  drs_desired_gains.yaw_offset = (yaw_offset / 3.1415) * 180;
+  /* drs_desired_gains.yaw_offset = (yaw_offset / 3.1415) * 180; */
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(drs_desired_gains);
@@ -690,7 +690,7 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
   mutex_gains.unlock();
   mutex_desired_gains.unlock();
 
-  yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592;
+  /* yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592; */
 
   nsf_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim);
   nsf_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim);

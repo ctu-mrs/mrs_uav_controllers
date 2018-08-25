@@ -1,4 +1,5 @@
-gains:
+default_gains:
+
   horizontal:
     kp: 0.15
     kv: 0.15
@@ -10,16 +11,16 @@ gains:
     kiw: 0.01
     kiw_lim: 0.3
 
-    mute_coefficitent: 0.0
-
   vertical:
     kp: 0.6
     kv: 0.2
     ka: 1.0
 
-weight_estimator:
-  km: 1.0
-  km_lim: 1.0 # [kg]
+  weight_estimator:
+    km: 1.0
+    km_lim: 1.0 # [kg]
+
+lateral_mute_coefficitent: 0.0
 
 g : 9.8
 
