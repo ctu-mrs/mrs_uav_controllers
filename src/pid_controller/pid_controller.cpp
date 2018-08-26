@@ -165,11 +165,14 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr     status();
+  const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level);
 
 private:
+  bool is_initialized = false;
+  bool is_active      = false;
+
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
@@ -332,6 +335,8 @@ void PidController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   }
 
   ROS_INFO("[PidController]: initialized");
+
+  is_initialized = true;
 }
 
 //}
@@ -353,6 +358,8 @@ bool PidController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   first_iteration = true;
 
   ROS_INFO("[PidController]: activated");
+
+  is_active = true;
 
   return true;
 }
@@ -494,11 +501,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
 //}
 
-//{ status()
+//{ getStatus()
 
-const mrs_msgs::ControllerStatus::Ptr PidController::status() {
+const mrs_msgs::ControllerStatus::Ptr PidController::getStatus() {
 
-  return mrs_msgs::ControllerStatus::Ptr();
+  if (is_initialized) {
+
+    mrs_msgs::ControllerStatus::Ptr controller_status(new mrs_msgs::ControllerStatus);
+
+    if (is_active) {
+      controller_status->active = mrs_msgs::ControllerStatus::ACTIVE;
+    } else {
+      controller_status->active = mrs_msgs::ControllerStatus::NONACTIVE;
+    }
+
+    return controller_status;
+  } else {
+
+    return mrs_msgs::ControllerStatus::Ptr();
+  }
 }
 
 //}

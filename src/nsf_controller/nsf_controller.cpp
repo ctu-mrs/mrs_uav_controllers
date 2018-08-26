@@ -99,6 +99,7 @@ double Nsf::update(double position_error, double speed_error, double desired_acc
   // calculate the nsf action
   double control_output = p_component + v_component + a_component + i_component;
 
+  saturated = false;
   // saturate the control output
   if (!std::isfinite(control_output)) {
     control_output = 0;
@@ -179,13 +180,16 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr     status();
+  const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, uint32_t level);
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
 private:
+  bool is_initialized = false;
+  bool is_active      = false;
+
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
@@ -348,18 +352,18 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  drs_desired_gains.kpxy       = kpxy;
-  drs_desired_gains.kvxy       = kvxy;
-  drs_desired_gains.kaxy       = kaxy;
-  drs_desired_gains.kiwxy      = kiwxy;
-  drs_desired_gains.kibxy      = kibxy;
-  drs_desired_gains.kpz        = kpz;
-  drs_desired_gains.kvz        = kvz;
-  drs_desired_gains.kaz        = kaz;
-  drs_desired_gains.kiwxy_lim  = kiwxy_lim;
-  drs_desired_gains.kibxy_lim  = kibxy_lim;
-  drs_desired_gains.km         = km;
-  drs_desired_gains.km_lim     = km_lim;
+  drs_desired_gains.kpxy      = kpxy;
+  drs_desired_gains.kvxy      = kvxy;
+  drs_desired_gains.kaxy      = kaxy;
+  drs_desired_gains.kiwxy     = kiwxy;
+  drs_desired_gains.kibxy     = kibxy;
+  drs_desired_gains.kpz       = kpz;
+  drs_desired_gains.kvz       = kvz;
+  drs_desired_gains.kaz       = kaz;
+  drs_desired_gains.kiwxy_lim = kiwxy_lim;
+  drs_desired_gains.kibxy_lim = kibxy_lim;
+  drs_desired_gains.km        = km;
+  drs_desired_gains.km_lim    = km_lim;
   /* drs_desired_gains.yaw_offset = (yaw_offset / 3.1415) * 180; */
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
@@ -387,6 +391,8 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   }
 
   ROS_INFO("[NsfController]: initialized");
+
+  is_initialized = true;
 }
 
 //}
@@ -408,6 +414,8 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   first_iteration = true;
 
   ROS_INFO("[NsfController]: activated");
+
+  is_active = true;
 
   return true;
 }
@@ -603,7 +611,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   }
   mutex_gains.unlock();
 
-  ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", nsf_pitch->getWorldIntegral(), nsf_roll->getWorldIntegral(), kiwxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", nsf_pitch->getWorldIntegral(), nsf_roll->getWorldIntegral(),
+                    kiwxy_lim);
   ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", body_integral_pitch, body_integral_roll, kibxy_lim);
 
   // | ------------------- produce the output ------------------- |
@@ -628,11 +637,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
 //}
 
-//{ status()
+//{ getStatus()
 
-const mrs_msgs::ControllerStatus::Ptr NsfController::status() {
+const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 
-  return mrs_msgs::ControllerStatus::Ptr();
+  if (is_initialized) {
+
+    mrs_msgs::ControllerStatus::Ptr controller_status(new mrs_msgs::ControllerStatus);
+
+    if (is_active) {
+      controller_status->active = mrs_msgs::ControllerStatus::ACTIVE;
+    } else {
+      controller_status->active = mrs_msgs::ControllerStatus::NONACTIVE;
+    }
+
+    return controller_status;
+  } else {
+
+    return mrs_msgs::ControllerStatus::Ptr();
+  }
 }
 
 //}
