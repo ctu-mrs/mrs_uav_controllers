@@ -29,6 +29,6 @@ max_tilt_angle: 30.0 # [deg]
 yaw_offset: 0.0 # [deg]
 
 gains_filter:
-  filter_rate: 10 # [Hz]
-  perc_change_rate: 1.0
-  min_change_rate: 0.3 # perc of the differnece
+  filter_rate: 20 # [Hz]
+  perc_change_rate: 0.5
+  min_change_rate: 0.1 # perc of the differnece
