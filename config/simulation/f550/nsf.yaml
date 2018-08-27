@@ -24,7 +24,7 @@ lateral_mute_coefficitent: 0.0
 
 g : 9.8
 
-max_tilt_angle: 30.0 # [deg]
+max_tilt_angle: 45.0 # [deg]
 
 yaw_offset: 0.0 # [deg]
 
