@@ -20,7 +20,7 @@
 namespace mrs_controllers
 {
 
-//{ class NSF
+/* //{ class NSF */
 
 class Nsf {
 
@@ -168,7 +168,7 @@ double Nsf::getWorldIntegral(void) {
 
 //}
 
-//{ class NsfController
+/* //{ class NsfController */
 
 class NsfController : public mrs_mav_manager::Controller {
 
@@ -254,8 +254,8 @@ private:
   double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
 
 private:
-  double body_integral_pitch;
-  double body_integral_roll;
+  double body_integral_pitch = 0;
+  double body_integral_roll = 0;
 };
 
 NsfController::NsfController(void) {
@@ -267,7 +267,7 @@ NsfController::NsfController(void) {
 // |                   controller's interface                   |
 // --------------------------------------------------------------
 
-//{ initialize()
+/* //{ initialize() */
 
 void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
 
@@ -397,7 +397,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
 
 //}
 
-//{ activate()
+/* //{ activate() */
 
 bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
@@ -422,7 +422,7 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
 //}
 
-//{ deactivate()
+/* //{ deactivate() */
 
 void NsfController::deactivate(void) {
 
@@ -434,7 +434,7 @@ void NsfController::deactivate(void) {
 
 //}
 
-//{ update()
+/* //{ update() */
 
 const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
@@ -637,7 +637,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
 //}
 
-//{ getStatus()
+/* //{ getStatus() */
 
 const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 
@@ -664,7 +664,7 @@ const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 // |                          callbacks                         |
 // --------------------------------------------------------------
 
-//{ dynamicReconfigureCallback()
+/* //{ dynamicReconfigureCallback() */
 
 void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, uint32_t level) {
 
@@ -761,7 +761,7 @@ double NsfController::calculateGainChange(const double current_value, const doub
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO("[NsfController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[NsfController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
   }
 
   return current_value + change;
