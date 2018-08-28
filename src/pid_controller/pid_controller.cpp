@@ -15,6 +15,8 @@
 
 #include <mrs_lib/Profiler.h>
 
+#include <mrs_lib/ParamLoader.h>
+
 namespace mrs_controllers
 {
 
@@ -158,7 +160,7 @@ class PidController : public mrs_mav_manager::Controller {
 public:
   PidController(void);
 
-  void initialize(const ros::NodeHandle &parent_nh);
+  void initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -184,11 +186,11 @@ private:
   Pid *pid_roll;
   Pid *pid_z;
 
-  double uav_mass_;
-  double uav_mass_difference;
-  double g_;
-  double hover_thrust_a_, hover_thrust_b_;
-  double hover_thrust;
+  double                       uav_mass_;
+  double                       uav_mass_difference;
+  double                       g_;
+  mrs_mav_manager::MotorParams motor_params_;
+  double                       hover_thrust;
 
   double roll, pitch, yaw;
 
@@ -245,100 +247,32 @@ void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig 
 
 //{ initialize()
 
-void PidController::initialize(const ros::NodeHandle &parent_nh) {
+void PidController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
 
   ros::NodeHandle nh_(parent_nh, "pid_controller");
 
   ros::Time::waitForValid();
 
+  this->motor_params_ = motor_params;
+
   // --------------------------------------------------------------
   // |                       load parameters                      |
   // --------------------------------------------------------------
 
-  nh_.param("kpxy", kpxy_, -1.0);
-  nh_.param("kdxy", kdxy_, -1.0);
-  nh_.param("kixy", kixy_, -1.0);
-  nh_.param("kpz", kpz_, -1.0);
-  nh_.param("kdz", kdz_, -1.0);
-  nh_.param("km", km_, -1.0);
-  nh_.param("kixy_lim", kixy_lim_, -1.0);
-  nh_.param("km_lim", km_lim_, -1.0);
-  nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
-  nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
-  nh_.param("uav_mass", uav_mass_, -1.0);
-  nh_.param("g", g_, -1.0);
-  nh_.param("exp", exp_, -1.0);
+  mrs_lib::ParamLoader param_loader(nh_, "PidController");
 
-  if (kpxy_ < 0) {
-    ROS_ERROR("[PidController]: kpxy is not specified!");
-    ros::shutdown();
-  }
-
-  if (kdxy_ < 0) {
-    ROS_ERROR("[PidController]: kdxy is not specified!");
-    ros::shutdown();
-  }
-
-  if (kixy_ < 0) {
-    ROS_ERROR("[PidController]: kixy is not specified!");
-    ros::shutdown();
-  }
-
-  if (kpz_ < 0) {
-    ROS_ERROR("[PidController]: kpz is not specified!");
-    ros::shutdown();
-  }
-
-  if (kdz_ < 0) {
-    ROS_ERROR("[PidController]: kdz is not specified!");
-    ros::shutdown();
-  }
-
-  if (km_ < 0) {
-    ROS_ERROR("[PidController]: km is not specified!");
-    ros::shutdown();
-  }
-
-  if (kixy_lim_ < 0) {
-    ROS_ERROR("[PidController]: kixy_lim is not specified!");
-    ros::shutdown();
-  }
-
-  if (km_lim_ < 0) {
-    ROS_ERROR("[PidController]: km_lim is not specified!");
-    ros::shutdown();
-  }
-
-  if (hover_thrust_a_ < -999) {
-    ROS_ERROR("[LsfController]: hover_thrust/a is not specified!");
-    ros::shutdown();
-  }
-
-  if (hover_thrust_b_ < -999) {
-    ROS_ERROR("[LsfController]: hover_thrust/b is not specified!");
-    ros::shutdown();
-  }
-
-  if (uav_mass_ < 0) {
-    ROS_ERROR("[LsfController]: uav_mass is not specified!");
-    ros::shutdown();
-  }
-
-  if (g_ < 0) {
-    ROS_ERROR("[LsfController]: g is not specified!");
-    ros::shutdown();
-  }
-
-  if (exp_ < 0) {
-    ROS_ERROR("[PidController]: exp is not specified!");
-    ros::shutdown();
-  }
-
-  nh_.param("max_tilt_angle", max_tilt_angle_, -1.0);
-  if (max_tilt_angle_ < 0) {
-    ROS_ERROR("[PidController]: max_tilt_angle is not specified!");
-    ros::shutdown();
-  }
+  param_loader.load_param("kpxy", kpxy_);
+  param_loader.load_param("kdxy", kdxy_);
+  param_loader.load_param("kixy", kixy_);
+  param_loader.load_param("kpz", kpz_);
+  param_loader.load_param("kdz", kdz_);
+  param_loader.load_param("km", km_);
+  param_loader.load_param("kixy_lim", kixy_lim_);
+  param_loader.load_param("km_lim", km_lim_);
+  param_loader.load_param("uav_mass", uav_mass_);
+  param_loader.load_param("g", g_);
+  param_loader.load_param("exp", exp_);
+  param_loader.load_param("max_tilt_angle", max_tilt_angle_);
 
   // convert to radians
   max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
@@ -355,7 +289,7 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
   // |                 calculate the hover thrust                 |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt(uav_mass_ * g_) * hover_thrust_a_ + hover_thrust_b_;
+  hover_thrust = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                       initialize pids                      |
@@ -390,6 +324,14 @@ void PidController::initialize(const ros::NodeHandle &parent_nh) {
 
   profiler       = new mrs_lib::Profiler(nh_, "PidController");
   routine_update = profiler->registerRoutine("update");
+
+  // | ----------------------- finish init ---------------------- |
+
+  if (!param_loader.loaded_successfully()) {
+    ros::shutdown();
+  }
+
+  ROS_INFO("[PidController]: initialized");
 }
 
 //}
@@ -498,7 +440,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
   // |                recalculate the hover thrust                |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * hover_thrust_a_ + hover_thrust_b_;
+  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                integrate the mass difference               |

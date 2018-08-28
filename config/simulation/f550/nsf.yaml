@@ -1,0 +1,30 @@
+gains:
+  horizontal:
+    kpxy: 0.65
+    kvxy: 0.30
+    kaxy: 1.0
+
+    kixy: 0.1
+    kixy_lim: 3.0
+
+    mute_coefficitent: 0.1
+
+  vertical:
+    kpz: 0.6
+    kvz: 0.2
+    kaz: 1.0
+
+weight_estimator:
+  km: 1.0
+  km_lim: 1.0 # [kg]
+
+g : 9.8
+
+max_tilt_angle: 45.0 # [deg]
+
+yaw_offset: 0.0 # [deg]
+
+gains_filter:
+  filter_rate: 10 # [Hz]
+  perc_change_rate: 1.0
+  min_change_rate: 0.1 # perc of the differnece

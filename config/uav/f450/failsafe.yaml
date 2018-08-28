@@ -1,7 +1,3 @@
-hover_thrust:
-  a: 0.15369
-  b: -0.23977
-
 thrust_decrease_rate: 0.02 # [1/s]
 
 g : 9.8

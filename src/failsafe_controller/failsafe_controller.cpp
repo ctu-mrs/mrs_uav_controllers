@@ -12,6 +12,8 @@
 
 #include <mrs_lib/Profiler.h>
 
+#include <mrs_lib/ParamLoader.h>
+
 namespace mrs_controllers
 {
 
@@ -22,7 +24,7 @@ class FailsafeController : public mrs_mav_manager::Controller {
 public:
   FailsafeController(void);
 
-  void initialize(const ros::NodeHandle &parent_nh);
+  void initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -30,12 +32,12 @@ public:
   const mrs_msgs::ControllerStatus::Ptr     status();
 
 private:
-  double uav_mass_;
-  double uav_mass_difference;
-  double g_;
-  double hover_thrust_a_, hover_thrust_b_;
-  double hover_thrust;
-  double thrust_decrease_rate_;
+  double                       uav_mass_;
+  double                       uav_mass_difference;
+  double                       g_;
+  mrs_mav_manager::MotorParams motor_params_;
+  double                       hover_thrust;
+  double                       thrust_decrease_rate_;
 
   double roll, pitch, yaw;
   double setpoint_yaw;
@@ -62,46 +64,23 @@ FailsafeController::FailsafeController(void) {
 
 //{ initialize()
 
-void FailsafeController::initialize(const ros::NodeHandle &parent_nh) {
+void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
 
   ros::NodeHandle nh_(parent_nh, "failsafe_controller");
 
   ros::Time::waitForValid();
 
+  this->motor_params_ = motor_params;
+
   // --------------------------------------------------------------
   // |                       load parameters                      |
   // --------------------------------------------------------------
 
-  nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
-  nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
-  nh_.param("thrust_decrease_rate", thrust_decrease_rate_, -1.0);
-  nh_.param("uav_mass", uav_mass_, -1.0);
-  nh_.param("g", g_, -1.0);
+  mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
 
-  if (hover_thrust_a_ < -999) {
-    ROS_ERROR("[FailsafeController]: hover_thrust/a is not specified!");
-    ros::shutdown();
-  }
-
-  if (hover_thrust_b_ < -999) {
-    ROS_ERROR("[FailsafeController]: hover_thrust/b is not specified!");
-    ros::shutdown();
-  }
-
-  if (thrust_decrease_rate_ < 0) {
-    ROS_ERROR("[FailsafeController]: thrust_decrease_rate is not specified!");
-    ros::shutdown();
-  }
-
-  if (uav_mass_ < 0) {
-    ROS_ERROR("[FailsafeController]: uav_mass is not specified!");
-    ros::shutdown();
-  }
-
-  if (g_ < 0) {
-    ROS_ERROR("[FailsafeController]: g is not specified!");
-    ros::shutdown();
-  }
+  param_loader.load_param("thrust_decrease_rate", thrust_decrease_rate_);
+  param_loader.load_param("uav_mass", uav_mass_);
+  param_loader.load_param("g", g_);
 
   uav_mass_difference = 0;
 
@@ -109,7 +88,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh) {
   // |                 calculate the hover thrust                 |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt(uav_mass_ * g_) * hover_thrust_a_ + hover_thrust_b_;
+  hover_thrust = sqrt(uav_mass_ * g_) * motor_params.hover_thrust_a + motor_params.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                          profiler                          |
@@ -117,6 +96,12 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh) {
 
   profiler       = new mrs_lib::Profiler(nh_, "FailsafeController");
   routine_update = profiler->registerRoutine("update");
+
+  // | ----------------------- finish init ---------------------- |
+
+  if (!param_loader.loaded_successfully()) {
+    ros::shutdown();
+  }
 
   ROS_INFO("[FailsafeController]: initialized");
 }
@@ -134,7 +119,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
   } else {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
-    hover_thrust                = sqrt((uav_mass_ + uav_mass_difference) * g_) * hover_thrust_a_ + hover_thrust_b_;
+    hover_thrust                = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
     ROS_INFO("[FailsafeController]: activated with uav_mass_difference %1.2f kg.", uav_mass_difference);
   }
 
