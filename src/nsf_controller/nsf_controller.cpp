@@ -34,7 +34,7 @@ public:
   double getWorldIntegral(void);
 
 private:
-  double world_integral;
+  double world_integral = 0;
 
   // gains
   double kp;
@@ -48,7 +48,7 @@ private:
 
   double g;
 
-  double saturated;
+  bool saturated;
 
   std::string name;
 };

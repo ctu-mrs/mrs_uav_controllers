@@ -10,8 +10,6 @@ km: 1.0
 kixy_lim: 3.0
 km_lim: 1.0 # [kg]
 
-g : 9.8
-
 exp: 0.1
 
 max_tilt_angle: 45.0 # [deg]
