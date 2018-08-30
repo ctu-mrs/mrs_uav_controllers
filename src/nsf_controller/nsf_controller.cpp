@@ -464,7 +464,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     nsf_pitch->reset();
     nsf_roll->reset();
     nsf_z->reset();
-    last_update = ros::Time::now();
+    last_update = odometry->header.stamp;
 
     first_iteration = false;
 
@@ -473,12 +473,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   } else {
 
-    dt = (ros::Time::now() - last_update).toSec();
+    dt = (odometry->header.stamp - last_update).toSec();
+    last_update = odometry->header.stamp;
   }
 
-  if (dt <= 0.001) {
+  if (fabs(dt) <= 0.001) {
 
-    ROS_WARN("[NsfController]: the update was called with too small dt!");
+    ROS_WARN_STREAM("[NsfController]: last " << last_update << ", current " << odometry->header.stamp);
+    ROS_WARN("[NsfController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
       routine_update->end();
@@ -490,8 +492,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
-
-  last_update = ros::Time::now();
 
   // --------------------------------------------------------------
   // |                 calculate the euler angles                 |
