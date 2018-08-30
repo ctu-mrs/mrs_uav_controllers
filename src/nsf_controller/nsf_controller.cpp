@@ -240,6 +240,7 @@ private:
 
 private:
   mrs_lib::Profiler *profiler;
+  bool profiler_enabled_ = false;
   mrs_lib::Routine * routine_update;
 
 private:
@@ -282,6 +283,8 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // --------------------------------------------------------------
 
   mrs_lib::ParamLoader param_loader(nh_, "NsfController");
+
+  param_loader.load_param("enable_profiler", profiler_enabled_);
 
   // lateral gains
   param_loader.load_param("default_gains/horizontal/kp", kpxy);
@@ -375,7 +378,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler       = new mrs_lib::Profiler(nh_, "NsfController");
+  profiler       = new mrs_lib::Profiler(nh_, "NsfController", profiler_enabled_);
   routine_update = profiler->registerRoutine("update");
 
   // --------------------------------------------------------------

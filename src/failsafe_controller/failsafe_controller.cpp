@@ -53,6 +53,7 @@ private:
 
 private:
   mrs_lib::Profiler *profiler;
+  bool profiler_enabled_ = false;
   mrs_lib::Routine * routine_update;
 };
 
@@ -84,6 +85,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
   param_loader.load_param("thrust_decrease_rate", thrust_decrease_rate_);
   param_loader.load_param("uav_mass", uav_mass_);
   param_loader.load_param("g", g_);
+  param_loader.load_param("enable_profiler", profiler_enabled_);
 
   uav_mass_difference = 0;
 
@@ -97,7 +99,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler       = new mrs_lib::Profiler(nh_, "FailsafeController");
+  profiler       = new mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
   routine_update = profiler->registerRoutine("update");
 
   // | ----------------------- finish init ---------------------- |

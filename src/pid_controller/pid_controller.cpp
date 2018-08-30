@@ -215,6 +215,7 @@ private:
 
 private:
   mrs_lib::Profiler *profiler;
+  bool profiler_enabled_ = false;
   mrs_lib::Routine * routine_update;
 };
 
@@ -263,6 +264,8 @@ void PidController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // --------------------------------------------------------------
 
   mrs_lib::ParamLoader param_loader(nh_, "PidController");
+
+  param_loader.load_param("enable_profiler", profiler_enabled_);
 
   param_loader.load_param("kpxy", kpxy_);
   param_loader.load_param("kdxy", kdxy_);
@@ -325,7 +328,7 @@ void PidController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler       = new mrs_lib::Profiler(nh_, "PidController");
+  profiler       = new mrs_lib::Profiler(nh_, "PidController", profiler_enabled_);
   routine_update = profiler->registerRoutine("update");
 
   // | ----------------------- finish init ---------------------- |
