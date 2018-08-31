@@ -26,7 +26,7 @@ class Nsf {
 
 public:
   Nsf(std::string name, double kp, double kv, double ka, double kiw, double kib, double integral_saturation, double saturation, double g);
-  double update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt, double hover_thrust,
+  double update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt, double hover_thrust,
                 double body_integral);
   void   reset(void);
   void   setParams(double kp, double kv, double ka, double kiw, double kib, double integral_saturation);
@@ -82,7 +82,7 @@ Nsf::Nsf(std::string name, double kp, double kv, double ka, double kiw, double k
   this->world_integral = 0;
 }
 
-double Nsf::update(double position_error, double speed_error, double desired_acceleration, double mass, double pitch, double roll, double dt,
+double Nsf::update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt,
                    double hover_thrust, double body_integral) {
 
   double p_component = kp * position_error;
@@ -555,12 +555,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   body_integral_x = body_integral_pitch * cos(-yaw) - body_integral_roll * sin(-yaw);
   body_integral_y = body_integral_pitch * sin(-yaw) + body_integral_roll * cos(-yaw);
 
-  double action_pitch = nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, uav_mass_ + uav_mass_difference, pitch, roll, dt,
+  double action_pitch = nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, pitch, roll, dt,
                                           hover_thrust, body_integral_x);
-  double action_roll  = nsf_roll->update(position_error_y, speed_error_y, -reference->acceleration.y, uav_mass_ + uav_mass_difference, pitch, roll, dt,
+  double action_roll  = nsf_roll->update(position_error_y, speed_error_y, -reference->acceleration.y, pitch, roll, dt,
                                         hover_thrust, body_integral_y);
   double action_z =
-      (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, uav_mass_ + uav_mass_difference, pitch, roll, dt, hover_thrust, 0) +
+      (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, pitch, roll, dt, hover_thrust, 0) +
        hover_thrust) *
       (1 / (cos(roll) * cos(pitch)));
 
@@ -669,7 +669,7 @@ const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 
 /* //{ dynamicReconfigureCallback() */
 
-void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, uint32_t level) {
+void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, [[maybe_unused]] uint32_t level) {
 
   mutex_desired_gains.lock();
   { drs_desired_gains = config; }
@@ -686,7 +686,7 @@ void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig 
 
 /* timerGainFilter() //{ */
 
-void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
+void NsfController::timerGainsFilter([[maybe_unused]] const ros::TimerEvent &event) {
 
   double gain_coeff                = 1;
   bool   bypass_filter             = mute_lateral_gains || mutex_lateral_gains_after_toggle;
