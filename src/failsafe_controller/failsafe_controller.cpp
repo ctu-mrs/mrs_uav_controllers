@@ -156,7 +156,7 @@ void FailsafeController::deactivate(void) {
 //{ update()
 
 const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
-                                                                     const mrs_msgs::PositionCommand::ConstPtr &reference) {
+                                                                     [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   routine_update->start();
 

@@ -226,7 +226,7 @@ PidController::PidController(void) {
 
 //{ dynamicReconfigureCallback()
 
-void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, uint32_t level) {
+void PidController::dynamicReconfigureCallback(mrs_controllers::pid_gainsConfig &config, [[maybe_unused]] uint32_t level) {
 
   kpxy_     = config.kpxy;
   kdxy_     = config.kdxy;
