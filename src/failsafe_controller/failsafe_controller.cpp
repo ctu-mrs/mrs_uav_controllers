@@ -53,8 +53,7 @@ private:
 
 private:
   mrs_lib::Profiler *profiler;
-  bool profiler_enabled_ = false;
-  mrs_lib::Routine * routine_update;
+  bool               profiler_enabled_ = false;
 };
 
 FailsafeController::FailsafeController(void) {
@@ -99,8 +98,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler       = new mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
-  routine_update = profiler->registerRoutine("update");
+  profiler = new mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -155,10 +153,10 @@ void FailsafeController::deactivate(void) {
 
 //{ update()
 
-const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
+const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_msgs::Odometry::ConstPtr &                        odometry,
                                                                      [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  routine_update->start();
+  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
   // --------------------------------------------------------------
   // |                 calculate the euler angles                 |
@@ -183,7 +181,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
     setpoint_yaw    = yaw;
     first_iteration = false;
 
-    routine_update->end();
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
@@ -196,12 +193,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
     ROS_WARN("[FailsafeController]: the update was called with too small dt!");
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
-      routine_update->end();
       return last_output_command;
 
     } else {
 
-      routine_update->end();
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
@@ -230,7 +225,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
 
   last_output_command = output_command;
 
-  routine_update->end();
   return output_command;
 }
 
