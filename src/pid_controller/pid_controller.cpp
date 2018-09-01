@@ -14,7 +14,6 @@
 #include <mrs_controllers/pid_gainsConfig.h>
 
 #include <mrs_lib/Profiler.h>
-
 #include <mrs_lib/ParamLoader.h>
 
 namespace mrs_controllers

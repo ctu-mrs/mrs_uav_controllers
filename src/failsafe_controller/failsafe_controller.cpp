@@ -11,7 +11,6 @@
 #include <mrs_mav_manager/Controller.h>
 
 #include <mrs_lib/Profiler.h>
-
 #include <mrs_lib/ParamLoader.h>
 
 namespace mrs_controllers
