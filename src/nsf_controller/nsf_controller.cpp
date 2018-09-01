@@ -326,6 +326,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[NsfController]: Could not load all parameters!");
     ros::shutdown();
   }
 
@@ -387,6 +388,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[NsfController]: Could not load all parameters!");
     ros::shutdown();
   }
 
@@ -675,7 +677,9 @@ void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig 
 
 /* timerGainFilter() //{ */
 
-void NsfController::timerGainsFilter([[maybe_unused]] const ros::TimerEvent &event) {
+void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
+
+  mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
   double gain_coeff                = 1;
   bool   bypass_filter             = mute_lateral_gains || mutex_lateral_gains_after_toggle;

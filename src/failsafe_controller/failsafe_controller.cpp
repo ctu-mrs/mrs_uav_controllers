@@ -102,8 +102,10 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[FailsafeController]: Could not load all parameters!");
     ros::shutdown();
   }
+
 
   ROS_INFO("[FailsafeController]: initialized");
 

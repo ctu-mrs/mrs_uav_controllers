@@ -331,6 +331,7 @@ void PidController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[PidController]: Could not load all parameters!");
     ros::shutdown();
   }
 
