@@ -14,7 +14,6 @@
 #include <mrs_controllers/nsf_gainsConfig.h>
 
 #include <mrs_lib/Profiler.h>
-
 #include <mrs_lib/ParamLoader.h>
 
 namespace mrs_controllers
@@ -82,8 +81,8 @@ Nsf::Nsf(std::string name, double kp, double kv, double ka, double kiw, double k
   this->world_integral = 0;
 }
 
-double Nsf::update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt,
-                   double hover_thrust, double body_integral) {
+double Nsf::update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt, double hover_thrust,
+                   double body_integral) {
 
   double p_component = kp * position_error;
   double v_component = kv * speed_error;
@@ -240,8 +239,7 @@ private:
 
 private:
   mrs_lib::Profiler *profiler;
-  bool profiler_enabled_ = false;
-  mrs_lib::Routine * routine_update;
+  bool               profiler_enabled_ = false;
 
 private:
   ros::Timer timer_gain_filter;
@@ -256,7 +254,7 @@ private:
 
 private:
   double body_integral_pitch = 0;
-  double body_integral_roll = 0;
+  double body_integral_roll  = 0;
 };
 
 NsfController::NsfController(void) {
@@ -328,6 +326,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[NsfController]: Could not load all parameters!");
     ros::shutdown();
   }
 
@@ -378,8 +377,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler       = new mrs_lib::Profiler(nh_, "NsfController", profiler_enabled_);
-  routine_update = profiler->registerRoutine("update");
+  profiler = new mrs_lib::Profiler(nh_, "NsfController", profiler_enabled_);
 
   // --------------------------------------------------------------
   // |                           timers                           |
@@ -390,6 +388,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[NsfController]: Could not load all parameters!");
     ros::shutdown();
   }
 
@@ -442,7 +441,7 @@ void NsfController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  routine_update->start();
+  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -471,12 +470,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
     first_iteration = false;
 
-    routine_update->end();
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
 
-    dt = (odometry->header.stamp - last_update).toSec();
+    dt          = (odometry->header.stamp - last_update).toSec();
     last_update = odometry->header.stamp;
   }
 
@@ -486,12 +484,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     ROS_WARN("[NsfController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
-      routine_update->end();
       return last_output_command;
 
     } else {
 
-      routine_update->end();
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
@@ -555,14 +551,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   body_integral_x = body_integral_pitch * cos(-yaw) - body_integral_roll * sin(-yaw);
   body_integral_y = body_integral_pitch * sin(-yaw) + body_integral_roll * cos(-yaw);
 
-  double action_pitch = nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, pitch, roll, dt,
-                                          hover_thrust, body_integral_x);
-  double action_roll  = nsf_roll->update(position_error_y, speed_error_y, -reference->acceleration.y, pitch, roll, dt,
-                                        hover_thrust, body_integral_y);
-  double action_z =
-      (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, pitch, roll, dt, hover_thrust, 0) +
-       hover_thrust) *
-      (1 / (cos(roll) * cos(pitch)));
+  double action_pitch = nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, pitch, roll, dt, hover_thrust, body_integral_x);
+  double action_roll  = nsf_roll->update(position_error_y, speed_error_y, -reference->acceleration.y, pitch, roll, dt, hover_thrust, body_integral_y);
+  double action_z     = (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, pitch, roll, dt, hover_thrust, 0) + hover_thrust) *
+                    (1 / (cos(roll) * cos(pitch)));
 
   // --------------------------------------------------------------
   // |                       body integrals                       |
@@ -634,7 +626,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   last_output_command = output_command;
 
-  routine_update->end();
   return output_command;
 }
 
@@ -686,7 +677,9 @@ void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig 
 
 /* timerGainFilter() //{ */
 
-void NsfController::timerGainsFilter([[maybe_unused]] const ros::TimerEvent &event) {
+void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
+
+  mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
   double gain_coeff                = 1;
   bool   bypass_filter             = mute_lateral_gains || mutex_lateral_gains_after_toggle;

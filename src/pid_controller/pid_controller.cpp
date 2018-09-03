@@ -14,7 +14,6 @@
 #include <mrs_controllers/pid_gainsConfig.h>
 
 #include <mrs_lib/Profiler.h>
-
 #include <mrs_lib/ParamLoader.h>
 
 namespace mrs_controllers
@@ -215,8 +214,7 @@ private:
 
 private:
   mrs_lib::Profiler *profiler;
-  bool profiler_enabled_ = false;
-  mrs_lib::Routine * routine_update;
+  bool               profiler_enabled_ = false;
 };
 
 PidController::PidController(void) {
@@ -328,12 +326,12 @@ void PidController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler       = new mrs_lib::Profiler(nh_, "PidController", profiler_enabled_);
-  routine_update = profiler->registerRoutine("update");
+  profiler = new mrs_lib::Profiler(nh_, "PidController", profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[PidController]: Could not load all parameters!");
     ros::shutdown();
   }
 
@@ -386,7 +384,7 @@ void PidController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  routine_update->start();
+  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -411,7 +409,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
     first_iteration = false;
 
-    routine_update->end();
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
@@ -424,12 +421,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
     ROS_WARN("[PidController]: the update was called with too small dt!");
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
-      routine_update->end();
       return last_output_command;
 
     } else {
 
-      routine_update->end();
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
@@ -498,7 +493,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr PidController::update(const nav_msgs::
 
   last_output_command = output_command;
 
-  routine_update->end();
   return output_command;
 }
 
