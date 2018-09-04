@@ -41,7 +41,6 @@
   <run_depend>mrs_lib</run_depend>
 
   <export>
-    <mrs_mav_manager plugin="${prefix}/pid_controller.xml" />
     <mrs_mav_manager plugin="${prefix}/nsf_controller.xml" />
     <mrs_mav_manager plugin="${prefix}/failsafe_controller.xml" />
   </export>
