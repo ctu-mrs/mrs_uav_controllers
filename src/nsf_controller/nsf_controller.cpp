@@ -1,3 +1,5 @@
+/* includes //{ */
+
 #include <ros/ros.h>
 #include <ros/package.h>
 
@@ -15,6 +17,8 @@
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
+
+//}
 
 namespace mrs_controllers
 {
@@ -560,8 +564,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                       body integrals                       |
   // --------------------------------------------------------------
 
-  mutex_gains.lock();
   {
+    std::scoped_lock lock(mutex_gains);
+
     // rotate the control errors to the body
     double body_error_pitch, body_error_roll;
     body_error_pitch = position_error_x * cos(yaw) - position_error_y * sin(yaw);
@@ -604,7 +609,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
       ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's body roll integral is being saturated!");
     }
   }
-  mutex_gains.unlock();
 
   ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", nsf_pitch->getWorldIntegral(), nsf_roll->getWorldIntegral(),
                     kiwxy_lim);
@@ -662,9 +666,11 @@ const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 
 void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, [[maybe_unused]] uint32_t level) {
 
-  mutex_desired_gains.lock();
-  { drs_desired_gains = config; }
-  mutex_desired_gains.unlock();
+  {
+    std::scoped_lock lock(mutex_desired_gains);
+
+    drs_desired_gains = config;
+  }
 
   ROS_INFO("[NsfController]: DRS updated gains");
 }
@@ -690,9 +696,9 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
   }
 
   // calculate the difference
-  mutex_desired_gains.lock();
-  mutex_gains.lock();
   {
+    std::scoped_lock lock(mutex_gains, mutex_desired_gains);
+
     kpxy      = calculateGainChange(kpxy, drs_desired_gains.kpxy * gain_coeff, bypass_filter, "kpxy");
     kvxy      = calculateGainChange(kvxy, drs_desired_gains.kvxy * gain_coeff, bypass_filter, "kvxy");
     kaxy      = calculateGainChange(kaxy, drs_desired_gains.kaxy * gain_coeff, bypass_filter, "kaxy");
@@ -706,8 +712,6 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
     kibxy_lim = calculateGainChange(kibxy_lim, drs_desired_gains.kibxy_lim, false, "kibxy_lim");
     km_lim    = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
   }
-  mutex_gains.unlock();
-  mutex_desired_gains.unlock();
 
   /* yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592; */
 

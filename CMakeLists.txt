@@ -18,7 +18,6 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/pid_gains.cfg
   cfg/nsf_gains.cfg
   )
 
@@ -48,22 +47,6 @@ catkin_package(
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
-  )
-
-# PID controller
-
-add_library(PidController
-  src/pid_controller/pid_controller.cpp
-  )
-
-add_dependencies(PidController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-
-target_link_libraries(PidController
-  ${catkin_LIBRARIES}
   )
 
 # NSF controller
