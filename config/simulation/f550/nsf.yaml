@@ -29,4 +29,4 @@ yaw_offset: 0.0 # [deg]
 gains_filter:
   filter_rate: 20 # [Hz]
   perc_change_rate: 1.0
-  min_change_rate: 0.1 # perc of the differnece
+  min_change_rate: 0.1 # perc of the difference
