@@ -11,7 +11,6 @@
 #include <mrs_mav_manager/Controller.h>
 
 #include <mrs_lib/Profiler.h>
-
 #include <mrs_lib/ParamLoader.h>
 
 namespace mrs_controllers
@@ -29,9 +28,12 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr     status();
+  const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
 private:
+  bool is_initialized = false;
+  bool is_active      = false;
+
   double                       uav_mass_;
   double                       uav_mass_difference;
   double                       g_;
@@ -50,7 +52,7 @@ private:
 
 private:
   mrs_lib::Profiler *profiler;
-  mrs_lib::Routine * routine_update;
+  bool               profiler_enabled_ = false;
 };
 
 FailsafeController::FailsafeController(void) {
@@ -81,6 +83,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
   param_loader.load_param("thrust_decrease_rate", thrust_decrease_rate_);
   param_loader.load_param("uav_mass", uav_mass_);
   param_loader.load_param("g", g_);
+  param_loader.load_param("enable_profiler", profiler_enabled_);
 
   uav_mass_difference = 0;
 
@@ -94,16 +97,19 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_ma
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler       = new mrs_lib::Profiler(nh_, "FailsafeController");
-  routine_update = profiler->registerRoutine("update");
+  profiler = new mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[FailsafeController]: Could not load all parameters!");
     ros::shutdown();
   }
 
+
   ROS_INFO("[FailsafeController]: initialized");
+
+  is_initialized = true;
 }
 
 //}
@@ -127,6 +133,8 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
   ROS_INFO("[FailsafeController]: activated");
 
+  is_active = true;
+
   return true;
 }
 
@@ -146,10 +154,10 @@ void FailsafeController::deactivate(void) {
 
 //{ update()
 
-const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
-                                                                     const mrs_msgs::PositionCommand::ConstPtr &reference) {
+const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_msgs::Odometry::ConstPtr &                        odometry,
+                                                                     [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  routine_update->start();
+  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
   // --------------------------------------------------------------
   // |                 calculate the euler angles                 |
@@ -174,7 +182,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
     setpoint_yaw    = yaw;
     first_iteration = false;
 
-    routine_update->end();
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
   } else {
@@ -187,12 +194,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
     ROS_WARN("[FailsafeController]: the update was called with too small dt!");
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
-      routine_update->end();
       return last_output_command;
 
     } else {
 
-      routine_update->end();
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
@@ -221,17 +226,30 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
 
   last_output_command = output_command;
 
-  routine_update->end();
   return output_command;
 }
 
 //}
 
-//{ status()
+//{ gettatus()
 
-const mrs_msgs::ControllerStatus::Ptr FailsafeController::status() {
+const mrs_msgs::ControllerStatus::Ptr FailsafeController::getStatus() {
 
-  return mrs_msgs::ControllerStatus::Ptr();
+  if (is_initialized) {
+
+    mrs_msgs::ControllerStatus::Ptr controller_status(new mrs_msgs::ControllerStatus);
+
+    if (is_active) {
+      controller_status->active = mrs_msgs::ControllerStatus::ACTIVE;
+    } else {
+      controller_status->active = mrs_msgs::ControllerStatus::NONACTIVE;
+    }
+
+    return controller_status;
+  } else {
+
+    return mrs_msgs::ControllerStatus::Ptr();
+  }
 }
 
 //}

@@ -14,26 +14,14 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_msgs
   dynamic_reconfigure
   mrs_mav_manager
-  message_generation
   mrs_lib
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/pid_gains.cfg
-  cfg/lsf_gains.cfg
+  cfg/nsf_gains.cfg
   )
 
-add_message_files(
-  FILES
-  debug.msg
-  )
-
-generate_messages(
-  DEPENDENCIES
-  std_msgs
-  )
-
-set(CMAKE_CXX_FLAGS "-std=c++11 -fno-diagnostics-color")
+set(CMAKE_CXX_FLAGS "-std=c++17 -fno-diagnostics-color")
 
 # include Eigen3
 find_package(Eigen3 REQUIRED)
@@ -45,7 +33,7 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 ###################################
 
 catkin_package(
-  CATKIN_DEPENDS message_runtime roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_mav_manager mrs_lib
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_mav_manager mrs_lib
   DEPENDS Eigen
   )
 
@@ -61,35 +49,19 @@ include_directories(
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
 
-# PID controller
+# NSF controller
 
-add_library(PidController
-  src/pid_controller/pid_controller.cpp
+add_library(NsfController
+  src/nsf_controller/nsf_controller.cpp
   )
 
-add_dependencies(PidController
+add_dependencies(NsfController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(PidController
-  ${catkin_LIBRARIES}
-  )
-
-# LSF controller
-
-add_library(LsfController
-  src/lsf_controller/lsf_controller.cpp
-  )
-
-add_dependencies(LsfController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-
-target_link_libraries(LsfController
+target_link_libraries(NsfController
   ${catkin_LIBRARIES}
   )
 
