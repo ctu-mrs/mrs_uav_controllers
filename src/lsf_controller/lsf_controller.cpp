@@ -15,6 +15,8 @@
 
 #include <mrs_lib/Profiler.h>
 
+#include <mrs_lib/ParamLoader.h>
+
 namespace mrs_controllers
 {
 
@@ -162,7 +164,7 @@ class LsfController : public mrs_mav_manager::Controller {
 public:
   LsfController(void);
 
-  void initialize(const ros::NodeHandle &parent_nh);
+  void initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -188,11 +190,11 @@ private:
   Lsf *lsf_roll;
   Lsf *lsf_z;
 
-  double uav_mass_;
-  double uav_mass_difference;
-  double g_;
-  double hover_thrust_a_, hover_thrust_b_;
-  double hover_thrust;
+  double                       uav_mass_;
+  double                       uav_mass_difference;
+  double                       g_;
+  mrs_mav_manager::MotorParams motor_params_;
+  double                       hover_thrust;
 
   double roll, pitch, yaw;
 
@@ -228,112 +230,34 @@ LsfController::LsfController(void) {
 
 //{ initialize()
 
-void LsfController::initialize(const ros::NodeHandle &parent_nh) {
+void LsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
 
   ros::NodeHandle nh_(parent_nh, "lsf_controller");
 
   ros::Time::waitForValid();
 
+  this->motor_params_ = motor_params;
+
   // --------------------------------------------------------------
   // |                       load parameters                      |
   // --------------------------------------------------------------
 
-  nh_.param("kpxy", kpxy_, -1.0);
-  nh_.param("kvxy", kvxy_, -1.0);
-  nh_.param("kaxy", kaxy_, -1.0);
-  nh_.param("kixy", kixy_, -1.0);
-  nh_.param("kpz", kpz_, -1.0);
-  nh_.param("kvz", kvz_, -1.0);
-  nh_.param("kaz", kaz_, -1.0);
-  nh_.param("km", km_, -1.0);
-  nh_.param("kixy_lim", kixy_lim_, -1.0);
-  nh_.param("km_lim", km_lim_, -1.0);
-  nh_.param("hover_thrust/a", hover_thrust_a_, -1000.0);
-  nh_.param("hover_thrust/b", hover_thrust_b_, -1000.0);
-  nh_.param("uav_mass", uav_mass_, -1.0);
-  nh_.param("g", g_, -1.0);
-  nh_.param("max_tilt_angle", max_tilt_angle_, -1.0);
-  nh_.param("yaw_offset", yaw_offset, -1000.0);
+  mrs_lib::ParamLoader param_loader(nh_, "LsfController");
 
-  if (kpxy_ < 0) {
-    ROS_ERROR("[LsfController]: kpxy is not specified!");
-    ros::shutdown();
-  }
-
-  if (kvxy_ < 0) {
-    ROS_ERROR("[LsfController]: kvxy is not specified!");
-    ros::shutdown();
-  }
-
-  if (kaxy_ < 0) {
-    ROS_ERROR("[LsfController]: kaxy is not specified!");
-    ros::shutdown();
-  }
-
-  if (kixy_ < 0) {
-    ROS_ERROR("[LsfController]: kixy is not specified!");
-    ros::shutdown();
-  }
-
-  if (kpz_ < 0) {
-    ROS_ERROR("[LsfController]: kpz is not specified!");
-    ros::shutdown();
-  }
-
-  if (kvz_ < 0) {
-    ROS_ERROR("[LsfController]: kvz is not specified!");
-    ros::shutdown();
-  }
-
-  if (kaz_ < 0) {
-    ROS_ERROR("[LsfController]: kaz is not specified!");
-    ros::shutdown();
-  }
-
-  if (km_ < 0) {
-    ROS_ERROR("[LsfController]: km is not specified!");
-    ros::shutdown();
-  }
-
-  if (kixy_lim_ < 0) {
-    ROS_ERROR("[LsfController]: kixy_lim is not specified!");
-    ros::shutdown();
-  }
-
-  if (km_lim_ < 0) {
-    ROS_ERROR("[LsfController]: km_lim is not specified!");
-    ros::shutdown();
-  }
-
-  if (hover_thrust_a_ < -999) {
-    ROS_ERROR("[LsfController]: hover_thrust/a is not specified!");
-    ros::shutdown();
-  }
-
-  if (hover_thrust_b_ < -999) {
-    ROS_ERROR("[LsfController]: hover_thrust/b is not specified!");
-    ros::shutdown();
-  }
-
-  if (uav_mass_ < 0) {
-    ROS_ERROR("[LsfController]: uav_mass is not specified!");
-    ros::shutdown();
-  }
-
-  if (g_ < 0) {
-    ROS_ERROR("[LsfController]: g is not specified!");
-    ros::shutdown();
-  }
-
-  if (max_tilt_angle_ < 0) {
-    ROS_ERROR("[LsfController]: max_tilt_angle is not specified!");
-    ros::shutdown();
-  }
-
-  if (yaw_offset < -999.0) {
-    ROS_ERROR("[LsfController]: yaw_offset is not specified!");
-    ros::shutdown();
-  }
+  param_loader.load_param("kpxy", kpxy_);
+  param_loader.load_param("kvxy", kvxy_);
+  param_loader.load_param("kaxy", kaxy_);
+  param_loader.load_param("kixy", kixy_);
+  param_loader.load_param("kpz", kpz_);
+  param_loader.load_param("kvz", kvz_);
+  param_loader.load_param("kaz", kaz_);
+  param_loader.load_param("km", km_);
+  param_loader.load_param("kixy_lim", kixy_lim_);
+  param_loader.load_param("km_lim", km_lim_);
+  param_loader.load_param("uav_mass", uav_mass_);
+  param_loader.load_param("g", g_);
+  param_loader.load_param("max_tilt_angle", max_tilt_angle_);
+  param_loader.load_param("yaw_offset", yaw_offset);
 
   // convert to radians
   max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
@@ -350,7 +274,7 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
   // |                 calculate the hover thrust                 |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt(uav_mass_ * g_) * hover_thrust_a_ + hover_thrust_b_;
+  hover_thrust = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                       initialize lsfs                      |
@@ -387,6 +311,14 @@ void LsfController::initialize(const ros::NodeHandle &parent_nh) {
 
   profiler       = new mrs_lib::Profiler(nh_, "LsfController");
   routine_update = profiler->registerRoutine("update");
+
+  // | ----------------------- finish init ---------------------- |
+
+  if (!param_loader.loaded_successfully()) {
+    ros::shutdown();
+  }
+
+  ROS_INFO("[LsfController]: initialized");
 }
 
 //}
@@ -499,7 +431,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   // |                recalculate the hover thrust                |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * hover_thrust_a_ + hover_thrust_b_;
+  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                integrate the mass difference               |
@@ -559,6 +491,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr LsfController::update(const nav_msgs::
   output_command->roll   = action_roll * cos(yaw + yaw_offset) + action_pitch * sin(yaw + yaw_offset);
   output_command->yaw    = reference->yaw;
   output_command->thrust = action_z;
+
+  output_command->yaw_rate = reference->yaw_dot;
 
   output_command->mass_difference = uav_mass_difference;
 

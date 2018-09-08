@@ -1,20 +1,16 @@
 kpxy: 0.50
-kvxy: 0.50
+kvxy: 0.30
 kaxy: 1.0
 kixy: 0.1
 
-kpz: 0.5
-kvz: 0.15
+kpz: 0.30
+kvz: 0.25
 kaz: 1.0
 
 km: 1.0
 
 kixy_lim: 3.0
-km_lim: 3.0 # [kg]
-
-hover_thrust:
-  a: 0.26
-  b: -0.25
+km_lim: 1.0 # [kg]
 
 g : 9.8
 
