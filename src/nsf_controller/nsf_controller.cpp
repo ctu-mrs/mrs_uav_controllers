@@ -17,159 +17,164 @@
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
+#include <mrs_lib/Utils.h>
 
 //}
+
+#define X 0
+#define Y 1
+#define Z 2
 
 namespace mrs_controllers
 {
 
-/* //{ class NSF */
+/* /1* //{ class NSF *1/ */
 
-class Nsf {
+/* class Nsf { */
 
-public:
-  Nsf(std::string name, double kp, double kv, double ka, double kiw, double kib, double integral_saturation, double saturation, double g);
-  double update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt, double hover_thrust,
-                double body_integral);
-  void   reset(void);
-  void   setParams(double kp, double kv, double ka, double kiw, double kib, double integral_saturation);
-  bool   isSaturated(void);
-  double getWorldIntegral(void);
+/* public: */
+/*   Nsf(std::string name, double kp, double kv, double ka, double kiw, double kib, double integral_saturation, double saturation, double g); */
+/*   double update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt, double hover_thrust, */
+/*                 double body_integral); */
+/*   void   reset(void); */
+/*   void   setParams(double kp, double kv, double ka, double kiw, double kib, double integral_saturation); */
+/*   bool   isSaturated(void); */
+/*   double getWorldIntegral(void); */
 
-private:
-  double world_integral = 0;
+/* private: */
+/*   double world_integral = 0; */
 
-  // gains
-  double kp;
-  double kv;
-  double ka;
-  double kiw;
-  double kib;
+/*   // gains */
+/*   double kp; */
+/*   double kv; */
+/*   double ka; */
+/*   double kiw; */
+/*   double kib; */
 
-  double integral_saturation;
-  double saturation;
+/*   double integral_saturation; */
+/*   double saturation; */
 
-  double g;
+/*   double g; */
 
-  bool saturated;
+/*   bool saturated; */
 
-  std::string name;
-};
+/*   std::string name; */
+/* }; */
 
-void Nsf::setParams(double kp, double kv, double ka, double kiw, double kib, double integral_saturation) {
+/* void Nsf::setParams(double kp, double kv, double ka, double kiw, double kib, double integral_saturation) { */
 
-  this->kp                  = kp;
-  this->kv                  = kv;
-  this->ka                  = ka;
-  this->kiw                 = kiw;
-  this->kib                 = kib;
-  this->integral_saturation = integral_saturation;
-}
+/*   this->kp                  = kp; */
+/*   this->kv                  = kv; */
+/*   this->ka                  = ka; */
+/*   this->kiw                 = kiw; */
+/*   this->kib                 = kib; */
+/*   this->integral_saturation = integral_saturation; */
+/* } */
 
-Nsf::Nsf(std::string name, double kp, double kv, double ka, double kiw, double kib, double integral_saturation, double saturation, double g) {
+/* Nsf::Nsf(std::string name, double kp, double kv, double ka, double kiw, double kib, double integral_saturation, double saturation, double g) { */
 
-  this->name = name;
+/*   this->name = name; */
 
-  this->kp                  = kp;
-  this->kv                  = kv;
-  this->ka                  = ka;
-  this->kiw                 = kiw;
-  this->kib                 = kib;
-  this->integral_saturation = integral_saturation;
-  this->saturation          = saturation;
+/*   this->kp                  = kp; */
+/*   this->kv                  = kv; */
+/*   this->ka                  = ka; */
+/*   this->kiw                 = kiw; */
+/*   this->kib                 = kib; */
+/*   this->integral_saturation = integral_saturation; */
+/*   this->saturation          = saturation; */
 
-  this->g = g;
+/*   this->g = g; */
 
-  this->saturated = false;
+/*   this->saturated = false; */
 
-  this->world_integral = 0;
-}
+/*   this->world_integral = 0; */
+/* } */
 
-double Nsf::update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt, double hover_thrust,
-                   double body_integral) {
+/* double Nsf::update(double position_error, double speed_error, double desired_acceleration, double pitch, double roll, double dt, double hover_thrust, */
+/*                    double body_integral) { */
 
-  double p_component = kp * position_error;
-  double v_component = kv * speed_error;
-  double i_component = world_integral + body_integral;
-  double a_component;
+/*   double p_component = kp * position_error; */
+/*   double v_component = kv * speed_error; */
+/*   double i_component = world_integral + body_integral; */
+/*   double a_component; */
 
-  if (name.compare(std::string("x")) == 0 || name.compare(std::string("y")) == 0) {
-    a_component = ka * asin((desired_acceleration * cos(pitch) * cos(roll)) / g);
-  } else {
-    a_component = ka * desired_acceleration * (hover_thrust / g);
-  }
+/*   if (name.compare(std::string("x")) == 0 || name.compare(std::string("y")) == 0) { */
+/*     a_component = ka * asin((desired_acceleration * cos(pitch) * cos(roll)) / g); */
+/*   } else { */
+/*     a_component = ka * desired_acceleration * (hover_thrust / g); */
+/*   } */
 
-  // calculate the nsf action
-  double control_output = p_component + v_component + a_component + i_component;
+/*   // calculate the nsf action */
+/*   double control_output = p_component + v_component + a_component + i_component; */
 
-  saturated = false;
-  // saturate the control output
-  if (!std::isfinite(control_output)) {
-    control_output = 0;
-    ROS_INFO("[NsfController]: p_component=%f", p_component);
-    ROS_INFO("[NsfController]: v_component=%f", v_component);
-    ROS_INFO("[NsfController]: i_component=%f", i_component);
-    ROS_INFO("[NsfController]: a_component=%f", a_component);
-    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"control_output\", setting it to 0!!!");
-  } else if (control_output > saturation) {
-    control_output = saturation;
-    saturated      = true;
-  } else if (control_output < -saturation) {
-    control_output = -saturation;
-    saturated      = true;
-  }
+/*   saturated = false; */
+/*   // saturate the control output */
+/*   if (!std::isfinite(control_output)) { */
+/*     control_output = 0; */
+/*     ROS_INFO("[NsfController]: p_component=%f", p_component); */
+/*     ROS_INFO("[NsfController]: v_component=%f", v_component); */
+/*     ROS_INFO("[NsfController]: i_component=%f", i_component); */
+/*     ROS_INFO("[NsfController]: a_component=%f", a_component); */
+/*     ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"control_output\", setting it to 0!!!"); */
+/*   } else if (control_output > saturation) { */
+/*     control_output = saturation; */
+/*     saturated      = true; */
+/*   } else if (control_output < -saturation) { */
+/*     control_output = -saturation; */
+/*     saturated      = true; */
+/*   } */
 
-  if (saturated) {
+/*   if (saturated) { */
 
-    ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF is being saturated! value: %f, saturation: %f", name.c_str(), control_output, saturation);
+/*     ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF is being saturated! value: %f, saturation: %f", name.c_str(), control_output, saturation); */
 
-    // integrate only in the direction oposite to the saturation (antiwindup)
-    if (control_output > 0 && position_error < 0) {
-      world_integral += kiw * position_error * dt;
-    } else if (control_output < 0 && position_error > 0) {
-      world_integral += kiw * position_error * dt;
-    }
-  } else {
-    // if the output is not saturated, we do not care in which direction do we integrate
-    world_integral += kiw * position_error * dt;
-  }
+/*     // integrate only in the direction oposite to the saturation (antiwindup) */
+/*     if (control_output > 0 && position_error < 0) { */
+/*       world_integral += kiw * position_error * dt; */
+/*     } else if (control_output < 0 && position_error > 0) { */
+/*       world_integral += kiw * position_error * dt; */
+/*     } */
+/*   } else { */
+/*     // if the output is not saturated, we do not care in which direction do we integrate */
+/*     world_integral += kiw * position_error * dt; */
+/*   } */
 
-  // saturate the world_integral
-  double integral_saturated = false;
-  if (!std::isfinite(world_integral)) {
-    world_integral = 0;
-    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"world_integral\", setting it to 0!!!");
-  } else if (world_integral > integral_saturation) {
-    world_integral     = integral_saturation;
-    integral_saturated = true;
-  } else if (world_integral < -integral_saturation) {
-    world_integral     = -integral_saturation;
-    integral_saturated = true;
-  }
+/*   // saturate the world_integral */
+/*   double integral_saturated = false; */
+/*   if (!std::isfinite(world_integral)) { */
+/*     world_integral = 0; */
+/*     ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"world_integral\", setting it to 0!!!"); */
+/*   } else if (world_integral > integral_saturation) { */
+/*     world_integral     = integral_saturation; */
+/*     integral_saturated = true; */
+/*   } else if (world_integral < -integral_saturation) { */
+/*     world_integral     = -integral_saturation; */
+/*     integral_saturated = true; */
+/*   } */
 
-  if (integral_saturation > 0 && integral_saturated) {
-    ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF's world_integral is being saturated!", name.c_str());
-  }
+/*   if (integral_saturation > 0 && integral_saturated) { */
+/*     ROS_WARN_THROTTLE(1.0, "[NsfController]: The \"%s\" NSF's world_integral is being saturated!", name.c_str()); */
+/*   } */
 
-  return control_output;
-}
+/*   return control_output; */
+/* } */
 
-void Nsf::reset(void) {
+/* void Nsf::reset(void) { */
 
-  this->world_integral = 0;
-}
+/*   this->world_integral = 0; */
+/* } */
 
-bool Nsf::isSaturated(void) {
+/* bool Nsf::isSaturated(void) { */
 
-  return saturated;
-}
+/*   return saturated; */
+/* } */
 
-double Nsf::getWorldIntegral(void) {
+/* double Nsf::getWorldIntegral(void) { */
 
-  return world_integral;
-}
+/*   return world_integral; */
+/* } */
 
-//}
+/* //} */
 
 /* //{ class NsfController */
 
@@ -189,6 +194,8 @@ public:
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
+  Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
+
 private:
   bool is_initialized = false;
   bool is_active      = false;
@@ -205,10 +212,6 @@ private:
   mrs_controllers::nsf_gainsConfig            drs_desired_gains;
 
 private:
-  Nsf *nsf_pitch;
-  Nsf *nsf_roll;
-  Nsf *nsf_z;
-
   double                       uav_mass_;
   double                       uav_mass_difference;
   double                       g_;
@@ -257,8 +260,8 @@ private:
   double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
 
 private:
-  double body_integral_pitch = 0;
-  double body_integral_roll  = 0;
+  Eigen::Vector2d Ib_b;  // body error integral in the body frame
+  Eigen::Vector2d Iw_w;  // world error integral in the world_frame
 };
 
 NsfController::NsfController(void) {
@@ -350,9 +353,9 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
   // |                       initialize nsfs                      |
   // --------------------------------------------------------------
 
-  nsf_pitch = new Nsf("x", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_);
-  nsf_roll  = new Nsf("y", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_);
-  nsf_z     = new Nsf("z", kpz, kvz, kaz, 0, 0, 0, 1.0, g_);
+  /* nsf_pitch = new Nsf("x", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_); */
+  /* nsf_roll  = new Nsf("y", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_); */
+  /* nsf_z     = new Nsf("z", kpz, kvz, kaz, 0, 0, 0, 1.0, g_); */
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -448,16 +451,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
   // --------------------------------------------------------------
+  // |          load the control reference and estimates          |
+  // --------------------------------------------------------------
+
+  // Rp - position reference in global frame
+  // Rp - velocity reference in global frame
+  Eigen::Vector3d Rp(reference->position.x, -reference->position.y, reference->position.z);
+  Eigen::Vector3d Rv(reference->velocity.x, -reference->velocity.y, reference->velocity.z);
+
+  // Op - position in global frame
+  // Op - velocity in global frame
+  Eigen::Vector3d Op(odometry->pose.pose.position.x, -odometry->pose.pose.position.y, odometry->pose.pose.position.z);
+  Eigen::Vector3d Ov(odometry->twist.twist.linear.x, -odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
+
+  // --------------------------------------------------------------
   // |                  calculate control errors                  |
   // --------------------------------------------------------------
 
-  double position_error_x = reference->position.x - odometry->pose.pose.position.x;
-  double position_error_y = -(reference->position.y - odometry->pose.pose.position.y);
-  double position_error_z = reference->position.z - odometry->pose.pose.position.z;
-
-  double speed_error_x = reference->velocity.x - odometry->twist.twist.linear.x;
-  double speed_error_y = -(reference->velocity.y - odometry->twist.twist.linear.y);
-  double speed_error_z = reference->velocity.z - odometry->twist.twist.linear.z;
+  Eigen::Vector3d Ep = Rp - Op;
+  Eigen::Vector3d Ev = Rv - Ov;
 
   // --------------------------------------------------------------
   // |                      calculate the dt                      |
@@ -513,12 +525,116 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
+  // |                      update parameters                     |
+  // --------------------------------------------------------------
+
+  if (mute_lateral_gains && !reference->disable_position_gains) {
+    mutex_lateral_gains_after_toggle = true;
+  }
+  mute_lateral_gains = reference->disable_position_gains;
+
+  // --------------------------------------------------------------
+  // |                     calculate the NSFs                     |
+  // --------------------------------------------------------------
+
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
+
+  /* double action_pitch = nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, pitch, roll, dt, hover_thrust, body_integral_x); */
+  /* double action_roll  = nsf_roll->update(position_error_y, speed_error_y, -reference->acceleration.y, pitch, roll, dt, hover_thrust, body_integral_y); */
+  /* double action_z     = (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, pitch, roll, dt, hover_thrust, 0) + hover_thrust) * */
+  /*                   (1 / (cos(roll) * cos(pitch))); */
+
+  // create vectors of gains
+  Eigen::Vector3d kp(kpxy, kpxy, kpz);
+  Eigen::Vector3d kv(kvxy, kvxy, kvz);
+  Eigen::Vector3d ka(kaxy, kaxy, kaz);
+
+  // calculate the feed forwared acceleration
+  Eigen::Vector3d feed_forward(asin((reference->acceleration.x * cos(pitch) * cos(roll)) / g_), asin((reference->acceleration.y * cos(pitch) * cos(roll)) / g_),
+                               reference->acceleration.z * (hover_thrust / g_));
+
+  // | -------- calculate the componentes of our feedback ------- |
+  Eigen::Vector3d p_component, v_component, a_component, i_component;
+
+  p_component = kp.cwiseProduct(Ep);
+  v_component = kv.cwiseProduct(Ev);
+  a_component = ka.cwiseProduct(feed_forward);
+  i_component << Ib_w + Iw_w, Eigen::VectorXd::Zero(1, 1);
+
+  Eigen::Vector3d feedback = p_component + v_component + a_component + i_component;
+
+  // --------------------------------------------------------------
+  // |                  validation and saturation                 |
+  // --------------------------------------------------------------
+
+  // | ------------ validate and saturate the X and Y components ------------- |
+
+  // check the world Y controller
+  double x_saturated = false;
+  if (!std::isfinite(feedback[X])) {
+    feedback[X] = 0;
+    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback[X]\", setting it to 0!!!");
+  } else if (feedback[X] > max_tilt_angle_) {
+    feedback[X] = max_tilt_angle_;
+    x_saturated = true;
+  } else if (feedback[X] < -max_tilt_angle_) {
+    feedback[X] = -max_tilt_angle_;
+    x_saturated = true;
+  }
+
+  // check the world Y controller
+  double y_saturated = false;
+  if (!std::isfinite(feedback[Y])) {
+    feedback[Y] = 0;
+    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback[Y]\", setting it to 0!!!");
+  } else if (feedback[Y] > max_tilt_angle_) {
+    feedback[Y] = max_tilt_angle_;
+    y_saturated = true;
+  } else if (feedback[Y] < -max_tilt_angle_) {
+    feedback[Y] = -max_tilt_angle_;
+    y_saturated = true;
+  }
+
+  // | ---------------- validate the Z component ---------------- |
+
+  // check the world Y controller
+  double z_saturated = false;
+  if (!std::isfinite(feedback[Z])) {
+    feedback[Z] = 0;
+    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback[Z]\", setting it to 0!!!");
+  } else if (feedback[Z] > max_tilt_angle_) {
+    feedback[Z] = max_tilt_angle_;
+    z_saturated = true;
+  } else if (feedback[Z] < -max_tilt_angle_) {
+    feedback[Z] = -max_tilt_angle_;
+    z_saturated = true;
+  }
+
+  // --------------------------------------------------------------
+  // |                  integrate the world error                 |
+  // --------------------------------------------------------------
+
+  Eigen::Vector3d integration_switch(1, 1, 0);
+
+  if (x_saturated && mrs_lib::sign(feedback[X]) == mrs_lib::sign(Ep[X])) {
+    integration_switch[X] = 0;
+  }
+
+  if (y_saturated && mrs_lib::sign(feedback[Y]) == mrs_lib::sign(Ep[Y])) {
+    integration_switch[Y] = 0;
+  }
+
+  // integrate the body error
+  Iw_w += kiwxy * Ep.cwiseProduct(integration_switch) * dt;
+
+
+  // --------------------------------------------------------------
   // |                integrate the mass difference               |
   // --------------------------------------------------------------
 
-  if (!nsf_z->isSaturated()) {
+  if (z_saturated) {
 
-    uav_mass_difference += km * position_error_z * dt;
+    uav_mass_difference += km * Ep[3] * dt;
   }
 
   // saturate the world_integral
@@ -539,53 +655,29 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   }
 
   // --------------------------------------------------------------
-  // |                      update parameters                     |
-  // --------------------------------------------------------------
-
-  if (mute_lateral_gains && !reference->disable_position_gains) {
-    mutex_lateral_gains_after_toggle = true;
-  }
-  mute_lateral_gains = reference->disable_position_gains;
-
-  // --------------------------------------------------------------
-  // |                     calculate the NSFs                     |
-  // --------------------------------------------------------------
-
-  double body_integral_x, body_integral_y;
-  body_integral_x = body_integral_pitch * cos(-yaw) - body_integral_roll * sin(-yaw);
-  body_integral_y = body_integral_pitch * sin(-yaw) + body_integral_roll * cos(-yaw);
-
-  double action_pitch = nsf_pitch->update(position_error_x, speed_error_x, reference->acceleration.x, pitch, roll, dt, hover_thrust, body_integral_x);
-  double action_roll  = nsf_roll->update(position_error_y, speed_error_y, -reference->acceleration.y, pitch, roll, dt, hover_thrust, body_integral_y);
-  double action_z     = (nsf_z->update(position_error_z, speed_error_z, reference->acceleration.z, pitch, roll, dt, hover_thrust, 0) + hover_thrust) *
-                    (1 / (cos(roll) * cos(pitch)));
-
-  // --------------------------------------------------------------
-  // |                       body integrals                       |
+  // |                  integrate the world error                 |
   // --------------------------------------------------------------
 
   {
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    double body_error_pitch, body_error_roll;
-    body_error_pitch = position_error_x * cos(yaw) - position_error_y * sin(yaw);
-    body_error_roll  = position_error_x * sin(yaw) + position_error_y * cos(yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
 
-    body_integral_pitch += kibxy * body_error_pitch * dt;
-    body_integral_roll += kibxy * body_error_roll * dt;
+    // integrate the body error
+    Ib_b += kibxy * Ep_body * dt;
 
     // saturate the world_integral
     double integral_saturated = false;
-    if (!std::isfinite(body_integral_pitch)) {
-      body_integral_pitch = 0;
-      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"body_integral_pitch\", setting it to 0!!!");
-    } else if (body_integral_pitch > kibxy_lim) {
-      body_integral_pitch = kibxy_lim;
-      integral_saturated  = true;
-    } else if (body_integral_pitch < -kibxy_lim) {
-      body_integral_pitch = -kibxy_lim;
-      integral_saturated  = true;
+    if (!std::isfinite(Ib_b[0])) {
+      Ib_b[0] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!");
+    } else if (Ib_b[0] > kibxy_lim) {
+      Ib_b[0]            = kibxy_lim;
+      integral_saturated = true;
+    } else if (Ib_b[0] < -kibxy_lim) {
+      Ib_b[0]            = -kibxy_lim;
+      integral_saturated = true;
     }
 
     if (kibxy_lim > 0 && integral_saturated) {
@@ -594,14 +686,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
     // saturate the world_integral
     integral_saturated = false;
-    if (!std::isfinite(body_integral_roll)) {
-      body_integral_roll = 0;
-      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"body_integral_roll\", setting it to 0!!!");
-    } else if (body_integral_roll > kibxy_lim) {
-      body_integral_roll = kibxy_lim;
+    if (!std::isfinite(Ib_b[1])) {
+      Ib_b[1] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!");
+    } else if (Ib_b[1] > kibxy_lim) {
+      Ib_b[1]            = kibxy_lim;
       integral_saturated = true;
-    } else if (body_integral_roll < -kibxy_lim) {
-      body_integral_roll = -kibxy_lim;
+    } else if (Ib_b[1] < -kibxy_lim) {
+      Ib_b[1]            = -kibxy_lim;
       integral_saturated = true;
     }
 
@@ -610,9 +702,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     }
   }
 
-  ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", nsf_pitch->getWorldIntegral(), nsf_roll->getWorldIntegral(),
-                    kiwxy_lim);
-  ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", body_integral_pitch, body_integral_roll, kibxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
 
   // | ------------------- produce the output ------------------- |
 
@@ -715,9 +806,9 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
 
   /* yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592; */
 
-  nsf_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim);
-  nsf_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim);
-  nsf_z->setParams(kpz, kvz, kaz, 0, 0, 0);
+  /* nsf_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
+  /* nsf_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
+  /* nsf_z->setParams(kpz, kvz, kaz, 0, 0, 0); */
 }
 
 //}
@@ -765,6 +856,17 @@ double NsfController::calculateGainChange(const double current_value, const doub
   }
 
   return current_value + change;
+}
+
+//}
+
+/* rotate2d() //{ */
+
+Eigen::Vector2d NsfController::rotate2d(const Eigen::Vector2d vector_in, double angle) {
+
+  Eigen::Rotation2D<double> rot2(angle);
+
+  return rot2.toRotationMatrix() * vector_in;
 }
 
 //}
