@@ -206,14 +206,6 @@ namespace mrs_controllers
     hover_thrust = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
     // --------------------------------------------------------------
-    // |                       initialize nsfs                      |
-    // --------------------------------------------------------------
-
-    /* nsf_pitch = new Nsf("x", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_); */
-    /* nsf_roll  = new Nsf("y", kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim, max_tilt_angle_, g_); */
-    /* nsf_z     = new Nsf("z", kpz, kvz, kaz, 0, 0, 0, 1.0, g_); */
-
-    // --------------------------------------------------------------
     // |                     dynamic reconfigure                    |
     // --------------------------------------------------------------
 
@@ -327,8 +319,6 @@ namespace mrs_controllers
     Eigen::Vector3d Ep = Rp - Op;
     Eigen::Vector3d Ev = Rv - Ov;
 
-    /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: Ep:" << Ep.transpose()); */
-
     // --------------------------------------------------------------
     // |                      calculate the dt                      |
     // --------------------------------------------------------------
@@ -396,15 +386,19 @@ namespace mrs_controllers
     Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
     // create vectors of gains
-    Eigen::Vector3d kp(kpxy, kpxy, kpz);
-    Eigen::Vector3d kv(kvxy, kvxy, kvz);
-    Eigen::Vector3d ka(kaxy, kaxy, kaz);
+    Eigen::Vector3d kp, kv, ka;
+
+    {
+      std::scoped_lock lock(mutex_gains);
+    
+      kp << kpxy, kpxy, kpz;
+      kv << kvxy, kvxy, kvz;
+      ka << kaxy, kaxy, kaz;
+    }
 
     // calculate the feed forwared acceleration
     Eigen::Vector3d feed_forward(asin((reference->acceleration.x * cos(pitch) * cos(roll)) / g_),
                                  asin((-reference->acceleration.y * cos(pitch) * cos(roll)) / g_), reference->acceleration.z * (hover_thrust / g_));
-
-    ROS_INFO_STREAM_THROTTLE(1.0, "[]: feedforward: " << feed_forward);
 
     // | -------- calculate the componentes of our feedback ------- |
     Eigen::Vector3d p_component, v_component, a_component, i_component;
@@ -480,77 +474,55 @@ namespace mrs_controllers
     // |                  integrate the world error                 |
     // --------------------------------------------------------------
 
-    Eigen::Vector3d integration_switch(1, 1, 0);
-
-    if (x_saturated && mrs_lib::sign(feedback_w[X]) == mrs_lib::sign(Ep[X])) {
-      integration_switch[X] = 0;
-    }
-
-    if (y_saturated && mrs_lib::sign(feedback_w[Y]) == mrs_lib::sign(Ep[Y])) {
-      integration_switch[Y] = 0;
-    }
-
-    // integrate the world error
-    Iw_w += kiwxy * (Ep.cwiseProduct(integration_switch)).head(2) * dt;
-
-    // saturate the world
-    double world_integral_saturated = false;
-    if (!std::isfinite(Iw_w[0])) {
-      Iw_w[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
-    } else if (Iw_w[0] > kiwxy_lim) {
-      Iw_w[0]                  = kiwxy_lim;
-      world_integral_saturated = true;
-    } else if (Iw_w[0] < -kiwxy_lim) {
-      Iw_w[0]                  = -kiwxy_lim;
-      world_integral_saturated = true;
-    }
-
-    if (kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's world X integral is being saturated!");
-    }
-
-    // saturate the world
-    world_integral_saturated = false;
-    if (!std::isfinite(Iw_w[1])) {
-      Iw_w[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
-    } else if (Iw_w[1] > kiwxy_lim) {
-      Iw_w[1]                  = kiwxy_lim;
-      world_integral_saturated = true;
-    } else if (Iw_w[1] < -kiwxy_lim) {
-      Iw_w[1]                  = -kiwxy_lim;
-      world_integral_saturated = true;
-    }
-
-    if (kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's world Y integral is being saturated!");
-    }
-
-    // --------------------------------------------------------------
-    // |                integrate the mass difference               |
-    // --------------------------------------------------------------
-
-    if (!z_saturated) {
-
-      uav_mass_difference += km * Ep[2] * dt;
-    }
-
-    // saturate the mass estimator
-    bool uav_mass_saturated = false;
-    if (!std::isfinite(uav_mass_difference)) {
-      uav_mass_difference = 0;
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
-    } else if (uav_mass_difference > km_lim) {
-      uav_mass_difference = km_lim;
-      uav_mass_saturated  = true;
-    } else if (uav_mass_difference < -km_lim) {
-      uav_mass_difference = -km_lim;
-      uav_mass_saturated  = true;
-    }
-
-    if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: The uav_mass_difference is being saturated to %1.3f!", uav_mass_difference);
+    {
+      std::scoped_lock lock(mutex_gains);
+    
+      Eigen::Vector3d integration_switch(1, 1, 0);
+      
+      if (x_saturated && mrs_lib::sign(feedback_w[X]) == mrs_lib::sign(Ep[X])) {
+        integration_switch[X] = 0;
+      }
+      
+      if (y_saturated && mrs_lib::sign(feedback_w[Y]) == mrs_lib::sign(Ep[Y])) {
+        integration_switch[Y] = 0;
+      }
+      
+      // integrate the world error
+      Iw_w += kiwxy * (Ep.cwiseProduct(integration_switch)).head(2) * dt;
+      
+      // saturate the world
+      double world_integral_saturated = false;
+      if (!std::isfinite(Iw_w[0])) {
+        Iw_w[0] = 0;
+        ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
+      } else if (Iw_w[0] > kiwxy_lim) {
+        Iw_w[0]                  = kiwxy_lim;
+        world_integral_saturated = true;
+      } else if (Iw_w[0] < -kiwxy_lim) {
+        Iw_w[0]                  = -kiwxy_lim;
+        world_integral_saturated = true;
+      }
+      
+      if (kiwxy_lim >= 0 && world_integral_saturated) {
+        ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's world X integral is being saturated!");
+      }
+      
+      // saturate the world
+      world_integral_saturated = false;
+      if (!std::isfinite(Iw_w[1])) {
+        Iw_w[1] = 0;
+        ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
+      } else if (Iw_w[1] > kiwxy_lim) {
+        Iw_w[1]                  = kiwxy_lim;
+        world_integral_saturated = true;
+      } else if (Iw_w[1] < -kiwxy_lim) {
+        Iw_w[1]                  = -kiwxy_lim;
+        world_integral_saturated = true;
+      }
+      
+      if (kiwxy_lim >= 0 && world_integral_saturated) {
+        ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's world Y integral is being saturated!");
+      }
     }
 
     // --------------------------------------------------------------
@@ -601,10 +573,45 @@ namespace mrs_controllers
       }
     }
 
+    // --------------------------------------------------------------
+    // |                integrate the mass difference               |
+    // --------------------------------------------------------------
+
+    {
+      std::scoped_lock lock(mutex_gains);
+    
+      if (!z_saturated) {
+        uav_mass_difference += km * Ep[2] * dt;
+      }
+      
+      // saturate the mass estimator
+      bool uav_mass_saturated = false;
+      if (!std::isfinite(uav_mass_difference)) {
+        uav_mass_difference = 0;
+        ROS_WARN_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
+      } else if (uav_mass_difference > km_lim) {
+        uav_mass_difference = km_lim;
+        uav_mass_saturated  = true;
+      } else if (uav_mass_difference < -km_lim) {
+        uav_mass_difference = -km_lim;
+        uav_mass_saturated  = true;
+      }
+      
+      if (uav_mass_saturated) {
+        ROS_WARN_THROTTLE(1.0, "[NsfController]: The uav_mass_difference is being saturated to %1.3f!", uav_mass_difference);
+      }
+    }
+
+    // --------------------------------------------------------------
+    // |            report on the values of the integrals           |
+    // --------------------------------------------------------------
+
     ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
     ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
 
-    // | ------------------- produce the output ------------------- |
+    // --------------------------------------------------------------
+    // |                 produce the control output                 |
+    // --------------------------------------------------------------
 
     mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
     output_command->header.stamp = ros::Time::now();
