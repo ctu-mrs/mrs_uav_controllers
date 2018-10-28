@@ -196,6 +196,8 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
+  bool reset(void);
+
 private:
   bool is_initialized = false;
   bool is_active      = false;
@@ -479,9 +481,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   if (first_iteration) {
 
-    nsf_pitch->reset();
-    nsf_roll->reset();
-    nsf_z->reset();
+    reset();
     last_update = odometry->header.stamp;
 
     first_iteration = false;
@@ -856,6 +856,17 @@ double NsfController::calculateGainChange(const double current_value, const doub
   }
 
   return current_value + change;
+}
+
+//}
+
+/* reset() //{ */
+
+bool NsfController::reset(void) {
+
+  Iw_w = Eigen::Vector2d::Zero(2);
+
+  return true;
 }
 
 //}
