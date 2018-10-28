@@ -401,6 +401,8 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager
     ros::shutdown();
   }
 
+  reset();
+
   ROS_INFO("[NsfController]: initialized");
 
   is_initialized = true;
@@ -473,6 +475,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   Eigen::Vector3d Ep = Rp - Op;
   Eigen::Vector3d Ev = Rv - Ov;
 
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: Ep:" << Ep.transpose()); */
+
   // --------------------------------------------------------------
   // |                      calculate the dt                      |
   // --------------------------------------------------------------
@@ -496,8 +500,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM("[NsfController]: last " << last_update << ", current " << odometry->header.stamp);
-    ROS_WARN("[NsfController]: the last odometry message came too close! %f", dt);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[NsfController]: last " << last_update << ", current " << odometry->header.stamp);
+    ROS_WARN_THROTTLE(1.0, "[NsfController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
       return last_output_command;
@@ -561,7 +565,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   a_component = ka.cwiseProduct(feed_forward);
   i_component << Ib_w + Iw_w, Eigen::VectorXd::Zero(1, 1);
 
-  Eigen::Vector3d feedback = p_component + v_component + a_component + i_component;
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: p_component: " << p_component.transpose()); */
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: v_component: " << v_component.transpose()); */
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: a_component: " << a_component.transpose()); */
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: i_component: " << i_component.transpose()); */
+
+  Eigen::Vector3d feedback_w = (p_component + v_component + a_component + i_component + Eigen::Vector3d(0, 0, hover_thrust)).cwiseProduct(Eigen::Vector3d(1, 1, 1 / (cos(roll) * cos(pitch))));
 
   // --------------------------------------------------------------
   // |                  validation and saturation                 |
@@ -571,27 +580,27 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   // check the world Y controller
   double x_saturated = false;
-  if (!std::isfinite(feedback[X])) {
-    feedback[X] = 0;
-    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback[X]\", setting it to 0!!!");
-  } else if (feedback[X] > max_tilt_angle_) {
-    feedback[X] = max_tilt_angle_;
+  if (!std::isfinite(feedback_w[X])) {
+    feedback_w[X] = 0;
+    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback_w[X]\", setting it to 0!!!");
+  } else if (feedback_w[X] > max_tilt_angle_) {
+    feedback_w[X] = max_tilt_angle_;
     x_saturated = true;
-  } else if (feedback[X] < -max_tilt_angle_) {
-    feedback[X] = -max_tilt_angle_;
+  } else if (feedback_w[X] < -max_tilt_angle_) {
+    feedback_w[X] = -max_tilt_angle_;
     x_saturated = true;
   }
 
   // check the world Y controller
   double y_saturated = false;
-  if (!std::isfinite(feedback[Y])) {
-    feedback[Y] = 0;
-    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback[Y]\", setting it to 0!!!");
-  } else if (feedback[Y] > max_tilt_angle_) {
-    feedback[Y] = max_tilt_angle_;
+  if (!std::isfinite(feedback_w[Y])) {
+    feedback_w[Y] = 0;
+    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback_w[Y]\", setting it to 0!!!");
+  } else if (feedback_w[Y] > max_tilt_angle_) {
+    feedback_w[Y] = max_tilt_angle_;
     y_saturated = true;
-  } else if (feedback[Y] < -max_tilt_angle_) {
-    feedback[Y] = -max_tilt_angle_;
+  } else if (feedback_w[Y] < -max_tilt_angle_) {
+    feedback_w[Y] = -max_tilt_angle_;
     y_saturated = true;
   }
 
@@ -599,14 +608,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   // check the world Y controller
   double z_saturated = false;
-  if (!std::isfinite(feedback[Z])) {
-    feedback[Z] = 0;
-    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback[Z]\", setting it to 0!!!");
-  } else if (feedback[Z] > max_tilt_angle_) {
-    feedback[Z] = max_tilt_angle_;
+  if (!std::isfinite(feedback_w[Z])) {
+    feedback_w[Z] = 0;
+    ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback_w[Z]\", setting it to 0!!!");
+  } else if (feedback_w[Z] > 1.0) {
+    feedback_w[Z] = 1.0;
     z_saturated = true;
-  } else if (feedback[Z] < -max_tilt_angle_) {
-    feedback[Z] = -max_tilt_angle_;
+  } else if (feedback_w[Z] < 0.0) {
+    feedback_w[Z] = 0;
     z_saturated = true;
   }
 
@@ -616,16 +625,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   Eigen::Vector3d integration_switch(1, 1, 0);
 
-  if (x_saturated && mrs_lib::sign(feedback[X]) == mrs_lib::sign(Ep[X])) {
+  if (x_saturated && mrs_lib::sign(feedback_w[X]) == mrs_lib::sign(Ep[X])) {
     integration_switch[X] = 0;
   }
 
-  if (y_saturated && mrs_lib::sign(feedback[Y]) == mrs_lib::sign(Ep[Y])) {
+  if (y_saturated && mrs_lib::sign(feedback_w[Y]) == mrs_lib::sign(Ep[Y])) {
     integration_switch[Y] = 0;
   }
 
   // integrate the body error
-  Iw_w += kiwxy * Ep.cwiseProduct(integration_switch) * dt;
+  Iw_w += kiwxy * (Ep.cwiseProduct(integration_switch)).head(2) * dt;
 
 
   // --------------------------------------------------------------
@@ -710,15 +719,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  // rotate the feedback to the body frame
-  Eigen::Vector2d feedback_w = rotate2d(feedback.head(2), yaw + yaw_offset);
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: feedback_w: " << feedback_w.transpose()); */
 
-  /* output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset); */
-  /* output_command->roll   = action_roll * cos(yaw + yaw_offset) + action_pitch * sin(yaw + yaw_offset); */
-  output_command->pitch  = feedback_w[0];
-  output_command->roll   = feedback_w[1];
+  // rotate the feedback to the body frame
+  Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset);
+
+  /* ROS_INFO_STREAM_THROTTLE(1.0, "[NsfController]: feedback_b: " << feedback_b.transpose()); */
+
+  output_command->pitch  = feedback_b[0];
+  output_command->roll   = feedback_b[1];
   output_command->yaw    = reference->yaw;
-  output_command->thrust = feedback[2];
+  output_command->thrust = feedback_w[2];
 
   output_command->yaw_rate = reference->yaw_dot;
 
