@@ -710,10 +710,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset);
-  output_command->roll   = action_roll * cos(yaw + yaw_offset) + action_pitch * sin(yaw + yaw_offset);
+  // rotate the feedback to the body frame
+  Eigen::Vector2d feedback_w = rotate2d(feedback.head(2), yaw + yaw_offset);
+
+  /* output_command->pitch  = action_pitch * cos(yaw + yaw_offset) - action_roll * sin(yaw + yaw_offset); */
+  /* output_command->roll   = action_roll * cos(yaw + yaw_offset) + action_pitch * sin(yaw + yaw_offset); */
+  output_command->pitch  = feedback_w[0];
+  output_command->roll   = feedback_w[1];
   output_command->yaw    = reference->yaw;
-  output_command->thrust = action_z;
+  output_command->thrust = feedback[2];
 
   output_command->yaw_rate = reference->yaw_dot;
 
