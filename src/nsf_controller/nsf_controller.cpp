@@ -619,6 +619,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     z_saturated = true;
   }
 
+  if (x_saturated) {
+    ROS_WARN_THROTTLE(1.0, "[NsfController]: X is saturated");
+  }
+
+  if (y_saturated) {
+    ROS_WARN_THROTTLE(1.0, "[NsfController]: Y is saturated");
+  }
+
+  if (z_saturated) {
+    ROS_WARN_THROTTLE(1.0, "[NsfController]: Z is saturated"); 
+  }
+
   // --------------------------------------------------------------
   // |                  integrate the world error                 |
   // --------------------------------------------------------------
@@ -633,7 +645,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     integration_switch[Y] = 0;
   }
 
-  // integrate the body error
+  // integrate the world error
   Iw_w += kiwxy * (Ep.cwiseProduct(integration_switch)).head(2) * dt;
 
 
@@ -641,7 +653,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                integrate the mass difference               |
   // --------------------------------------------------------------
 
-  if (z_saturated) {
+  if (!z_saturated) {
 
     uav_mass_difference += km * Ep[3] * dt;
   }
