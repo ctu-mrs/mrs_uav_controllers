@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 generate_dynamic_reconfigure_options(
   cfg/nsf_gains.cfg
+  cfg/so3_gains.cfg
   )
 
 set(CMAKE_CXX_FLAGS "-std=c++17 -fno-diagnostics-color")
@@ -62,6 +63,22 @@ add_dependencies(NsfController
   )
 
 target_link_libraries(NsfController
+  ${catkin_LIBRARIES}
+  )
+
+# SO3 controller
+
+add_library(So3Controller
+  src/so3_controller/so3_controller.cpp
+  )
+
+add_dependencies(NsfController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
+  )
+
+target_link_libraries(So3Controller
   ${catkin_LIBRARIES}
   )
 

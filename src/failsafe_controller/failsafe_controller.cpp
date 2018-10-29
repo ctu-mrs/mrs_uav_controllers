@@ -219,10 +219,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
     hover_thrust = -0.0;
   }
 
-  output_command->pitch  = 0.0;
-  output_command->roll   = 0.0;
-  output_command->yaw    = setpoint_yaw;
+  output_command->euler_attitude.pitch  = 0.0;
+  output_command->euler_attitude.roll   = 0.0;
+  output_command->euler_attitude.yaw    = setpoint_yaw;
   output_command->thrust = hover_thrust;
+  output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
 
   last_output_command = output_command;
 

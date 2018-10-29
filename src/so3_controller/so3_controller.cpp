@@ -13,7 +13,7 @@
 #include <mrs_msgs/ControllerStatus.h>
 #include <mrs_mav_manager/Controller.h>
 
-#include <mrs_controllers/nsf_gainsConfig.h>
+#include <mrs_controllers/so3_gainsConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
@@ -28,12 +28,12 @@
 namespace mrs_controllers
 {
 
-  /* //{ class NsfController */
+  /* //{ class So3Controller */
 
-  class NsfController : public mrs_mav_manager::Controller {
+  class So3Controller : public mrs_mav_manager::Controller {
 
   public:
-    NsfController(void);
+    So3Controller(void);
 
     void initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params);
     bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
@@ -42,7 +42,7 @@ namespace mrs_controllers
     const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
     const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
-    void dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, uint32_t level);
+    void dynamicReconfigureCallback(mrs_controllers::so3_gainsConfig &config, uint32_t level);
 
     double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
@@ -59,11 +59,11 @@ namespace mrs_controllers
     // --------------------------------------------------------------
 
     boost::recursive_mutex                      config_mutex_;
-    typedef mrs_controllers::nsf_gainsConfig    Config;
+    typedef mrs_controllers::so3_gainsConfig    Config;
     typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
     boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-    void                                        drs_callback(mrs_controllers::nsf_gainsConfig &config, uint32_t level);
-    mrs_controllers::nsf_gainsConfig            drs_desired_gains;
+    void                                        drs_callback(mrs_controllers::so3_gainsConfig &config, uint32_t level);
+    mrs_controllers::so3_gainsConfig            drs_desired_gains;
 
   private:
     double                       uav_mass_;
@@ -118,7 +118,7 @@ namespace mrs_controllers
     Eigen::Vector2d Iw_w;  // world error integral in the world_frame
   };
 
-  NsfController::NsfController(void) {
+  So3Controller::So3Controller(void) {
   }
 
   //}
@@ -129,9 +129,9 @@ namespace mrs_controllers
 
   /* //{ initialize() */
 
-  void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
+  void So3Controller::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
 
-    ros::NodeHandle nh_(parent_nh, "nsf_controller");
+    ros::NodeHandle nh_(parent_nh, "so3_controller");
 
     ros::Time::waitForValid();
 
@@ -141,7 +141,7 @@ namespace mrs_controllers
     // |                       load parameters                      |
     // --------------------------------------------------------------
 
-    mrs_lib::ParamLoader param_loader(nh_, "NsfController");
+    mrs_lib::ParamLoader param_loader(nh_, "So3Controller");
 
     param_loader.load_param("enable_profiler", profiler_enabled_);
 
@@ -187,7 +187,7 @@ namespace mrs_controllers
     gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
 
     if (!param_loader.loaded_successfully()) {
-      ROS_ERROR("[NsfController]: Could not load all parameters!");
+      ROS_ERROR("[So3Controller]: Could not load all parameters!");
       ros::shutdown();
     }
 
@@ -225,29 +225,29 @@ namespace mrs_controllers
 
     reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
     reconfigure_server_->updateConfig(drs_desired_gains);
-    ReconfigureServer::CallbackType f = boost::bind(&NsfController::dynamicReconfigureCallback, this, _1, _2);
+    ReconfigureServer::CallbackType f = boost::bind(&So3Controller::dynamicReconfigureCallback, this, _1, _2);
     reconfigure_server_->setCallback(f);
 
     // --------------------------------------------------------------
     // |                          profiler                          |
     // --------------------------------------------------------------
 
-    profiler = new mrs_lib::Profiler(nh_, "NsfController", profiler_enabled_);
+    profiler = new mrs_lib::Profiler(nh_, "So3Controller", profiler_enabled_);
 
     // --------------------------------------------------------------
     // |                           timers                           |
     // --------------------------------------------------------------
 
-    timer_gain_filter = nh_.createTimer(ros::Rate(gains_filter_timer_rate_), &NsfController::timerGainsFilter, this);
+    timer_gain_filter = nh_.createTimer(ros::Rate(gains_filter_timer_rate_), &So3Controller::timerGainsFilter, this);
 
     // | ----------------------- finish init ---------------------- |
 
     if (!param_loader.loaded_successfully()) {
-      ROS_ERROR("[NsfController]: Could not load all parameters!");
+      ROS_ERROR("[So3Controller]: Could not load all parameters!");
       ros::shutdown();
     }
 
-    ROS_INFO("[NsfController]: initialized");
+    ROS_INFO("[So3Controller]: initialized");
 
     is_initialized = true;
   }
@@ -256,21 +256,21 @@ namespace mrs_controllers
 
   /* //{ activate() */
 
-  bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+  bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
     if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
       activation_control_command_ = mrs_msgs::AttitudeCommand();
       uav_mass_difference         = 0;
-      ROS_WARN("[NsfController]: activated without getting the last tracker's command.");
+      ROS_WARN("[So3Controller]: activated without getting the last tracker's command.");
     } else {
       activation_control_command_ = *cmd;
       uav_mass_difference         = cmd->mass_difference;
-      ROS_INFO("[NsfController]: activated with a last trackers command.");
+      ROS_INFO("[So3Controller]: activated with a last trackers command.");
     }
 
     first_iteration = true;
 
-    ROS_INFO("[NsfController]: activated");
+    ROS_INFO("[So3Controller]: activated");
 
     is_active = true;
 
@@ -281,19 +281,19 @@ namespace mrs_controllers
 
   /* //{ deactivate() */
 
-  void NsfController::deactivate(void) {
+  void So3Controller::deactivate(void) {
 
     first_iteration     = false;
     uav_mass_difference = 0;
 
-    ROS_INFO("[NsfController]: deactivated");
+    ROS_INFO("[So3Controller]: deactivated");
   }
 
   //}
 
   /* //{ update() */
 
-  const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
+  const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                   const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
     mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
@@ -342,8 +342,8 @@ namespace mrs_controllers
 
     if (fabs(dt) <= 0.001) {
 
-      ROS_WARN_STREAM_THROTTLE(1.0, "[NsfController]: last " << last_update << ", current " << odometry->header.stamp);
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: the last odometry message came too close! %f", dt);
+      ROS_WARN_STREAM_THROTTLE(1.0, "[So3Controller]: last " << last_update << ", current " << odometry->header.stamp);
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: the last odometry message came too close! %f", dt);
       if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
         return last_output_command;
@@ -380,7 +380,7 @@ namespace mrs_controllers
     mute_lateral_gains = reference->disable_position_gains;
 
     // --------------------------------------------------------------
-    // |                     calculate the NSFs                     |
+    // |                     calculate the SO3s                     |
     // --------------------------------------------------------------
 
     Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
@@ -421,7 +421,7 @@ namespace mrs_controllers
     double x_saturated = false;
     if (!std::isfinite(feedback_w[X])) {
       feedback_w[X] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback_w[X]\", setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"feedback_w[X]\", setting it to 0!!!");
     } else if (feedback_w[X] > max_tilt_angle_) {
       feedback_w[X] = max_tilt_angle_;
       x_saturated   = true;
@@ -434,7 +434,7 @@ namespace mrs_controllers
     double y_saturated = false;
     if (!std::isfinite(feedback_w[Y])) {
       feedback_w[Y] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback_w[Y]\", setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"feedback_w[Y]\", setting it to 0!!!");
     } else if (feedback_w[Y] > max_tilt_angle_) {
       feedback_w[Y] = max_tilt_angle_;
       y_saturated   = true;
@@ -449,7 +449,7 @@ namespace mrs_controllers
     double z_saturated = false;
     if (!std::isfinite(feedback_w[Z])) {
       feedback_w[Z] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback_w[Z]\", setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"feedback_w[Z]\", setting it to 0!!!");
     } else if (feedback_w[Z] > 1.0) {
       feedback_w[Z] = 1.0;
       z_saturated   = true;
@@ -459,15 +459,15 @@ namespace mrs_controllers
     }
 
     if (x_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: X is saturated");
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: X is saturated");
     }
 
     if (y_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: Y is saturated");
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Y is saturated");
     }
 
     if (z_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[NsfController]: Z is saturated");
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Z is saturated");
     }
 
     // --------------------------------------------------------------
@@ -494,7 +494,7 @@ namespace mrs_controllers
       double world_integral_saturated = false;
       if (!std::isfinite(Iw_w[0])) {
         Iw_w[0] = 0;
-        ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
+        ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
       } else if (Iw_w[0] > kiwxy_lim) {
         Iw_w[0]                  = kiwxy_lim;
         world_integral_saturated = true;
@@ -504,14 +504,14 @@ namespace mrs_controllers
       }
 
       if (kiwxy_lim >= 0 && world_integral_saturated) {
-        ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's world X integral is being saturated!");
+        ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's world X integral is being saturated!");
       }
 
       // saturate the world
       world_integral_saturated = false;
       if (!std::isfinite(Iw_w[1])) {
         Iw_w[1] = 0;
-        ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
+        ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
       } else if (Iw_w[1] > kiwxy_lim) {
         Iw_w[1]                  = kiwxy_lim;
         world_integral_saturated = true;
@@ -521,7 +521,7 @@ namespace mrs_controllers
       }
 
       if (kiwxy_lim >= 0 && world_integral_saturated) {
-        ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's world Y integral is being saturated!");
+        ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's world Y integral is being saturated!");
       }
     }
 
@@ -542,7 +542,7 @@ namespace mrs_controllers
       double body_integral_saturated = false;
       if (!std::isfinite(Ib_b[0])) {
         Ib_b[0] = 0;
-        ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!");
+        ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!");
       } else if (Ib_b[0] > kibxy_lim) {
         Ib_b[0]                 = kibxy_lim;
         body_integral_saturated = true;
@@ -552,14 +552,14 @@ namespace mrs_controllers
       }
 
       if (kibxy_lim > 0 && body_integral_saturated) {
-        ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's body pitch integral is being saturated!");
+        ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's body pitch integral is being saturated!");
       }
 
       // saturate the body
       body_integral_saturated = false;
       if (!std::isfinite(Ib_b[1])) {
         Ib_b[1] = 0;
-        ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!");
+        ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!");
       } else if (Ib_b[1] > kibxy_lim) {
         Ib_b[1]                 = kibxy_lim;
         body_integral_saturated = true;
@@ -569,7 +569,7 @@ namespace mrs_controllers
       }
 
       if (kibxy_lim > 0 && body_integral_saturated) {
-        ROS_WARN_THROTTLE(1.0, "[NsfController]: NSF's body roll integral is being saturated!");
+        ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's body roll integral is being saturated!");
       }
     }
 
@@ -588,7 +588,7 @@ namespace mrs_controllers
       bool uav_mass_saturated = false;
       if (!std::isfinite(uav_mass_difference)) {
         uav_mass_difference = 0;
-        ROS_WARN_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
+        ROS_WARN_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
       } else if (uav_mass_difference > km_lim) {
         uav_mass_difference = km_lim;
         uav_mass_saturated  = true;
@@ -598,7 +598,7 @@ namespace mrs_controllers
       }
 
       if (uav_mass_saturated) {
-        ROS_WARN_THROTTLE(1.0, "[NsfController]: The uav_mass_difference is being saturated to %1.3f!", uav_mass_difference);
+        ROS_WARN_THROTTLE(1.0, "[So3Controller]: The uav_mass_difference is being saturated to %1.3f!", uav_mass_difference);
       }
     }
 
@@ -606,8 +606,8 @@ namespace mrs_controllers
     // |            report on the values of the integrals           |
     // --------------------------------------------------------------
 
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
 
     // --------------------------------------------------------------
     // |                 produce the control output                 |
@@ -619,12 +619,12 @@ namespace mrs_controllers
     // rotate the feedback to the body frame
     Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset);
 
-    output_command->euler_attitude.pitch = feedback_b[0];
-    output_command->euler_attitude.roll  = feedback_b[1];
-    output_command->euler_attitude.yaw   = reference->yaw;
-    output_command->thrust               = feedback_w[2];
+    output_command->attitude_rate.yaw   = 6.28;
+    output_command->attitude_rate.pitch = 0;
+    output_command->attitude_rate.roll  = 0;
+    output_command->thrust              = feedback_w[2];
 
-    output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
+    output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 
     output_command->mass_difference = uav_mass_difference;
 
@@ -637,7 +637,7 @@ namespace mrs_controllers
 
   /* //{ getStatus() */
 
-  const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
+  const mrs_msgs::ControllerStatus::Ptr So3Controller::getStatus() {
 
     if (is_initialized) {
 
@@ -664,7 +664,7 @@ namespace mrs_controllers
 
   /* //{ dynamicReconfigureCallback() */
 
-  void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, [[maybe_unused]] uint32_t level) {
+  void So3Controller::dynamicReconfigureCallback(mrs_controllers::so3_gainsConfig &config, [[maybe_unused]] uint32_t level) {
 
     {
       std::scoped_lock lock(mutex_desired_gains);
@@ -672,7 +672,7 @@ namespace mrs_controllers
       drs_desired_gains = config;
     }
 
-    ROS_INFO("[NsfController]: DRS updated gains");
+    ROS_INFO("[So3Controller]: DRS updated gains");
   }
 
   //}
@@ -683,7 +683,7 @@ namespace mrs_controllers
 
   /* timerGainFilter() //{ */
 
-  void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
+  void So3Controller::timerGainsFilter(const ros::TimerEvent &event) {
 
     mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
@@ -715,9 +715,9 @@ namespace mrs_controllers
 
     /* yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592; */
 
-    /* nsf_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
-    /* nsf_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
-    /* nsf_z->setParams(kpz, kvz, kaz, 0, 0, 0); */
+    /* so3_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
+    /* so3_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
+    /* so3_z->setParams(kpz, kvz, kaz, 0, 0, 0); */
   }
 
   //}
@@ -728,7 +728,7 @@ namespace mrs_controllers
 
   /* calculateGainChange() //{ */
 
-  double NsfController::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
+  double So3Controller::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
 
     double change = desired_value - current_value;
 
@@ -761,7 +761,7 @@ namespace mrs_controllers
     }
 
     if (fabs(change) > 1e-3) {
-      ROS_INFO_THROTTLE(1.0, "[NsfController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
+      ROS_INFO_THROTTLE(1.0, "[So3Controller]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
     }
 
     return current_value + change;
@@ -771,7 +771,7 @@ namespace mrs_controllers
 
   /* reset() //{ */
 
-  bool NsfController::reset(void) {
+  bool So3Controller::reset(void) {
 
     Iw_w = Eigen::Vector2d::Zero(2);
 
@@ -782,7 +782,7 @@ namespace mrs_controllers
 
   /* rotate2d() //{ */
 
-  Eigen::Vector2d NsfController::rotate2d(const Eigen::Vector2d vector_in, double angle) {
+  Eigen::Vector2d So3Controller::rotate2d(const Eigen::Vector2d vector_in, double angle) {
 
     Eigen::Rotation2D<double> rot2(angle);
 
@@ -794,4 +794,4 @@ namespace mrs_controllers
 }  // namespace mrs_controllers
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mrs_controllers::NsfController, mrs_mav_manager::Controller)
+PLUGINLIB_EXPORT_CLASS(mrs_controllers::So3Controller, mrs_mav_manager::Controller)
