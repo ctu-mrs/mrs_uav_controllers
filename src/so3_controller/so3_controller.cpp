@@ -82,6 +82,7 @@ namespace mrs_controllers
     double kiwxy_lim, kibxy_lim;
     double km, km_lim;
     double kqxy, kqz;  // attitude gains
+    double kwxy, kwz;  // attitude rate gains
 
     // desired gains (set by DRS)
     std::mutex mutex_gains;
@@ -162,8 +163,12 @@ namespace mrs_controllers
     param_loader.load_param("default_gains/vertical/ka", kaz);
 
     // attitude gains
-    param_loader.load_param("default_gains/attitude/kqxy", kqxy);
-    param_loader.load_param("default_gains/attitude/kqz", kqz);
+    param_loader.load_param("default_gains/horizontal/kq", kqxy);
+    param_loader.load_param("default_gains/vertical/kq", kqz);
+
+    // attitude rate gains
+    param_loader.load_param("default_gains/horizontal/kw", kwxy);
+    param_loader.load_param("default_gains/vertical/kw", kwz);
 
     // mass estimator
     param_loader.load_param("default_gains/weight_estimator/km", km);
@@ -205,12 +210,6 @@ namespace mrs_controllers
     Ib_b                = Eigen::Vector2d::Zero(2);
 
     // --------------------------------------------------------------
-    // |                 calculate the hover thrust                 |
-    // --------------------------------------------------------------
-
-    hover_thrust = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
-
-    // --------------------------------------------------------------
     // |                     dynamic reconfigure                    |
     // --------------------------------------------------------------
 
@@ -222,6 +221,10 @@ namespace mrs_controllers
     drs_desired_gains.kpz       = kpz;
     drs_desired_gains.kvz       = kvz;
     drs_desired_gains.kaz       = kaz;
+    drs_desired_gains.kqxy      = kqxy;
+    drs_desired_gains.kqz       = kqz;
+    drs_desired_gains.kwxy      = kwxy;
+    drs_desired_gains.kwz       = kwz;
     drs_desired_gains.kiwxy_lim = kiwxy_lim;
     drs_desired_gains.kibxy_lim = kibxy_lim;
     drs_desired_gains.km        = km;
@@ -317,26 +320,45 @@ namespace mrs_controllers
     Eigen::Matrix3d Rd;
 
     if (reference->use_position) {
-      Rp << reference->position.x, -reference->position.y, reference->position.z;                                 // fill the desired position
-      Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;  // fill the desired orientation
+      Rp << reference->position.x, -reference->position.y, reference->position.z;  // fill the desired position
+
+      if (reference->use_euler_attitude) {
+        Rq.coeffs() << cos(reference->yaw / 2.0), 0, 0, sin(reference->yaw / 2.0);  // fill the desired yaw from yaw
+      } else if (reference->use_euler_attitude) {
+        Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;  // fill the desired yaw from quaternion
+      }
     }
 
     if (reference->use_velocity) {
-      Rv << reference->velocity.x, -reference->velocity.y, reference->velocity.z;
+      Rv << reference->velocity.x, reference->velocity.y, reference->velocity.z;
+    } else {
+      Rv << 0, 0, 0;
     }
 
     if (reference->use_acceleration) {
-      Ra << reference->acceleration.x, -reference->acceleration.y, reference->acceleration.z;
+      Ra << reference->acceleration.x, reference->acceleration.y, reference->acceleration.z;
+    } else {
+      Ra << 0, 0, 0;
     }
 
     if (reference->use_attitude_rate) {
       Rw << reference->attitude_rate.roll, reference->attitude_rate.pitch, reference->attitude_rate.yaw;
+    } else {
+      Rw << 0, 0, 0;
     }
 
     // Op - position in global frame
-    // Op - velocity in global frame
-    Eigen::Vector3d Op(odometry->pose.pose.position.x, -odometry->pose.pose.position.y, odometry->pose.pose.position.z);
-    Eigen::Vector3d Ov(odometry->twist.twist.linear.x, -odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
+    // Ov - velocity in global frame
+    Eigen::Vector3d Op(odometry->pose.pose.position.x, odometry->pose.pose.position.y, odometry->pose.pose.position.z);
+    Eigen::Vector3d Ov(odometry->twist.twist.linear.x, odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
+
+    // Oq - UAV attitude quaternion
+    Eigen::Quaternion<double> Oq;
+    Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
+    Eigen::Matrix3d R = Oq.matrix();
+
+    // Ow - UAV angular rate
+    Eigen::Vector3d Ow(odometry->twist.twist.angular.x, odometry->twist.twist.angular.y, odometry->twist.twist.angular.z);
 
     // --------------------------------------------------------------
     // |                  calculate control errors                  |
@@ -384,17 +406,71 @@ namespace mrs_controllers
     // |                 calculate the euler angles                 |
     // --------------------------------------------------------------
 
-    double         yaw, pitch, roll;
-    tf::Quaternion quaternion_odometry;
-    quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
-    tf::Matrix3x3 m(quaternion_odometry);
-    m.getRPY(roll, pitch, yaw);
+    /* double         yaw, pitch, roll; */
+    /* tf::Quaternion quaternion_odometry; */
+    /* quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry); */
+    /* tf::Matrix3x3 m(quaternion_odometry); */
+    /* m.getRPY(roll, pitch, yaw); */
+
+    // --------------------------------------------------------------
+    // |                            gains                           |
+    // --------------------------------------------------------------
+    //
+    Eigen::Vector3d Ka;
+    Eigen::Array3d  Kp, Kv, Kq, Kw;
+
+    {
+      std::scoped_lock lock(mutex_gains);
+
+      Kp << kpxy, kpxy, kpz;
+      Kv << kvxy, kvxy, kvz;
+      Ka << kaxy, kaxy, kaz;
+      Kq << kqxy, kqxy, kqz;
+      Kw << kwxy, kwxy, kwz;
+    }
+
+    // --------------------------------------------------------------
+    // |                 desired orientation matrix                 |
+    // --------------------------------------------------------------
+
+    Eigen::Vector3d f = Kp * Ep.array() + Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
+
+    Rd.col(2) = f.normalized();
+
+    Rd.col(1) = Rd.col(2).cross(Rq.matrix().col(0));
+    Rd.col(1).normalize();
+
+    Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+
+    // --------------------------------------------------------------
+    // |                      orientation error                     |
+    // --------------------------------------------------------------
+
+    /* orientation error */
+    Eigen::Matrix3d E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
+
+    Eigen::Vector3d Eq;
+    Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
 
     // --------------------------------------------------------------
     // |                recalculate the hover thrust                |
     // --------------------------------------------------------------
 
     hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+
+    // --------------------------------------------------------------
+    // |                     angular rate error                     |
+    // --------------------------------------------------------------
+    //
+    Eigen::Vector3d Ew;
+    Ew = R.transpose() * (Rw - Ow);
+
+    /* output */
+    double thrust = sqrt((f.dot(R.col(2))/10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    ROS_INFO_THROTTLE(1.0, "[So3Controller]: thrust: %f", thrust);
+
+    Eigen::Vector3d t;
+    t = -Kq * Eq.array() + Kw * Ew.array();
 
     // --------------------------------------------------------------
     // |                      update parameters                     |
@@ -405,97 +481,7 @@ namespace mrs_controllers
     }
     mute_lateral_gains = reference->disable_position_gains;
 
-    // --------------------------------------------------------------
-    // |                     calculate the SO3s                     |
-    // --------------------------------------------------------------
-
-    Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
-
-    // create vectors of gains
-    Eigen::Vector3d kp, kv, ka, kq;
-
-    {
-      std::scoped_lock lock(mutex_gains);
-
-      kp << kpxy, kpxy, kpz;
-      kv << kvxy, kvxy, kvz;
-      ka << kaxy, kaxy, kaz;
-      kq << kqxy, kqxy, kqz;
-    }
-
-    // calculate the feed forwared acceleration
-    Eigen::Vector3d feed_forward(asin((reference->acceleration.x * cos(pitch) * cos(roll)) / g_),
-                                 asin((-reference->acceleration.y * cos(pitch) * cos(roll)) / g_), reference->acceleration.z * (hover_thrust / g_));
-
-    // | -------- calculate the componentes of our feedback ------- |
-    Eigen::Vector3d p_component, v_component, a_component, i_component;
-
-    p_component = kp.cwiseProduct(Ep);
-    v_component = kv.cwiseProduct(Ev);
-    a_component = ka.cwiseProduct(feed_forward);
-    i_component << Ib_w + Iw_w, Eigen::VectorXd::Zero(1, 1);
-
-    Eigen::Vector3d feedback_w = (p_component + v_component + a_component + i_component + Eigen::Vector3d(0, 0, hover_thrust))
-                                     .cwiseProduct(Eigen::Vector3d(1, 1, 1 / (cos(roll) * cos(pitch))));
-
-    // --------------------------------------------------------------
-    // |                  validation and saturation                 |
-    // --------------------------------------------------------------
-
-    // | ------------ validate and saturate the X and Y components ------------- |
-
-    // check the world Y controller
-    double x_saturated = false;
-    if (!std::isfinite(feedback_w[X])) {
-      feedback_w[X] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"feedback_w[X]\", setting it to 0!!!");
-    } else if (feedback_w[X] > max_tilt_angle_) {
-      feedback_w[X] = max_tilt_angle_;
-      x_saturated   = true;
-    } else if (feedback_w[X] < -max_tilt_angle_) {
-      feedback_w[X] = -max_tilt_angle_;
-      x_saturated   = true;
-    }
-
-    // check the world Y controller
-    double y_saturated = false;
-    if (!std::isfinite(feedback_w[Y])) {
-      feedback_w[Y] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"feedback_w[Y]\", setting it to 0!!!");
-    } else if (feedback_w[Y] > max_tilt_angle_) {
-      feedback_w[Y] = max_tilt_angle_;
-      y_saturated   = true;
-    } else if (feedback_w[Y] < -max_tilt_angle_) {
-      feedback_w[Y] = -max_tilt_angle_;
-      y_saturated   = true;
-    }
-
-    // | ---------------- validate the Z component ---------------- |
-
-    // check the world Y controller
-    double z_saturated = false;
-    if (!std::isfinite(feedback_w[Z])) {
-      feedback_w[Z] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"feedback_w[Z]\", setting it to 0!!!");
-    } else if (feedback_w[Z] > 1.0) {
-      feedback_w[Z] = 1.0;
-      z_saturated   = true;
-    } else if (feedback_w[Z] < 0.0) {
-      feedback_w[Z] = 0;
-      z_saturated   = true;
-    }
-
-    if (x_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: X is saturated");
-    }
-
-    if (y_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Y is saturated");
-    }
-
-    if (z_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Z is saturated");
-    }
+    /* world error integrator //{ */
 
     // --------------------------------------------------------------
     // |                  integrate the world error                 |
@@ -506,16 +492,8 @@ namespace mrs_controllers
 
       Eigen::Vector3d integration_switch(1, 1, 0);
 
-      if (x_saturated && mrs_lib::sign(feedback_w[X]) == mrs_lib::sign(Ep[X])) {
-        integration_switch[X] = 0;
-      }
-
-      if (y_saturated && mrs_lib::sign(feedback_w[Y]) == mrs_lib::sign(Ep[Y])) {
-        integration_switch[Y] = 0;
-      }
-
       // integrate the world error
-      Iw_w += kiwxy * (Ep.cwiseProduct(integration_switch)).head(2) * dt;
+      Iw_w += kiwxy * Ep.head(2) * dt;
 
       // saturate the world
       double world_integral_saturated = false;
@@ -551,6 +529,10 @@ namespace mrs_controllers
         ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's world Y integral is being saturated!");
       }
     }
+
+    //}
+
+    /* body error integrator //{ */
 
     // --------------------------------------------------------------
     // |                  integrate the body error                 |
@@ -600,6 +582,10 @@ namespace mrs_controllers
       }
     }
 
+    //}
+
+    /* mass estimatior //{ */
+
     // --------------------------------------------------------------
     // |                integrate the mass difference               |
     // --------------------------------------------------------------
@@ -607,9 +593,7 @@ namespace mrs_controllers
     {
       std::scoped_lock lock(mutex_gains);
 
-      if (!z_saturated) {
-        uav_mass_difference += km * Ep[2] * dt;
-      }
+      uav_mass_difference += km * Ep[2] * dt;
 
       // saturate the mass estimator
       bool uav_mass_saturated = false;
@@ -629,6 +613,8 @@ namespace mrs_controllers
       }
     }
 
+    //}
+
     // --------------------------------------------------------------
     // |            report on the values of the integrals           |
     // --------------------------------------------------------------
@@ -646,10 +632,10 @@ namespace mrs_controllers
     // rotate the feedback to the body frame
     /* Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset); */
 
-    output_command->attitude_rate.yaw   = 6.28;
-    output_command->attitude_rate.pitch = 0;
-    output_command->attitude_rate.roll  = 0;
-    output_command->thrust              = feedback_w[2];
+    output_command->attitude_rate.roll  = t[0]*0;
+    output_command->attitude_rate.pitch = t[1]*0;
+    output_command->attitude_rate.yaw   = t[2];
+    output_command->thrust              = thrust;
 
     output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 
@@ -734,17 +720,15 @@ namespace mrs_controllers
       kpz       = calculateGainChange(kpz, drs_desired_gains.kpz, false, "kpz");
       kvz       = calculateGainChange(kvz, drs_desired_gains.kvz, false, "kvz");
       kaz       = calculateGainChange(kaz, drs_desired_gains.kaz, false, "kaz");
+      kqxy      = calculateGainChange(kqxy, drs_desired_gains.kqxy, false, "kqxy");
+      kqz       = calculateGainChange(kqz, drs_desired_gains.kqz, false, "kqz");
+      kwxy      = calculateGainChange(kwxy, drs_desired_gains.kwxy, false, "kwxy");
+      kwz       = calculateGainChange(kwz, drs_desired_gains.kwz, false, "kwz");
       km        = calculateGainChange(km, drs_desired_gains.km, false, "km");
       kiwxy_lim = calculateGainChange(kiwxy_lim, drs_desired_gains.kiwxy_lim, false, "kiwxy_lim");
       kibxy_lim = calculateGainChange(kibxy_lim, drs_desired_gains.kibxy_lim, false, "kibxy_lim");
       km_lim    = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
     }
-
-    /* yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592; */
-
-    /* so3_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
-    /* so3_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
-    /* so3_z->setParams(kpz, kvz, kaz, 0, 0, 0); */
   }
 
   //}
