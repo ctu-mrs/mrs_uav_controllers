@@ -81,6 +81,7 @@ namespace mrs_controllers
     double kpz, kvz, kaz;
     double kiwxy_lim, kibxy_lim;
     double km, km_lim;
+    double kqxy, kqz;  // attitude gains
 
     // desired gains (set by DRS)
     std::mutex mutex_gains;
@@ -159,6 +160,10 @@ namespace mrs_controllers
     param_loader.load_param("default_gains/vertical/kp", kpz);
     param_loader.load_param("default_gains/vertical/kv", kvz);
     param_loader.load_param("default_gains/vertical/ka", kaz);
+
+    // attitude gains
+    param_loader.load_param("default_gains/attitude/kqxy", kqxy);
+    param_loader.load_param("default_gains/attitude/kqz", kqz);
 
     // mass estimator
     param_loader.load_param("default_gains/weight_estimator/km", km);
@@ -304,8 +309,29 @@ namespace mrs_controllers
 
     // Rp - position reference in global frame
     // Rp - velocity reference in global frame
-    Eigen::Vector3d Rp(reference->position.x, -reference->position.y, reference->position.z);
-    Eigen::Vector3d Rv(reference->velocity.x, -reference->velocity.y, reference->velocity.z);
+    // Ra - velocity reference in global frame
+    // Rw - angular velocity reference
+    Eigen::Vector3d           Rp, Rv, Ra, Rw;
+    Eigen::Quaternion<double> Rq;
+
+    Eigen::Matrix3d Rd;
+
+    if (reference->use_position) {
+      Rp << reference->position.x, -reference->position.y, reference->position.z;                                 // fill the desired position
+      Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;  // fill the desired orientation
+    }
+
+    if (reference->use_velocity) {
+      Rv << reference->velocity.x, -reference->velocity.y, reference->velocity.z;
+    }
+
+    if (reference->use_acceleration) {
+      Ra << reference->acceleration.x, -reference->acceleration.y, reference->acceleration.z;
+    }
+
+    if (reference->use_attitude_rate) {
+      Rw << reference->attitude_rate.roll, reference->attitude_rate.pitch, reference->attitude_rate.yaw;
+    }
 
     // Op - position in global frame
     // Op - velocity in global frame
@@ -386,7 +412,7 @@ namespace mrs_controllers
     Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
     // create vectors of gains
-    Eigen::Vector3d kp, kv, ka;
+    Eigen::Vector3d kp, kv, ka, kq;
 
     {
       std::scoped_lock lock(mutex_gains);
@@ -394,6 +420,7 @@ namespace mrs_controllers
       kp << kpxy, kpxy, kpz;
       kv << kvxy, kvxy, kvz;
       ka << kaxy, kaxy, kaz;
+      kq << kqxy, kqxy, kqz;
     }
 
     // calculate the feed forwared acceleration
@@ -617,7 +644,7 @@ namespace mrs_controllers
     output_command->header.stamp = ros::Time::now();
 
     // rotate the feedback to the body frame
-    Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset);
+    /* Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset); */
 
     output_command->attitude_rate.yaw   = 6.28;
     output_command->attitude_rate.pitch = 0;
