@@ -20,8 +20,8 @@ default_gains:
     kp: 30.0
     kv: 50.0
     ka: 1.0
-    kq: 0.1
-    kw: 0.1
+    kq: 0.5
+    kw: 0.5
 
   weight_estimator:
     km: 1.0

@@ -323,9 +323,12 @@ namespace mrs_controllers
       Rp << reference->position.x, -reference->position.y, reference->position.z;  // fill the desired position
 
       if (reference->use_euler_attitude) {
-        Rq.coeffs() << cos(reference->yaw / 2.0), 0, 0, sin(reference->yaw / 2.0);  // fill the desired yaw from yaw
-      } else if (reference->use_euler_attitude) {
-        Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;  // fill the desired yaw from quaternion
+        ROS_INFO_THROTTLE(1.0, "[So3Controller]: %f", reference->yaw);
+        /* Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);  // fill the desired yaw from yaw */
+        Rq = Eigen::Quaterniond(sin(-reference->yaw/2.0), 0, 0, cos(-reference->yaw/2.0));
+        ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Rq: " << Rq.coeffs());
+      } else if (reference->use_quat_attitude) {
+        /* Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;  // fill the desired yaw from quaternion */
       }
     }
 
@@ -355,7 +358,7 @@ namespace mrs_controllers
     // Oq - UAV attitude quaternion
     Eigen::Quaternion<double> Oq;
     Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
-    Eigen::Matrix3d R = Oq.matrix();
+    Eigen::Matrix3d R = Oq.toRotationMatrix();
 
     // Ow - UAV angular rate
     Eigen::Vector3d Ow(odometry->twist.twist.angular.x, odometry->twist.twist.angular.y, odometry->twist.twist.angular.z);
@@ -364,8 +367,8 @@ namespace mrs_controllers
     // |                  calculate control errors                  |
     // --------------------------------------------------------------
 
-    Eigen::Vector3d Ep = Rp - Op;
-    Eigen::Vector3d Ev = Rv - Ov;
+    Eigen::Vector3d Ep = Op - Rp;
+    Eigen::Vector3d Ev = Ov - Rv;
 
     // --------------------------------------------------------------
     // |                      calculate the dt                      |
@@ -433,14 +436,19 @@ namespace mrs_controllers
     // |                 desired orientation matrix                 |
     // --------------------------------------------------------------
 
-    Eigen::Vector3d f = Kp * Ep.array() + Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
+    Eigen::Vector3d f = - Kp * Ep.array() - Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
+
+    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: f: " << f);
+    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Rq.matrix(): " << Rq.matrix());
 
     Rd.col(2) = f.normalized();
 
-    Rd.col(1) = Rd.col(2).cross(Rq.matrix().col(0));
+    Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0));
     Rd.col(1).normalize();
 
     Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+
+    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Rd" << Rd);
 
     // --------------------------------------------------------------
     // |                      orientation error                     |
@@ -451,6 +459,8 @@ namespace mrs_controllers
 
     Eigen::Vector3d Eq;
     Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
+
+    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Eq: " << Eq);
 
     // --------------------------------------------------------------
     // |                recalculate the hover thrust                |
@@ -463,14 +473,14 @@ namespace mrs_controllers
     // --------------------------------------------------------------
     //
     Eigen::Vector3d Ew;
-    Ew = R.transpose() * (Rw - Ow);
+    Ew = R.transpose() * (Ow - Rw);
 
     /* output */
     double thrust = sqrt((f.dot(R.col(2))/10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
     ROS_INFO_THROTTLE(1.0, "[So3Controller]: thrust: %f", thrust);
 
     Eigen::Vector3d t;
-    t = -Kq * Eq.array() + Kw * Ew.array();
+    t = -Kq * Eq.array() - Kw * Ew.array();
 
     // --------------------------------------------------------------
     // |                      update parameters                     |
@@ -632,8 +642,8 @@ namespace mrs_controllers
     // rotate the feedback to the body frame
     /* Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset); */
 
-    output_command->attitude_rate.roll  = t[0]*0;
-    output_command->attitude_rate.pitch = t[1]*0;
+    output_command->attitude_rate.roll  = t[0];
+    output_command->attitude_rate.pitch = t[1];
     output_command->attitude_rate.yaw   = t[2];
     output_command->thrust              = thrust;
 
