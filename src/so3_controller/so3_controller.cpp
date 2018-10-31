@@ -473,6 +473,8 @@ namespace mrs_controllers
     Eigen::Vector3d t;
     t = -Kq * Eq.array() - Kw * Ew.array() * 0;
 
+    ROS_INFO_STREAM("[So3Controller]: Eq.array() = " << Eq.array().transpose());
+
     // --------------------------------------------------------------
     // |                      update parameters                     |
     // --------------------------------------------------------------
@@ -630,28 +632,25 @@ namespace mrs_controllers
     mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
     output_command->header.stamp = ros::Time::now();
 
-    // rotate the feedback to the body frame
-    /* Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset); */
-
-    /* output_command->attitude_rate.x = -t[0]; */
-    /* output_command->attitude_rate.y = -t[1]*0; */
+    /* output_command->attitude_rate.x = 0*t[0]; */
+    /* output_command->attitude_rate.y = -t[0]; */
     /* output_command->attitude_rate.z = t[2]; */
-    output_command->thrust          = thrust;
 
     Eigen::Quaterniond thrust_vec = Eigen::Quaterniond(Rd);
-
     output_command->quter_attitude.w = thrust_vec.w();
     output_command->quter_attitude.x = thrust_vec.x();
     output_command->quter_attitude.y = thrust_vec.y();
     output_command->quter_attitude.z = thrust_vec.z();
 
-    /* output_command->quter_attitude.w = 0; */
+    /* output_command->quter_attitude.w = 1; */
     /* output_command->quter_attitude.x = 0; */
     /* output_command->quter_attitude.y = 0; */
-    /* output_command->quter_attitude.z = 1; */
+    /* output_command->quter_attitude.z = 0; */
 
     /* output_command->mode_mask = output_command->MODE_ATTITUDE_RATE; */
     output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
+
+    output_command->thrust          = thrust;
 
     output_command->mass_difference = uav_mass_difference;
 
