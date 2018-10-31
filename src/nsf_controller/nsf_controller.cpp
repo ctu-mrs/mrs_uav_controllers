@@ -619,10 +619,10 @@ namespace mrs_controllers
     // rotate the feedback to the body frame
     Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset);
 
-    output_command->euler_attitude.pitch = feedback_b[0];
-    output_command->euler_attitude.roll  = feedback_b[1];
-    output_command->euler_attitude.yaw   = reference->yaw;
-    output_command->thrust               = feedback_w[2];
+    output_command->euler_attitude.x = feedback_b[1];
+    output_command->euler_attitude.y = feedback_b[0];
+    output_command->euler_attitude.z = reference->yaw;
+    output_command->thrust           = feedback_w[2];
 
     output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
 

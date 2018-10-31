@@ -320,15 +320,11 @@ namespace mrs_controllers
     Eigen::Matrix3d Rd;
 
     if (reference->use_position) {
-      Rp << reference->position.x, -reference->position.y, reference->position.z;  // fill the desired position
+      Rp << reference->position.x, reference->position.y, reference->position.z;  // fill the desired position
 
       if (reference->use_euler_attitude) {
-        ROS_INFO_THROTTLE(1.0, "[So3Controller]: %f", reference->yaw);
-        /* Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);  // fill the desired yaw from yaw */
-        Rq = Eigen::Quaterniond(sin(-reference->yaw/2.0), 0, 0, cos(-reference->yaw/2.0));
-        ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Rq: " << Rq.coeffs());
+        Rq = Eigen::Quaterniond(cos(reference->yaw / 2.0), 0, 0, sin(reference->yaw / 2.0));
       } else if (reference->use_quat_attitude) {
-        /* Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;  // fill the desired yaw from quaternion */
       }
     }
 
@@ -345,7 +341,7 @@ namespace mrs_controllers
     }
 
     if (reference->use_attitude_rate) {
-      Rw << reference->attitude_rate.roll, reference->attitude_rate.pitch, reference->attitude_rate.yaw;
+      Rw << reference->attitude_rate.x, reference->attitude_rate.y, reference->attitude_rate.z;
     } else {
       Rw << 0, 0, 0;
     }
@@ -356,8 +352,7 @@ namespace mrs_controllers
     Eigen::Vector3d Ov(odometry->twist.twist.linear.x, odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
 
     // Oq - UAV attitude quaternion
-    Eigen::Quaternion<double> Oq;
-    Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
+    Eigen::Quaternion<double> Oq = Eigen::Quaterniond(odometry->pose.pose.orientation.w, odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z);
     Eigen::Matrix3d R = Oq.toRotationMatrix();
 
     // Ow - UAV angular rate
@@ -436,10 +431,11 @@ namespace mrs_controllers
     // |                 desired orientation matrix                 |
     // --------------------------------------------------------------
 
-    Eigen::Vector3d f = - Kp * Ep.array() - Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
+    Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
-    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: f: " << f);
-    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Rq.matrix(): " << Rq.matrix());
+    Eigen::Vector3d Ip(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
+
+    Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
 
     Rd.col(2) = f.normalized();
 
@@ -447,8 +443,6 @@ namespace mrs_controllers
     Rd.col(1).normalize();
 
     Rd.col(0) = Rd.col(1).cross(Rd.col(2));
-
-    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Rd" << Rd);
 
     // --------------------------------------------------------------
     // |                      orientation error                     |
@@ -459,8 +453,6 @@ namespace mrs_controllers
 
     Eigen::Vector3d Eq;
     Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
-
-    ROS_INFO_STREAM_THROTTLE(1.0, "[So3Controller]: Eq: " << Eq);
 
     // --------------------------------------------------------------
     // |                recalculate the hover thrust                |
@@ -476,11 +468,10 @@ namespace mrs_controllers
     Ew = R.transpose() * (Ow - Rw);
 
     /* output */
-    double thrust = sqrt((f.dot(R.col(2))/10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
-    ROS_INFO_THROTTLE(1.0, "[So3Controller]: thrust: %f", thrust);
+    double thrust = sqrt((f.dot(R.col(2)) / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
     Eigen::Vector3d t;
-    t = -Kq * Eq.array() - Kw * Ew.array();
+    t = -Kq * Eq.array() - Kw * Ew.array() * 0;
 
     // --------------------------------------------------------------
     // |                      update parameters                     |
@@ -503,7 +494,7 @@ namespace mrs_controllers
       Eigen::Vector3d integration_switch(1, 1, 0);
 
       // integrate the world error
-      Iw_w += kiwxy * Ep.head(2) * dt;
+      Iw_w -= kiwxy * Ep.head(2) * dt;
 
       // saturate the world
       double world_integral_saturated = false;
@@ -555,7 +546,7 @@ namespace mrs_controllers
       Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
 
       // integrate the body error
-      Ib_b += kibxy * Ep_body * dt;
+      Ib_b -= kibxy * Ep_body * dt;
 
       // saturate the body
       double body_integral_saturated = false;
@@ -603,7 +594,7 @@ namespace mrs_controllers
     {
       std::scoped_lock lock(mutex_gains);
 
-      uav_mass_difference += km * Ep[2] * dt;
+      uav_mass_difference -= km * Ep[2] * dt;
 
       // saturate the mass estimator
       bool uav_mass_saturated = false;
@@ -642,12 +633,25 @@ namespace mrs_controllers
     // rotate the feedback to the body frame
     /* Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset); */
 
-    output_command->attitude_rate.roll  = t[0];
-    output_command->attitude_rate.pitch = t[1];
-    output_command->attitude_rate.yaw   = t[2];
-    output_command->thrust              = thrust;
+    /* output_command->attitude_rate.x = -t[0]; */
+    /* output_command->attitude_rate.y = -t[1]*0; */
+    /* output_command->attitude_rate.z = t[2]; */
+    output_command->thrust          = thrust;
 
-    output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
+    Eigen::Quaterniond thrust_vec = Eigen::Quaterniond(Rd);
+
+    output_command->quter_attitude.w = thrust_vec.w();
+    output_command->quter_attitude.x = thrust_vec.x();
+    output_command->quter_attitude.y = thrust_vec.y();
+    output_command->quter_attitude.z = thrust_vec.z();
+
+    /* output_command->quter_attitude.w = 0; */
+    /* output_command->quter_attitude.x = 0; */
+    /* output_command->quter_attitude.y = 0; */
+    /* output_command->quter_attitude.z = 1; */
+
+    /* output_command->mode_mask = output_command->MODE_ATTITUDE_RATE; */
+    output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
 
     output_command->mass_difference = uav_mass_difference;
 
