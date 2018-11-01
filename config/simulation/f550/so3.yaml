@@ -7,8 +7,8 @@ default_gains:
     kp: 20.0
     kv: 10.0
     ka: 1.0
-    kq: 100.0
-    kw: 0.0
+    kq: 10.0
+    kw: 0.1
 
     kib: 0.5
     kib_lim: 1.0
