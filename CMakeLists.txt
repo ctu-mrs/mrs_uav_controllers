@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
 generate_dynamic_reconfigure_options(
   cfg/nsf_gains.cfg
   cfg/so3_gains.cfg
+  cfg/attitude_gains.cfg
   )
 
 set(CMAKE_CXX_FLAGS "-std=c++17 -fno-diagnostics-color")
@@ -79,6 +80,22 @@ add_dependencies(NsfController
   )
 
 target_link_libraries(So3Controller
+  ${catkin_LIBRARIES}
+  )
+
+# attitude controller
+
+add_library(AttitudeController
+  src/attitude_controller/attitude_controller.cpp
+  )
+
+add_dependencies(NsfController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
+  )
+
+target_link_libraries(AttitudeController
   ${catkin_LIBRARIES}
   )
 

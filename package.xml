@@ -44,6 +44,7 @@
     <mrs_mav_manager plugin="${prefix}/failsafe_controller.xml" />
     <mrs_mav_manager plugin="${prefix}/nsf_controller.xml" />
     <mrs_mav_manager plugin="${prefix}/so3_controller.xml" />
+    <mrs_mav_manager plugin="${prefix}/attitude_controller.xml" />
   </export>
 
 </package>
