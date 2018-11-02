@@ -306,6 +306,41 @@ namespace mrs_controllers
     mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
     // --------------------------------------------------------------
+    // |                      calculate the dt                      |
+    // --------------------------------------------------------------
+
+    double dt;
+
+    if (first_iteration) {
+
+      reset();
+      last_update = odometry->header.stamp;
+
+      first_iteration = false;
+
+      return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
+
+    } else {
+
+      dt          = (odometry->header.stamp - last_update).toSec();
+      last_update = odometry->header.stamp;
+    }
+
+    if (fabs(dt) <= 0.001) {
+
+      ROS_WARN_STREAM_THROTTLE(1.0, "[So3Controller]: last " << last_update << ", current " << odometry->header.stamp);
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: the last odometry message came too close! %f", dt);
+      if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
+
+        return last_output_command;
+
+      } else {
+
+        return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
+      }
+    }
+
+    // --------------------------------------------------------------
     // |          load the control reference and estimates          |
     // --------------------------------------------------------------
 
@@ -319,11 +354,13 @@ namespace mrs_controllers
     Eigen::Matrix3d Rd;
 
     if (reference->use_position) {
+
       Rp << reference->position.x, reference->position.y, reference->position.z;  // fill the desired position
 
       if (reference->use_euler_attitude) {
         Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
       }
+
     }
 
     if (reference->use_velocity) {
@@ -365,41 +402,6 @@ namespace mrs_controllers
 
     Eigen::Vector3d Ep = Op - Rp;
     Eigen::Vector3d Ev = Ov - Rv;
-
-    // --------------------------------------------------------------
-    // |                      calculate the dt                      |
-    // --------------------------------------------------------------
-
-    double dt;
-
-    if (first_iteration) {
-
-      reset();
-      last_update = odometry->header.stamp;
-
-      first_iteration = false;
-
-      return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
-
-    } else {
-
-      dt          = (odometry->header.stamp - last_update).toSec();
-      last_update = odometry->header.stamp;
-    }
-
-    if (fabs(dt) <= 0.001) {
-
-      ROS_WARN_STREAM_THROTTLE(1.0, "[So3Controller]: last " << last_update << ", current " << odometry->header.stamp);
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: the last odometry message came too close! %f", dt);
-      if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
-
-        return last_output_command;
-
-      } else {
-
-        return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
-      }
-    }
 
     // --------------------------------------------------------------
     // |                            gains                           |
