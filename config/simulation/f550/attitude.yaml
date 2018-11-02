@@ -10,7 +10,7 @@ default_gains:
       kw: 0.0
 
   vertical:
-    kp: 100.0
+    kp: 150.0
     kv: 70.0
     ka: 1.0
 
