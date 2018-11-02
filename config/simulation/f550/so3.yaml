@@ -4,7 +4,7 @@ default_gains:
   # Gains which are actually used are in the MrsMavManager package under the GainManager configs
 
   horizontal:
-    kp: 20.0
+    kp: 40.0
     kv: 10.0
     ka: 1.0
 
