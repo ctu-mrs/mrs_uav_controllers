@@ -9,7 +9,7 @@ default_gains:
     ka: 1.0
 
     attitude:
-      kq: 8.0
+      kq: 3.0
       kw: 0.0
 
     kib: 0.5
