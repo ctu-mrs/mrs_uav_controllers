@@ -70,7 +70,6 @@ namespace mrs_controllers
     double                       uav_mass_difference;
     double                       g_;
     mrs_mav_manager::MotorParams motor_params_;
-    double                       hover_thrust;
 
     double roll, pitch, yaw;
 
@@ -444,12 +443,6 @@ namespace mrs_controllers
 
     Eigen::Vector3d Eq;
     Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
-
-    // --------------------------------------------------------------
-    // |                recalculate the hover thrust                |
-    // --------------------------------------------------------------
-
-    hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
     // --------------------------------------------------------------
     // |                     angular rate error                     |
