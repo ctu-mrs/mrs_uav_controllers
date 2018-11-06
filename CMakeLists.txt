@@ -73,7 +73,7 @@ add_library(So3Controller
   src/so3_controller/so3_controller.cpp
   )
 
-add_dependencies(NsfController
+add_dependencies(So3Controller
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
@@ -89,7 +89,7 @@ add_library(AttitudeController
   src/attitude_controller/attitude_controller.cpp
   )
 
-add_dependencies(NsfController
+add_dependencies(AttitudeController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
