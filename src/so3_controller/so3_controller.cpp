@@ -359,7 +359,6 @@ namespace mrs_controllers
       if (reference->use_euler_attitude) {
         Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
       }
-
     }
 
     if (reference->use_velocity) {
@@ -452,7 +451,13 @@ namespace mrs_controllers
     Ew = R.transpose() * (Ow - Rw);
 
     /* output */
-    double thrust = sqrt((f.dot(R.col(2)) / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    double thrust_force = f.dot(R.col(2));
+    double thrust       = 0;
+    if (thrust_force >= 0) {
+      thrust = sqrt((f.dot(R.col(2)) / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    } else {
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    }
 
     Eigen::Vector3d t;
     t = -Kq * Eq.array() - Kw * Ew.array();
