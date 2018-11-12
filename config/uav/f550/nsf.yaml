@@ -1,5 +1,8 @@
 default_gains:
 
+  # Gains in this file should not be changed, since they are not used most of the times.
+  # Gains which are actually used are in the MrsMavManager package under the GainManager configs
+
   horizontal:
     kp: 0.15
     kv: 0.15
@@ -18,7 +21,7 @@ default_gains:
 
   weight_estimator:
     km: 1.0
-    km_lim: 1.0 # [kg]
+    km_lim: 1.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
 lateral_mute_coefficitent: 0.0
 

@@ -1,0 +1,5 @@
+<library path="lib/libAttitudeController">
+  <class name="mrs_controllers/AttitudeController" type="mrs_controllers::AttitudeController" base_class_type="mrs_mav_manager::Controller">
+    <description>This is ATTITUDE controller.</description>
+  </class>
+</library>
