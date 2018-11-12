@@ -33,7 +33,7 @@ default_gains:
 
 lateral_mute_coefficitent: 0.0
 
-max_tilt_angle: 90.0 # [deg]
+max_tilt_angle: 60.0 # [deg]
 
 yaw_offset: 0.0 # [deg]
 

@@ -428,7 +428,29 @@ namespace mrs_controllers
 
     Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
 
-    Rd.col(2) = f.normalized();
+    // | ------------------ limit the tilt angle ------------------ |
+    
+    Eigen::Vector3d f_norm = f.normalized();
+
+    // calculate the force in the spherical coordinates
+    double theta = acos(f_norm[2]);
+    double phi   = atan2(f_norm[1], f_norm[0]);
+
+    if (!std::isfinite(theta)) {
+      ROS_ERROR("NaN detected in variable \"theta\", not saturating");
+    } else if (theta > max_tilt_angle_) {
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta/3.1415)*180.0, (max_tilt_angle_/3.1415)*180.0);
+      theta = max_tilt_angle_;
+    }
+
+    // reconstruct the vector
+    f_norm[0] = sin(theta)*cos(phi);
+    f_norm[1] = sin(theta)*sin(phi);
+    f_norm[2] = cos(theta);
+
+    // | ------------- construct the rotational matrix ------------ |
+
+    Rd.col(2) = f_norm;
     Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0));
     Rd.col(1).normalize();
     Rd.col(0) = Rd.col(1).cross(Rd.col(2));
