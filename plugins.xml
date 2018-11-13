@@ -1,0 +1,23 @@
+<library path="lib/libFailsafeController">
+  <class name="mrs_controllers/FailsafeController" type="mrs_controllers::FailsafeController" base_class_type="mrs_mav_manager::Controller">
+    <description>This is FailsafeController.</description>
+  </class>
+</library>
+
+<library path="lib/libNsfController">
+  <class name="mrs_controllers/NsfController" type="mrs_controllers::NsfController" base_class_type="mrs_mav_manager::Controller">
+    <description>This is NsfController.</description>
+  </class>
+</library>
+
+<library path="lib/libAttitudeController">
+  <class name="mrs_controllers/AttitudeController" type="mrs_controllers::AttitudeController" base_class_type="mrs_mav_manager::Controller">
+    <description>This is AttitudeController.</description>
+  </class>
+</library>
+
+<library path="lib/libSo3Controller">
+  <class name="mrs_controllers/So3Controller" type="mrs_controllers::So3Controller" base_class_type="mrs_mav_manager::Controller">
+    <description>This is So3Controller.</description>
+  </class>
+</library>

@@ -1,5 +1,0 @@
-<library path="lib/libSo3Controller">
-  <class name="mrs_controllers/So3Controller" type="mrs_controllers::So3Controller" base_class_type="mrs_mav_manager::Controller">
-    <description>This is SO3 controller.</description>
-  </class>
-</library>

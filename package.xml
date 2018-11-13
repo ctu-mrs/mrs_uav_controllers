@@ -7,9 +7,6 @@
 
   <maintainer email="tomas.baca@fel.cvut.cz">Tomas Baca</maintainer>
 
-  <!-- One license tag required, multiple allowed, one license per tag -->
-  <!-- Commonly used license strings: -->
-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
   <license>TODO</license>
 
   <buildtool_depend>catkin</buildtool_depend>
@@ -41,10 +38,7 @@
   <run_depend>mrs_lib</run_depend>
 
   <export>
-    <mrs_mav_manager plugin="${prefix}/failsafe_controller.xml" />
-    <mrs_mav_manager plugin="${prefix}/nsf_controller.xml" />
-    <mrs_mav_manager plugin="${prefix}/so3_controller.xml" />
-    <mrs_mav_manager plugin="${prefix}/attitude_controller.xml" />
+    <mrs_mav_manager plugin="${prefix}/plugins.xml" />
   </export>
 
 </package>
