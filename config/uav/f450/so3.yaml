@@ -4,12 +4,12 @@ default_gains:
   # Gains which are actually used are in the MrsMavManager package under the GainManager configs
 
   horizontal:
-    kp: 3.0
-    kv: 2.0
+    kp: 4.0
+    kv: 2.5
     ka: 1.0
 
     attitude:
-      kq: 3.0
+      kq: 5.0
       kw: 0.0
 
     kib: 1.0
@@ -19,12 +19,12 @@ default_gains:
     kiw_lim: 1.0
 
   vertical:
-    kp: 50.0
-    kv: 25.0
+    kp: 10.0
+    kv: 10.0
     ka: 1.0
 
     attitude:
-      kq: 20.0
+      kq: 5.0
       kw: 5.0
 
   weight_estimator:
