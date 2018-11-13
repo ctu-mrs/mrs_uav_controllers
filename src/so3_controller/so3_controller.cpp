@@ -429,7 +429,7 @@ namespace mrs_controllers
     Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
 
     // | ------------------ limit the tilt angle ------------------ |
-    
+
     Eigen::Vector3d f_norm = f.normalized();
 
     // calculate the force in the spherical coordinates
@@ -439,13 +439,14 @@ namespace mrs_controllers
     if (!std::isfinite(theta)) {
       ROS_ERROR("NaN detected in variable \"theta\", not saturating");
     } else if (theta > max_tilt_angle_) {
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta/3.1415)*180.0, (max_tilt_angle_/3.1415)*180.0);
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / 3.1415) * 180.0,
+                        (max_tilt_angle_ / 3.1415) * 180.0);
       theta = max_tilt_angle_;
     }
 
     // reconstruct the vector
-    f_norm[0] = sin(theta)*cos(phi);
-    f_norm[1] = sin(theta)*sin(phi);
+    f_norm[0] = sin(theta) * cos(phi);
+    f_norm[1] = sin(theta) * sin(phi);
     f_norm[2] = cos(theta);
 
     // | ------------- construct the rotational matrix ------------ |
@@ -475,10 +476,21 @@ namespace mrs_controllers
     /* output */
     double thrust_force = f.dot(R.col(2));
     double thrust       = 0;
+
     if (thrust_force >= 0) {
       thrust = sqrt((f.dot(R.col(2)) / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
     } else {
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    }
+
+    // saturate the thrust
+    if (!std::isfinite(thrust)) {
+      thrust = 0;
+      ROS_ERROR("NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    } else if (thrust > 0.8) {
+      thrust = 0.8;
+    } else if (thrust < 0.0) {
+      thrust = 0.0;
     }
 
     Eigen::Vector3d t;
