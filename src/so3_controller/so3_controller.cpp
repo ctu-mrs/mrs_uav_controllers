@@ -25,6 +25,8 @@
 #define Y 1
 #define Z 2
 
+#define PI 3.141592653
+
 namespace mrs_controllers
 {
 
@@ -201,8 +203,8 @@ namespace mrs_controllers
     }
 
     // convert to radians
-    max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
-    yaw_offset      = (yaw_offset / 180.0) * 3.141592;
+    max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
+    yaw_offset      = (yaw_offset / 180.0) * PI;
 
     uav_mass_difference = 0;
     Iw_w                = Eigen::Vector2d::Zero(2);
@@ -385,8 +387,6 @@ namespace mrs_controllers
     Eigen::Vector3d Ov(odometry->twist.twist.linear.x, odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
 
     // Oq - UAV attitude quaternion
-    /* Eigen::Quaternion<double> Oq = Eigen::Quaterniond(odometry->pose.pose.orientation.w, odometry->pose.pose.orientation.x,
-     * odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z); */
     Eigen::Quaternion<double> Oq;
     Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
     Eigen::Matrix3d R = Oq.toRotationMatrix();
@@ -426,7 +426,7 @@ namespace mrs_controllers
 
     Eigen::Vector3d Ip(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
 
-    Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
+    Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
 
     // | ------------------ limit the tilt angle ------------------ |
 
@@ -439,8 +439,8 @@ namespace mrs_controllers
     if (!std::isfinite(theta)) {
       ROS_ERROR("NaN detected in variable \"theta\", not saturating");
     } else if (theta > max_tilt_angle_) {
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / 3.1415) * 180.0,
-                        (max_tilt_angle_ / 3.1415) * 180.0);
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0,
+                        (max_tilt_angle_ / PI) * 180.0);
       theta = max_tilt_angle_;
     }
 
@@ -478,7 +478,7 @@ namespace mrs_controllers
     double thrust       = 0;
 
     if (thrust_force >= 0) {
-      thrust = sqrt((f.dot(R.col(2)) / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+      thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
     } else {
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f", thrust_force);
     }

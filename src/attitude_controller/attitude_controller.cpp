@@ -25,6 +25,8 @@
 #define Y 1
 #define Z 2
 
+#define PI 3.141592653
+
 namespace mrs_controllers
 {
 
@@ -180,8 +182,8 @@ namespace mrs_controllers
     }
 
     // convert to radians
-    max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
-    yaw_offset      = (yaw_offset / 180.0) * 3.141592;
+    max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
+    yaw_offset      = (yaw_offset / 180.0) * PI;
 
     uav_mass_difference = 0;
     Iw_w                = Eigen::Vector2d::Zero(2);
@@ -300,8 +302,6 @@ namespace mrs_controllers
     Eigen::Vector3d Ov(0, 0, odometry->twist.twist.linear.z);
 
     // Oq - UAV attitude quaternion
-    /* Eigen::Quaternion<double> Oq = Eigen::Quaterniond(odometry->pose.pose.orientation.w, odometry->pose.pose.orientation.x,
-     * odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z); */
     Eigen::Quaternion<double> Oq;
     Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
     Eigen::Matrix3d R = Oq.toRotationMatrix();
@@ -352,16 +352,6 @@ namespace mrs_controllers
     //}
 
     // --------------------------------------------------------------
-    // |                 calculate the euler angles                 |
-    // --------------------------------------------------------------
-
-    /* double         yaw, pitch, roll; */
-    /* tf::Quaternion quaternion_odometry; */
-    /* quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry); */
-    /* tf::Matrix3x3 m(quaternion_odometry); */
-    /* m.getRPY(roll, pitch, yaw); */
-
-    // --------------------------------------------------------------
     // |                            gains                           |
     // --------------------------------------------------------------
     //
@@ -382,12 +372,8 @@ namespace mrs_controllers
     // |                 desired orientation matrix                 |
     // --------------------------------------------------------------
 
-    Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, 9.81) + Ra).array();
+    Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
 
-    /* Rd.col(2) = f.normalized(); */
-    /* Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0)); */
-    /* Rd.col(1).normalize(); */
-    /* Rd.col(0) = Rd.col(1).cross(Rd.col(2)); */
     Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;
     Rd = Rq.matrix();
 
@@ -414,8 +400,24 @@ namespace mrs_controllers
     Eigen::Vector3d Ew;
     Ew = R.transpose() * (Ow - Rw);
 
-    /* output */
-    double thrust = sqrt((f.dot(R.col(2)) / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    double thrust_force = f.dot(R.col(2));
+    double thrust       = 0;
+
+    if (thrust_force >= 0) {
+      thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    } else {
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    }
+
+    // saturate the thrust
+    if (!std::isfinite(thrust)) {
+      thrust = 0;
+      ROS_ERROR("NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    } else if (thrust > 0.8) {
+      thrust = 0.8;
+    } else if (thrust < 0.0) {
+      thrust = 0.0;
+    }
 
     Eigen::Vector3d t;
     t = -Kq * Eq.array() - Kw * Ew.array();

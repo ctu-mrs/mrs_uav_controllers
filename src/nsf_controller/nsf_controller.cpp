@@ -25,6 +25,8 @@
 #define Y 1
 #define Z 2
 
+#define PI 3.141592653
+
 namespace mrs_controllers
 {
 
@@ -192,8 +194,8 @@ namespace mrs_controllers
     }
 
     // convert to radians
-    max_tilt_angle_ = (max_tilt_angle_ / 180) * 3.141592;
-    yaw_offset      = (yaw_offset / 180.0) * 3.141592;
+    max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
+    yaw_offset      = (yaw_offset / 180.0) * PI;
 
     uav_mass_difference = 0;
     Iw_w                = Eigen::Vector2d::Zero(2);
@@ -221,7 +223,6 @@ namespace mrs_controllers
     drs_desired_gains.kibxy_lim = kibxy_lim;
     drs_desired_gains.km        = km;
     drs_desired_gains.km_lim    = km_lim;
-    /* drs_desired_gains.yaw_offset = (yaw_offset / 3.1415) * 180; */
 
     reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
     reconfigure_server_->updateConfig(drs_desired_gains);
@@ -712,12 +713,6 @@ namespace mrs_controllers
       kibxy_lim = calculateGainChange(kibxy_lim, drs_desired_gains.kibxy_lim, false, "kibxy_lim");
       km_lim    = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
     }
-
-    /* yaw_offset = (drs_desired_gains.yaw_offset / 180) * 3.141592; */
-
-    /* nsf_pitch->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
-    /* nsf_roll->setParams(kpxy, kvxy, kaxy, kiwxy, kibxy, kiwxy_lim); */
-    /* nsf_z->setParams(kpz, kvz, kaz, 0, 0, 0); */
   }
 
   //}
