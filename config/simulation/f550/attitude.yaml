@@ -1,8 +1,5 @@
 default_gains:
 
-  # Gains in this file should not be changed, since they are not used most of the times.
-  # Gains which are actually used are in the MrsMavManager package under the GainManager configs
-
   horizontal:
     
     attitude:
