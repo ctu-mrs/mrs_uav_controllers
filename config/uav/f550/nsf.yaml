@@ -1,8 +1,8 @@
 default_gains:
 
   horizontal:
-    kp: 0.3
-    kv: 0.2
+    kp: 0.30
+    kv: 0.20
     ka: 1.0
 
     kib: 0.01
