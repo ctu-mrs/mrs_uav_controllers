@@ -3,12 +3,12 @@ default_gains:
   horizontal:
     
     attitude:
-      kq: 5.0
+      kq: 6.0
       kw: 0.0
 
   vertical:
-    kp: 10.0
-    kv: 10.0
+    kp: 70.0
+    kv: 40.0
     ka: 1.0
 
     attitude:
@@ -17,7 +17,7 @@ default_gains:
 
   weight_estimator:
     km: 1.0
-    km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+    km_lim: 5.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
 gains_filter:
   filter_rate: 20 # [Hz]
