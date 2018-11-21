@@ -12,10 +12,10 @@ default_gains:
       kq: 5.0
       kw: 0.0
 
-    kib: 1.0
+    kib: 0.1
     kib_lim: 1.0
 
-    kiw: 1.0
+    kiw: 0.1
     kiw_lim: 1.0
 
   vertical:
@@ -25,7 +25,7 @@ default_gains:
 
     attitude:
       kq: 5.0
-      kw: 5.0
+      kw: 1.0
 
   weight_estimator:
     km: 1.0
@@ -33,7 +33,7 @@ default_gains:
 
 lateral_mute_coefficitent: 0.0
 
-max_tilt_angle: 90.0 # [deg]
+max_tilt_angle: 30.0 # [deg]
 
 yaw_offset: 0.0 # [deg]
 
