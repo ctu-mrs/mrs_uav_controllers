@@ -3,7 +3,7 @@ default_gains:
   horizontal:
     
     attitude:
-      kq: 6.0
+      kq: 5.5
       kw: 0.0
 
   vertical:
