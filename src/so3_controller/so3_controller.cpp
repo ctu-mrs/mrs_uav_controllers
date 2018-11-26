@@ -475,6 +475,10 @@ namespace mrs_controllers
 
     /* output */
     double thrust_force = f.dot(R.col(2));
+
+    // alternative form of getting the thrust force
+    /* double thrust_force = f.dot(R.col(2)) * R.col(2).dot(Rd.col(2)); */
+
     double thrust       = 0;
 
     if (thrust_force >= 0) {
