@@ -418,6 +418,9 @@ namespace mrs_controllers
       Kw << kwxy, kwxy, kwz;
     }
 
+    Kp = Kp * (uav_mass_ + uav_mass_difference);
+    Kv = Kv * (uav_mass_ + uav_mass_difference);
+
     // --------------------------------------------------------------
     // |                 desired orientation matrix                 |
     // --------------------------------------------------------------

@@ -4,8 +4,8 @@ default_gains:
   # Gains which are actually used are in the MavManager package under the GainManager configs
 
   horizontal:
-    kp: 4.0
-    kv: 2.0
+    kp: 1.333333
+    kv: 0.833333
     ka: 1.0
 
     attitude:
@@ -19,8 +19,8 @@ default_gains:
     kiw_lim: 1.0
 
   vertical:
-    kp: 10.0
-    kv: 10.0
+    kp: 13.333333
+    kv: 6.666667
     ka: 1.0
 
     attitude:
