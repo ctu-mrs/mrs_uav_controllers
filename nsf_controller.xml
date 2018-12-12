@@ -1,5 +1,0 @@
-<library path="lib/libNsfController">
-  <class name="mrs_controllers/NsfController" type="mrs_controllers::NsfController" base_class_type="mrs_mav_manager::Controller">
-    <description>This is NSF controller.</description>
-  </class>
-</library>

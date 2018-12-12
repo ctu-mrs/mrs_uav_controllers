@@ -1,31 +1,31 @@
 default_gains:
 
   # Gains in this file should not be changed, since they are not used most of the times.
-  # Gains which are actually used are in the MrsMavManager package under the GainManager configs
+  # Gains which are actually used are in the MavManager package under the GainManager configs
 
   horizontal:
-    kp: 3.0
+    kp: 3.2
     kv: 2.0
     ka: 1.0
 
     attitude:
-      kq: 3.0
+      kq: 5.0
       kw: 0.0
 
-    kib: 1.0
+    kib: 0.1
     kib_lim: 1.0
 
-    kiw: 1.0
+    kiw: 0.1
     kiw_lim: 1.0
 
   vertical:
-    kp: 50.0
-    kv: 25.0
+    kp: 5.0
+    kv: 5.0
     ka: 1.0
 
     attitude:
-      kq: 20.0
-      kw: 5.0
+      kq: 5.0
+      kw: 2.0
 
   weight_estimator:
     km: 1.0
@@ -33,7 +33,7 @@ default_gains:
 
 lateral_mute_coefficitent: 0.0
 
-max_tilt_angle: 90.0 # [deg]
+max_tilt_angle: 30.0 # [deg]
 
 yaw_offset: 0.0 # [deg]
 

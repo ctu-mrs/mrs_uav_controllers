@@ -1,39 +1,39 @@
 default_gains:
 
-  # Gains in this file SHOULD NOT BE CHANGED, since they are not used most of the times.
+  # Gains in this file should not be changed, since they are not used most of the times.
   # Gains which are actually used are in the MavManager package under the GainManager configs
 
   horizontal:
-    kp: 1.333333
-    kv: 0.833333
+    kp: 2.25
+    kv: 1.5
+    ka: 1.0
+
+    attitude:
+      kq: 5.5
+      kw: 0.0
+
+    kib: 0.1
+    kib_lim: 1.0
+
+    kiw: 0.1
+    kiw_lim: 1.0
+
+  vertical:
+    kp: 10.0
+    kv: 6.0
     ka: 1.0
 
     attitude:
       kq: 5.0
-      kw: 0.0
-
-    kib: 0.5
-    kib_lim: 1.0
-
-    kiw: 0.5
-    kiw_lim: 1.0
-
-  vertical:
-    kp: 13.333333
-    kv: 6.666667
-    ka: 1.0
-
-    attitude:
-      kq: 2.0
-      kw: 2.0
+      kw: 1.0
 
   weight_estimator:
     km: 1.0
-    km_lim: 2.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+    km_lim: 5.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
 lateral_mute_coefficitent: 0.0
 
-max_tilt_angle: 60.0 # [deg]
+max_tilt_angle: 50.0 # [deg]
 
 yaw_offset: 0.0 # [deg]
 

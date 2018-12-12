@@ -1,5 +1,0 @@
-<library path="lib/libFailsafeController">
-  <class name="mrs_controllers/FailsafeController" type="mrs_controllers::FailsafeController" base_class_type="mrs_mav_manager::Controller">
-    <description>This is Failsafe controller.</description>
-  </class>
-</library>
