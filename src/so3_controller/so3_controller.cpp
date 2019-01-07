@@ -665,7 +665,7 @@ namespace mrs_controllers
     output_command->attitude_rate.y = -1 * t[1];
     output_command->attitude_rate.z = -1 * t[2];
 
-    // output the desired attitude
+    /* // output the desired attitude */
     /* Eigen::Quaterniond thrust_vec = Eigen::Quaterniond(Rd); */
     /* output_command->quter_attitude.w = thrust_vec.w(); */
     /* output_command->quter_attitude.x = thrust_vec.x(); */
