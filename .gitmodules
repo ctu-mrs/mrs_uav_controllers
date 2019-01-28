@@ -6,4 +6,4 @@
 	url = https://github.com/tmuxinator/tmuxinator
 [submodule "ros_packages/mrs_msgs"]
 	path = pes/ros_packages/mrs_msgs
-	url = git@192.168.0.107:uav/mrs_msgs.git
+	url = git@mrs.felk.cvut.cz:uav/mrs_msgs.git
