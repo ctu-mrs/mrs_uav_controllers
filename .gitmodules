@@ -1,9 +1,0 @@
-[submodule "utils/tmux"]
-	path = utils/tmux
-	url = https://github.com/tmux/tmux
-[submodule "utils/tmuxinator"]
-	path = utils/tmuxinator
-	url = https://github.com/tmuxinator/tmuxinator
-[submodule "ros_packages/mrs_msgs"]
-	path = pes/ros_packages/mrs_msgs
-	url = git@mrs.felk.cvut.cz:uav/mrs_msgs.git
