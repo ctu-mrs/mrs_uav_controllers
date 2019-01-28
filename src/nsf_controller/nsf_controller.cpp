@@ -11,7 +11,7 @@
 #include <math.h>
 
 #include <mrs_msgs/ControllerStatus.h>
-#include <mrs_mav_manager/Controller.h>
+#include <mrs_uav_manager/Controller.h>
 
 #include <mrs_controllers/nsf_gainsConfig.h>
 
@@ -32,12 +32,12 @@ namespace mrs_controllers
 
   /* //{ class NsfController */
 
-  class NsfController : public mrs_mav_manager::Controller {
+  class NsfController : public mrs_uav_manager::Controller {
 
   public:
     NsfController(void);
 
-    void initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params);
+    void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
     bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
     void deactivate(void);
 
@@ -71,7 +71,7 @@ namespace mrs_controllers
     double                       uav_mass_;
     double                       uav_mass_difference;
     double                       g_;
-    mrs_mav_manager::MotorParams motor_params_;
+    mrs_uav_manager::MotorParams motor_params_;
     double                       hover_thrust;
 
     double roll, pitch, yaw;
@@ -131,7 +131,7 @@ namespace mrs_controllers
 
   /* //{ initialize() */
 
-  void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_mav_manager::MotorParams motor_params) {
+  void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params) {
 
     ros::NodeHandle nh_(parent_nh, "nsf_controller");
 
@@ -789,4 +789,4 @@ namespace mrs_controllers
 }  // namespace mrs_controllers
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mrs_controllers::NsfController, mrs_mav_manager::Controller)
+PLUGINLIB_EXPORT_CLASS(mrs_controllers::NsfController, mrs_uav_manager::Controller)

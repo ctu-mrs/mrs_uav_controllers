@@ -13,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   cmake_modules
   mrs_msgs
   dynamic_reconfigure
-  mrs_mav_manager
+  mrs_uav_manager
   mrs_lib
   )
 
@@ -35,7 +35,7 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 ###################################
 
 catkin_package(
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_mav_manager mrs_lib
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager mrs_lib
   DEPENDS Eigen
   )
 
