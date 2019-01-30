@@ -487,7 +487,7 @@ namespace mrs_controllers
     if (thrust_force >= 0) {
       thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
     } else {
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f)", thrust_force);
     }
 
     // saturate the thrust
