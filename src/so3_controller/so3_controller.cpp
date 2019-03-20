@@ -27,6 +27,9 @@
 
 #define PI 3.141592653
 
+#define OUTPUT_ATTITUDE_RATE 1
+#define OUTPUT_ATTITUDE_QUATERNION 2
+
 namespace mrs_controllers
 {
 
@@ -65,7 +68,7 @@ namespace mrs_controllers
     typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
     boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
     void                                        drs_callback(mrs_controllers::so3_gainsConfig &config, uint32_t level);
-    mrs_controllers::so3_gainsConfig            drs_desired_gains;
+    mrs_controllers::so3_gainsConfig            drs_params;
 
   private:
     double                       uav_mass_;
@@ -87,7 +90,7 @@ namespace mrs_controllers
 
     // desired gains (set by DRS)
     std::mutex mutex_gains;
-    std::mutex mutex_desired_gains;
+    std::mutex mutex_drs_params;
 
     double max_tilt_angle_;
 
@@ -115,6 +118,10 @@ namespace mrs_controllers
 
     double gains_filter_max_change_;  // calculated from change_rate_/timer_rate_;
     double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
+
+  private:
+    int output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
+    std::mutex mutex_output_mode;
 
   private:
     Eigen::Vector2d Ib_b;  // body error integral in the body frame
@@ -179,7 +186,7 @@ namespace mrs_controllers
     param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim);
     param_loader.load_param("default_gains/horizontal/kib_lim", kibxy_lim);
 
-    // physical
+    // physics
     param_loader.load_param("uav_mass", uav_mass_);
     param_loader.load_param("g", g_);
 
@@ -196,6 +203,13 @@ namespace mrs_controllers
 
     gains_filter_max_change_ = gains_filter_change_rate_ / gains_filter_timer_rate_;
     gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
+
+    // output mode
+    param_loader.load_param("output_mode", output_mode_);
+
+    if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
+      ROS_ERROR("[So3Controller]: output mode has to be {1, 2}!");
+    }
 
     if (!param_loader.loaded_successfully()) {
       ROS_ERROR("[So3Controller]: Could not load all parameters!");
@@ -214,25 +228,26 @@ namespace mrs_controllers
     // |                     dynamic reconfigure                    |
     // --------------------------------------------------------------
 
-    drs_desired_gains.kpxy      = kpxy;
-    drs_desired_gains.kvxy      = kvxy;
-    drs_desired_gains.kaxy      = kaxy;
-    drs_desired_gains.kiwxy     = kiwxy;
-    drs_desired_gains.kibxy     = kibxy;
-    drs_desired_gains.kpz       = kpz;
-    drs_desired_gains.kvz       = kvz;
-    drs_desired_gains.kaz       = kaz;
-    drs_desired_gains.kqxy      = kqxy;
-    drs_desired_gains.kqz       = kqz;
-    drs_desired_gains.kwxy      = kwxy;
-    drs_desired_gains.kwz       = kwz;
-    drs_desired_gains.kiwxy_lim = kiwxy_lim;
-    drs_desired_gains.kibxy_lim = kibxy_lim;
-    drs_desired_gains.km        = km;
-    drs_desired_gains.km_lim    = km_lim;
+    drs_params.kpxy        = kpxy;
+    drs_params.kvxy        = kvxy;
+    drs_params.kaxy        = kaxy;
+    drs_params.kiwxy       = kiwxy;
+    drs_params.kibxy       = kibxy;
+    drs_params.kpz         = kpz;
+    drs_params.kvz         = kvz;
+    drs_params.kaz         = kaz;
+    drs_params.kqxy        = kqxy;
+    drs_params.kqz         = kqz;
+    drs_params.kwxy        = kwxy;
+    drs_params.kwz         = kwz;
+    drs_params.kiwxy_lim   = kiwxy_lim;
+    drs_params.kibxy_lim   = kibxy_lim;
+    drs_params.km          = km;
+    drs_params.km_lim      = km_lim;
+    drs_params.output_mode = output_mode_;
 
     reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
-    reconfigure_server_->updateConfig(drs_desired_gains);
+    reconfigure_server_->updateConfig(drs_params);
     ReconfigureServer::CallbackType f = boost::bind(&So3Controller::dynamicReconfigureCallback, this, _1, _2);
     reconfigure_server_->setCallback(f);
 
@@ -482,7 +497,7 @@ namespace mrs_controllers
     // alternative form of getting the thrust force
     /* double thrust_force = f.dot(R.col(2)) * R.col(2).dot(Rd.col(2)); */
 
-    double thrust       = 0;
+    double thrust = 0;
 
     if (thrust_force >= 0) {
       thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
@@ -660,28 +675,39 @@ namespace mrs_controllers
     mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
     output_command->header.stamp = ros::Time::now();
 
-    // output the desired attitude rate
-    output_command->attitude_rate.x = 1 * t[0];
-    output_command->attitude_rate.y = -1 * t[1];
-    output_command->attitude_rate.z = -1 * t[2];
+    {
+      std::scoped_lock lock(mutex_output_mode);
+    
+      if (output_mode_ == OUTPUT_ATTITUDE_RATE) {
+      
+        // output the desired attitude rate
+        output_command->attitude_rate.x = 1 * t[0];
+        output_command->attitude_rate.y = -1 * t[1];
+        output_command->attitude_rate.z = -1 * t[2];
+      
+        output_command->quter_attitude.w = cos(reference->yaw / 2.0);
+        output_command->quter_attitude.x = 0;
+        output_command->quter_attitude.y = 0;
+        output_command->quter_attitude.z = sin(reference->yaw / 2.0);
+      
+        output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
+      
+      } else if (output_mode_ == OUTPUT_ATTITUDE_QUATERNION) {
+      
+        // output the desired attitude
+        Eigen::Quaterniond thrust_vec    = Eigen::Quaterniond(Rd);
+        output_command->quter_attitude.w = thrust_vec.w();
+        output_command->quter_attitude.x = thrust_vec.x();
+        output_command->quter_attitude.y = thrust_vec.y();
+        output_command->quter_attitude.z = thrust_vec.z();
+      
+        output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
+      
+        ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion");
+      }
+    }
 
-    /* // output the desired attitude */
-    /* Eigen::Quaterniond thrust_vec = Eigen::Quaterniond(Rd); */
-    /* output_command->quter_attitude.w = thrust_vec.w(); */
-    /* output_command->quter_attitude.x = thrust_vec.x(); */
-    /* output_command->quter_attitude.y = thrust_vec.y(); */
-    /* output_command->quter_attitude.z = thrust_vec.z(); */
-
-    output_command->quter_attitude.w = cos(reference->yaw / 2.0);
-    output_command->quter_attitude.x = 0;
-    output_command->quter_attitude.y = 0;
-    output_command->quter_attitude.z = sin(reference->yaw / 2.0);
-
-    output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
-    /* output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE; */
-
-    output_command->thrust = thrust;
-
+    output_command->thrust          = thrust;
     output_command->mass_difference = uav_mass_difference;
 
     last_output_command = output_command;
@@ -723,9 +749,11 @@ namespace mrs_controllers
   void So3Controller::dynamicReconfigureCallback(mrs_controllers::so3_gainsConfig &config, [[maybe_unused]] uint32_t level) {
 
     {
-      std::scoped_lock lock(mutex_desired_gains);
+      std::scoped_lock lock(mutex_drs_params, mutex_output_mode);
 
-      drs_desired_gains = config;
+      drs_params = config;
+
+      output_mode_ = config.output_mode;
     }
 
     ROS_INFO("[So3Controller]: DRS updated gains");
@@ -753,24 +781,24 @@ namespace mrs_controllers
 
     // calculate the difference
     {
-      std::scoped_lock lock(mutex_gains, mutex_desired_gains);
+      std::scoped_lock lock(mutex_gains, mutex_drs_params);
 
-      kpxy      = calculateGainChange(kpxy, drs_desired_gains.kpxy * gain_coeff, bypass_filter, "kpxy");
-      kvxy      = calculateGainChange(kvxy, drs_desired_gains.kvxy * gain_coeff, bypass_filter, "kvxy");
-      kaxy      = calculateGainChange(kaxy, drs_desired_gains.kaxy * gain_coeff, bypass_filter, "kaxy");
-      kiwxy     = calculateGainChange(kiwxy, drs_desired_gains.kiwxy * gain_coeff, bypass_filter, "kiwxy");
-      kibxy     = calculateGainChange(kibxy, drs_desired_gains.kibxy * gain_coeff, bypass_filter, "kibxy");
-      kpz       = calculateGainChange(kpz, drs_desired_gains.kpz, false, "kpz");
-      kvz       = calculateGainChange(kvz, drs_desired_gains.kvz, false, "kvz");
-      kaz       = calculateGainChange(kaz, drs_desired_gains.kaz, false, "kaz");
-      kqxy      = calculateGainChange(kqxy, drs_desired_gains.kqxy, false, "kqxy");
-      kqz       = calculateGainChange(kqz, drs_desired_gains.kqz, false, "kqz");
-      kwxy      = calculateGainChange(kwxy, drs_desired_gains.kwxy, false, "kwxy");
-      kwz       = calculateGainChange(kwz, drs_desired_gains.kwz, false, "kwz");
-      km        = calculateGainChange(km, drs_desired_gains.km, false, "km");
-      kiwxy_lim = calculateGainChange(kiwxy_lim, drs_desired_gains.kiwxy_lim, false, "kiwxy_lim");
-      kibxy_lim = calculateGainChange(kibxy_lim, drs_desired_gains.kibxy_lim, false, "kibxy_lim");
-      km_lim    = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
+      kpxy      = calculateGainChange(kpxy, drs_params.kpxy * gain_coeff, bypass_filter, "kpxy");
+      kvxy      = calculateGainChange(kvxy, drs_params.kvxy * gain_coeff, bypass_filter, "kvxy");
+      kaxy      = calculateGainChange(kaxy, drs_params.kaxy * gain_coeff, bypass_filter, "kaxy");
+      kiwxy     = calculateGainChange(kiwxy, drs_params.kiwxy * gain_coeff, bypass_filter, "kiwxy");
+      kibxy     = calculateGainChange(kibxy, drs_params.kibxy * gain_coeff, bypass_filter, "kibxy");
+      kpz       = calculateGainChange(kpz, drs_params.kpz, false, "kpz");
+      kvz       = calculateGainChange(kvz, drs_params.kvz, false, "kvz");
+      kaz       = calculateGainChange(kaz, drs_params.kaz, false, "kaz");
+      kqxy      = calculateGainChange(kqxy, drs_params.kqxy, false, "kqxy");
+      kqz       = calculateGainChange(kqz, drs_params.kqz, false, "kqz");
+      kwxy      = calculateGainChange(kwxy, drs_params.kwxy, false, "kwxy");
+      kwz       = calculateGainChange(kwz, drs_params.kwz, false, "kwz");
+      km        = calculateGainChange(km, drs_params.km, false, "km");
+      kiwxy_lim = calculateGainChange(kiwxy_lim, drs_params.kiwxy_lim, false, "kiwxy_lim");
+      kibxy_lim = calculateGainChange(kibxy_lim, drs_params.kibxy_lim, false, "kibxy_lim");
+      km_lim    = calculateGainChange(km_lim, drs_params.km_lim, false, "km_lim");
     }
   }
 

@@ -41,3 +41,6 @@ gains_filter:
   filter_rate: 20 # [Hz]
   perc_change_rate: 1.0
   min_change_rate: 0.1 # perc of the difference
+
+# output mode to PixHawk
+output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}
