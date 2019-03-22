@@ -22,131 +22,111 @@
 namespace mrs_controllers
 {
 
-  //{ class FailsafeController
-
+  /* class FailsafeController //{ */
+  
   class FailsafeController : public mrs_uav_manager::Controller {
-
+  
   public:
     FailsafeController(void);
-
+  
     void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
     bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
     void deactivate(void);
-
+  
     const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
     const mrs_msgs::ControllerStatus::Ptr     getStatus();
-
+  
   private:
     bool is_initialized = false;
     bool is_active      = false;
-
+  
     double                       uav_mass_;
     double                       uav_mass_difference;
     double                       g_;
     mrs_uav_manager::MotorParams motor_params_;
     double                       hover_thrust;
     double                       thrust_decrease_rate_;
-
+  
     std::mutex mutex_hover_thrust;
-
+  
     double roll, pitch, yaw;
     double setpoint_yaw;
-
+  
     mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
     mrs_msgs::AttitudeCommand           activation_control_command_;
-
+  
     ros::Time last_update;
     bool      first_iteration = true;
-
-  private:
-    ros::Timer main_timer;
-    void       mainTimer(const ros::TimerEvent &event);
-
-    // service for disarming
-  private:
-    ros::ServiceClient service_client_arm;
-
+  
   private:
     mrs_lib::Profiler *profiler;
     bool               profiler_enabled_ = false;
   };
-
+  
   FailsafeController::FailsafeController(void) {
   }
-
+  
   //}
 
-  // --------------------------------------------------------------
+// --------------------------------------------------------------
   // |                   controller's interface                   |
   // --------------------------------------------------------------
 
-  //{ initialize()
-
+  /* initialize() //{ */
+  
   void FailsafeController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params) {
-
+  
     ros::NodeHandle nh_(parent_nh, "failsafe_controller");
-
+  
     ros::Time::waitForValid();
-
+  
     this->motor_params_ = motor_params;
-
+  
     // --------------------------------------------------------------
     // |                       load parameters                      |
     // --------------------------------------------------------------
-
+  
     mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
-
+  
     param_loader.load_param("thrust_decrease_rate", thrust_decrease_rate_);
     param_loader.load_param("uav_mass", uav_mass_);
     param_loader.load_param("g", g_);
     param_loader.load_param("enable_profiler", profiler_enabled_);
-
+  
     uav_mass_difference = 0;
-
+  
     // --------------------------------------------------------------
     // |                 calculate the hover thrust                 |
     // --------------------------------------------------------------
-
+  
     hover_thrust = sqrt(uav_mass_ * g_) * motor_params.hover_thrust_a + motor_params.hover_thrust_b;
-
-    // --------------------------------------------------------------
-    // |                          services                          |
-    // --------------------------------------------------------------
-
-    service_client_arm = nh_.serviceClient<std_srvs::SetBool>("arm_out");
-
+  
     // --------------------------------------------------------------
     // |                          profiler                          |
     // --------------------------------------------------------------
-
+  
     profiler = new mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
-
-    // --------------------------------------------------------------
-    // |                           timers                           |
-    // --------------------------------------------------------------
-
-    main_timer = nh_.createTimer(ros::Rate(10.0), &FailsafeController::mainTimer, this, false, false);
-
+  
     // | ----------------------- finish init ---------------------- |
-
+  
     if (!param_loader.loaded_successfully()) {
       ROS_ERROR("[FailsafeController]: Could not load all parameters!");
       ros::shutdown();
     }
-
+  
     ROS_INFO("[FailsafeController]: initialized");
-
+  
     is_initialized = true;
   }
-
+  
   //}
 
-  //{ activate()
-
+  /* activate() //{ */
+  
   bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
-
+  
     std::scoped_lock lock(mutex_hover_thrust);
-
+  
     if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
       activation_control_command_ = mrs_msgs::AttitudeCommand();
       uav_mass_difference         = 0;
@@ -157,95 +137,92 @@ namespace mrs_controllers
       hover_thrust                = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
       ROS_INFO("[FailsafeController]: activated with uav_mass_difference %1.2f kg.", uav_mass_difference);
     }
-
+  
     first_iteration = true;
-
+  
     is_active = true;
-
-    main_timer.start();
-    ROS_INFO("[FailsafeController]: mainTimer started");
-
+  
     return true;
   }
-
+  
   //}
 
-  //{ deactivate()
-
+  /* deactivate() //{ */
+  
   void FailsafeController::deactivate(void) {
-
+  
     first_iteration     = false;
     uav_mass_difference = 0;
-
+  
     ROS_INFO("[FailsafeController]: deactivated");
   }
-
+  
   //}
 
-  //{ update()
-
+  /* update() //{ */
+  
   const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_msgs::Odometry::ConstPtr &                        odometry,
                                                                        [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &reference) {
-
+  
     // WARNING: this mutex keeps the disarming routine from being called during the same moment, when the update routine is being called
     // If we try to disarm during the update() execution, it will freeze, since the update() is being called by the control manager
     // and the disarm is automatically swithing motors off, which is automatically switching to NullTracker, which means this controller
     // is getting deactivated
     std::scoped_lock lock(mutex_hover_thrust);
-
+  
     mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
-
+  
     // --------------------------------------------------------------
     // |                 calculate the euler angles                 |
     // --------------------------------------------------------------
-
+  
     double         yaw, pitch, roll;
     tf::Quaternion quaternion_odometry;
     quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
     tf::Matrix3x3 m(quaternion_odometry);
     m.getRPY(roll, pitch, yaw);
-
+  
     // --------------------------------------------------------------
     // |                      calculate the dt                      |
     // --------------------------------------------------------------
-
+  
     double dt;
-
+  
     if (first_iteration) {
-
+  
       last_update = ros::Time::now();
-
+  
       setpoint_yaw    = yaw;
       first_iteration = false;
-
+  
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
-
+  
     } else {
-
+  
       dt = (ros::Time::now() - last_update).toSec();
     }
-
+  
     if (dt <= 0.001) {
-
+  
       ROS_WARN("[FailsafeController]: the update was called with too small dt!");
       if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
-
+  
         return last_output_command;
-
+  
       } else {
-
+  
         return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
       }
     }
-
+  
     last_update = ros::Time::now();
-
+  
     mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
     output_command->header.stamp = ros::Time::now();
-
+  
     // decrease the hover thrust
     hover_thrust -= thrust_decrease_rate_ * dt;
-
+  
     if (!std::isfinite(hover_thrust)) {
       hover_thrust = 0;
       ROS_ERROR("NaN detected in variable \"hover_thrust\", setting it to 0 and returning!!!");
@@ -254,75 +231,42 @@ namespace mrs_controllers
     } else if (hover_thrust < 0.0) {
       hover_thrust = 0.0;
     }
-
+  
     output_command->euler_attitude.x = 0.0;
     output_command->euler_attitude.y = 0.0;
     output_command->euler_attitude.z = setpoint_yaw;
     output_command->thrust           = hover_thrust;
     output_command->mode_mask        = output_command->MODE_EULER_ATTITUDE;
-
+  
     last_output_command = output_command;
-
+  
     return output_command;
   }
-
+  
   //}
 
-  //{ gettatus()
-
+  /* getStatus() //{ */
+  
   const mrs_msgs::ControllerStatus::Ptr FailsafeController::getStatus() {
-
+  
     if (is_initialized) {
-
+  
       mrs_msgs::ControllerStatus::Ptr controller_status(new mrs_msgs::ControllerStatus);
-
+  
       if (is_active) {
         controller_status->active = mrs_msgs::ControllerStatus::ACTIVE;
       } else {
         controller_status->active = mrs_msgs::ControllerStatus::NONACTIVE;
       }
-
+  
       return controller_status;
-
+  
     } else {
-
+  
       return mrs_msgs::ControllerStatus::Ptr();
     }
   }
-
-  //}
-
-  // --------------------------------------------------------------
-  // |                           timers                           |
-  // --------------------------------------------------------------
-
-  /* mainTimer() //{ */
-
-  void FailsafeController::mainTimer(const ros::TimerEvent &event) {
-
-    // WARNING: this mutex keeps the disarming routine from being called during the same moment, when the update routine is being called
-    // If we try to disarm during the update() execution, it will freeze, since the update() is being called by the control manager
-    // and the disarm is automatically swithing motors off, which is automatically switching to NullTracker, which means this controller
-    // is getting deactivated
-    std::scoped_lock lock(mutex_hover_thrust);
-
-    mrs_lib::Routine profiler_routine = profiler->createRoutine("mainTimer", 10, 0.01, event);
-
-    if (hover_thrust <= 10e-3) {
-      
-      // disarm the drone
-      std_srvs::SetBool srv_out;
-      srv_out.request.data = false;  // we want the "arm" state to false
-      
-      ROS_INFO_THROTTLE(1.0, "[FailsafeController]: reached 0 thrust, disarming the drone");
-      
-      service_client_arm.call(srv_out);
-
-      main_timer.stop();
-      ROS_INFO("[FailsafeController]: mainTimer stopped");
-    }
-  }
-
+  
   //}
 
 }  // namespace mrs_controllers
