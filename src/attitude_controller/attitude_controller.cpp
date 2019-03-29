@@ -469,14 +469,19 @@ namespace mrs_controllers
     mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
     output_command->header.stamp = ros::Time::now();
 
-    output_command->attitude_rate.x = 1 * t[0];
-    output_command->attitude_rate.y = -1 * t[1];
-    output_command->attitude_rate.z = -1 * t[2];
+    output_command->attitude_rate.x   = 1 * t[0];
+    output_command->attitude_rate.y   = -1 * t[1];
+    output_command->attitude_rate.z   = -1 * t[2];
+    output_command->attitude_rate_set = true;
 
-    output_command->quter_attitude.w = cos(reference->yaw / 2.0);
-    output_command->quter_attitude.x = 0;
-    output_command->quter_attitude.y = 0;
-    output_command->quter_attitude.z = sin(reference->yaw / 2.0);
+    Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
+    output_command->quter_attitude.w    = thrust_vec.w();
+    output_command->quter_attitude.x    = thrust_vec.x();
+    output_command->quter_attitude.y    = thrust_vec.y();
+    output_command->quter_attitude.z    = thrust_vec.z();
+    output_command->quater_attitude_set = true;
+
+    output_command->euler_attitude_set = false;
 
     output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 

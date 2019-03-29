@@ -138,7 +138,7 @@ namespace mrs_controllers
     } else {
       activation_control_command_ = *cmd;
       uav_mass_difference         = cmd->mass_difference;
-      hover_thrust                = initial_thrust_percentage_ * sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+      hover_thrust = initial_thrust_percentage_ * sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
       ROS_INFO("[FailsafeController]: activated with uav_mass_difference %1.2f kg.", uav_mass_difference);
     }
 
@@ -236,11 +236,16 @@ namespace mrs_controllers
       hover_thrust = 0.0;
     }
 
-    output_command->euler_attitude.x = 0.0;
-    output_command->euler_attitude.y = 0.0;
-    output_command->euler_attitude.z = setpoint_yaw;
-    output_command->thrust           = hover_thrust;
-    output_command->mode_mask        = output_command->MODE_EULER_ATTITUDE;
+    output_command->euler_attitude.x   = 0.0;
+    output_command->euler_attitude.y   = 0.0;
+    output_command->euler_attitude.z   = setpoint_yaw;
+    output_command->euler_attitude_set = true;
+
+    output_command->quater_attitude_set = false;
+    output_command->attitude_rate_set   = false;
+
+    output_command->thrust    = hover_thrust;
+    output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
 
     last_output_command = output_command;
 

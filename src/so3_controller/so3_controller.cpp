@@ -120,7 +120,7 @@ namespace mrs_controllers
     double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
 
   private:
-    int output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
+    int        output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
     std::mutex mutex_output_mode;
 
   private:
@@ -677,32 +677,41 @@ namespace mrs_controllers
 
     {
       std::scoped_lock lock(mutex_output_mode);
-    
+
       if (output_mode_ == OUTPUT_ATTITUDE_RATE) {
-      
+
         // output the desired attitude rate
-        output_command->attitude_rate.x = 1 * t[0];
-        output_command->attitude_rate.y = -1 * t[1];
-        output_command->attitude_rate.z = -1 * t[2];
-      
-        output_command->quter_attitude.w = cos(reference->yaw / 2.0);
-        output_command->quter_attitude.x = 0;
-        output_command->quter_attitude.y = 0;
-        output_command->quter_attitude.z = sin(reference->yaw / 2.0);
-      
+        output_command->attitude_rate.x   = 1 * t[0];
+        output_command->attitude_rate.y   = -1 * t[1];
+        output_command->attitude_rate.z   = -1 * t[2];
+        output_command->attitude_rate_set = true;
+
+        Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
+        output_command->quter_attitude.w    = thrust_vec.w();
+        output_command->quter_attitude.x    = thrust_vec.x();
+        output_command->quter_attitude.y    = thrust_vec.y();
+        output_command->quter_attitude.z    = thrust_vec.z();
+        output_command->quater_attitude_set = true;
+
+        output_command->euler_attitude_set = false;
+
         output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
-      
+
       } else if (output_mode_ == OUTPUT_ATTITUDE_QUATERNION) {
-      
+
         // output the desired attitude
-        Eigen::Quaterniond thrust_vec    = Eigen::Quaterniond(Rd);
-        output_command->quter_attitude.w = thrust_vec.w();
-        output_command->quter_attitude.x = thrust_vec.x();
-        output_command->quter_attitude.y = thrust_vec.y();
-        output_command->quter_attitude.z = thrust_vec.z();
-      
+        Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
+        output_command->quter_attitude.w    = thrust_vec.w();
+        output_command->quter_attitude.x    = thrust_vec.x();
+        output_command->quter_attitude.y    = thrust_vec.y();
+        output_command->quter_attitude.z    = thrust_vec.z();
+        output_command->quater_attitude_set = true;
+
+        output_command->euler_attitude_set = false;
+        output_command->attitude_rate_set  = false;
+
         output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
-      
+
         ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion");
       }
     }
