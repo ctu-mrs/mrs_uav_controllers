@@ -516,7 +516,7 @@ namespace mrs_controllers
     } else if (thrust > max_thrust_) {
 
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to %f", max_thrust_);
-      thrust = 0.8;
+      thrust = max_thrust_;
 
     } else if (thrust < 0.0) {
 
