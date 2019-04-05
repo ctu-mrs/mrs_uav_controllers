@@ -93,6 +93,7 @@ namespace mrs_controllers
     std::mutex mutex_drs_params;
 
     double max_tilt_angle_;
+    double max_thrust_;
 
     mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
     mrs_msgs::AttitudeCommand           activation_control_command_;
@@ -192,6 +193,7 @@ namespace mrs_controllers
 
     // constraints
     param_loader.load_param("max_tilt_angle", max_tilt_angle_);
+    param_loader.load_param("max_thrust", max_thrust_);
 
     // yaw offset for compensating for heading error estimation
     param_loader.load_param("yaw_offset", yaw_offset);
@@ -507,11 +509,18 @@ namespace mrs_controllers
 
     // saturate the thrust
     if (!std::isfinite(thrust)) {
+
       thrust = 0;
       ROS_ERROR("NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
-    } else if (thrust > 0.8) {
+
+    } else if (thrust > max_thrust_) {
+
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to %f", max_thrust_);
       thrust = 0.8;
+
     } else if (thrust < 0.0) {
+
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to 0");
       thrust = 0.0;
     }
 
