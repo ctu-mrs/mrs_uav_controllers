@@ -874,6 +874,7 @@ namespace mrs_controllers
   bool So3Controller::reset(void) {
 
     Iw_w = Eigen::Vector2d::Zero(2);
+    Ib_b = Eigen::Vector2d::Zero(2);
 
     return true;
   }
