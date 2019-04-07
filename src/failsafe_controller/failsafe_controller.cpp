@@ -136,6 +136,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
     activation_control_command_ = mrs_msgs::AttitudeCommand();
+    activation_control_command_.mass_difference = 0;
     uav_mass_difference         = 0;
     ROS_WARN("[FailsafeController]: activated without getting the last tracker's command.");
   } else {
@@ -201,6 +202,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
 
     setpoint_yaw    = yaw;
     first_iteration = false;
+
+    ROS_INFO("[FailsafeController]: first iteration");
 
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
 
