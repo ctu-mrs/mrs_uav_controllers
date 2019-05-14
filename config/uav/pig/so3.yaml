@@ -44,4 +44,4 @@ gains_filter:
   min_change_rate: 0.1 # perc of the difference
 
 # output mode to PixHawk
-output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}
+output_mode: 2 # {1 = attitude_rate, 2 = attitude quaternion}
