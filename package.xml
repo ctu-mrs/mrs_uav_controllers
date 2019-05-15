@@ -1,41 +1,29 @@
 <?xml version="1.0"?>
-<package>
+<package format="2">
 
   <name>mrs_controllers</name>
   <version>1.0.0</version>
   <description>The mrs_controllers package</description>
 
+  <author email="tomas.baca@fel.cvut.cz">Tomas Baca</author>
   <maintainer email="tomas.baca@fel.cvut.cz">Tomas Baca</maintainer>
 
-  <license>TODO</license>
+  <license>MIT</license>
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <build_depend>pluginlib</build_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>nav_msgs</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <build_depend>tf</build_depend>
-  <build_depend>cmake_modules</build_depend>
-  <build_depend>mrs_msgs</build_depend>
-  <build_depend>mrs_uav_manager</build_depend>
-  <build_depend>dynamic_reconfigure</build_depend>
-  <build_depend>mrs_lib</build_depend>
-
-  <run_depend>pluginlib</run_depend>
-  <run_depend>geometry_msgs</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>roscpp</run_depend>
-  <run_depend>std_msgs</run_depend>
-  <run_depend>nav_msgs</run_depend>
-  <run_depend>tf</run_depend>
-  <run_depend>cmake_modules</run_depend>
-  <run_depend>mrs_msgs</run_depend>
-  <run_depend>mrs_uav_manager</run_depend>
-  <run_depend>dynamic_reconfigure</run_depend>
-  <run_depend>mrs_lib</run_depend>
+  <depend>pluginlib</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>tf</depend>
+  <depend>cmake_modules</depend>
+  <depend>mrs_msgs</depend>
+  <depend>mrs_uav_manager</depend>
+  <depend>dynamic_reconfigure</depend>
+  <depend>mrs_lib</depend>
 
   <export>
     <mrs_uav_manager plugin="${prefix}/plugins.xml" />
