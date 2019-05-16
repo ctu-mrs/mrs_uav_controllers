@@ -34,6 +34,7 @@ default_gains:
 lateral_mute_coefficitent: 0.0
 
 max_tilt_angle: 60.0 # [deg]
+max_thrust: 0.8 # [-]
 
 yaw_offset: 0.0 # [deg]
 
@@ -41,3 +42,6 @@ gains_filter:
   filter_rate: 20 # [Hz]
   perc_change_rate: 1.0
   min_change_rate: 0.1 # perc of the difference
+
+# output mode to PixHawk
+output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}
