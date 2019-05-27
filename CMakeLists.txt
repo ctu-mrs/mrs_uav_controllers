@@ -21,6 +21,7 @@ generate_dynamic_reconfigure_options(
   cfg/nsf_gains.cfg
   cfg/so3_gains.cfg
   cfg/attitude_gains.cfg
+  cfg/mpc_gains.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color")
@@ -80,6 +81,22 @@ add_dependencies(So3Controller
   )
 
 target_link_libraries(So3Controller
+  ${catkin_LIBRARIES}
+  )
+
+# Mpc controller
+
+add_library(MpcController
+  src/mpc_controller/mpc_controller.cpp
+  )
+
+add_dependencies(MpcController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
+  )
+
+target_link_libraries(MpcController
   ${catkin_LIBRARIES}
   )
 
