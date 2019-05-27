@@ -270,7 +270,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // prepare the MPC matrice
 
   // initialize the trajectory variables
-  mpc_reference = Eigen::MatrixXd::Zero(n*horizon_len, 1);
+  mpc_reference = Eigen::MatrixXd::Zero(n * horizon_len, 1);
 
   // prepare A_roof matrix
   // A_roof = [A;
@@ -370,10 +370,10 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   outputTrajectory = Eigen::MatrixXd::Zero(horizon_len * n, 1);
 
   // calculate H
-  H = B_roof_reduced.transpose()*Q_roof*B_roof_reduced + P_roof;
+  H = B_roof_reduced.transpose() * Q_roof * B_roof_reduced + P_roof;
 
   // create the inversion of H matrix - the main matrix of the qudratic form
-  H_inv = (0.5*H).inverse();
+  H_inv = (0.5 * H).inverse();
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -479,7 +479,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   Rp << 0, 0, reference->position.z;  // fill the desired position
   Rv << 0, 0, reference->velocity.z;
-  Ra << 0, 0, reference->acceleration.z;
+  Ra << reference->acceleration.x, reference->acceleration.y, reference->acceleration.z;
   Rw << 0, 0, reference->yaw_dot;
 
   // Op - position in global frame
@@ -614,7 +614,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // calculate the feed forwared acceleration
   Eigen::Vector3d mpc_feed_forward(asin((-u(1) * cos(pitch) * cos(roll)) / g_), asin((u(0) * cos(pitch) * cos(roll)) / g_), 0);
-  
+
   // --------------------------------------------------------------
   // |                recalculate the hover thrust                |
   // --------------------------------------------------------------
@@ -625,9 +625,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // |                  feed forward from tracker                 |
   // --------------------------------------------------------------
 
+  double total_mass = uav_mass_ + uav_mass_difference;
+
   // calculate the feed forwared acceleration
-  Eigen::Vector3d feed_forward(asin((-reference->acceleration.y * cos(pitch) * cos(roll)) / ((uav_mass_ + uav_mass_difference) * g_ * sin(roll))),
-                               asin((reference->acceleration.x * cos(pitch) * cos(roll)) / ((uav_mass_ + uav_mass_difference) * g_ * sin(pitch))), reference->acceleration.z * (hover_thrust / g_));
+  Eigen::Vector3d feed_forward(asin((total_mass * reference->acceleration.x) /
+                                    sqrt(pow(total_mass * g_ + reference->acceleration.z, 2) + pow(total_mass * reference->acceleration.x, 1))),
+                               asin((total_mass * reference->acceleration.y) /
+                                    sqrt(pow(total_mass * g_ + reference->acceleration.z, 2) + pow(total_mass * reference->acceleration.y, 1))),
+                               reference->acceleration.z);
 
   // --------------------------------------------------------------
   // |                 desired orientation matrix                 |
