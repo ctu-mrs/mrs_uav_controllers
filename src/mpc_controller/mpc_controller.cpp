@@ -503,11 +503,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   for (int i = 0; i < horizon_len; i++) {
 
     mpc_reference(i * n, 0)     = reference->position.x;
-    mpc_reference(i * n + 1, 0) = 0;
-    mpc_reference(i * n + 2, 0) = 0;
+    mpc_reference(i * n + 1, 0) = reference->velocity.x;
+    mpc_reference(i * n + 2, 0) = reference->acceleration.x;
     mpc_reference(i * n + 3, 0) = reference->position.y;
-    mpc_reference(i * n + 4, 0) = 0;
-    mpc_reference(i * n + 5, 0) = 0;
+    mpc_reference(i * n + 4, 0) = reference->velocity.y;
+    mpc_reference(i * n + 5, 0) = reference->acceleration.y;
   }
 
   // set the initial condition
@@ -626,8 +626,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   // calculate the feed forwared acceleration
-  Eigen::Vector3d feed_forward(asin((-reference->acceleration.y * cos(pitch) * cos(roll)) / g_),
-                               asin((reference->acceleration.x * cos(pitch) * cos(roll)) / g_), reference->acceleration.z * (hover_thrust / g_));
+  Eigen::Vector3d feed_forward(asin((-reference->acceleration.y * cos(pitch) * cos(roll)) / ((uav_mass_ + uav_mass_difference) * g_ * sin(roll))),
+                               asin((reference->acceleration.x * cos(pitch) * cos(roll)) / ((uav_mass_ + uav_mass_difference) * g_ * sin(pitch))), reference->acceleration.z * (hover_thrust / g_));
 
   // --------------------------------------------------------------
   // |                 desired orientation matrix                 |
