@@ -77,10 +77,6 @@ private:
   mrs_uav_manager::MotorParams motor_params_;
   double                       hover_thrust;
 
-  double roll, pitch, yaw;
-
-  double yaw_offset;
-
   // actual gains (used and already filtered)
   double kpz, kvz, kaz;
   double km, km_lim;
@@ -186,7 +182,6 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_ma
 
   // convert to radians
   max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
-  yaw_offset      = (yaw_offset / 180.0) * PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
@@ -319,7 +314,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
   Eigen::Vector3d Ep = Op - Rp;
   Eigen::Vector3d Ev = Ov - Rv;
 
-  /* calculate dt //{ */
+  // --------------------------------------------------------------
+  // |                      calculate the dt                      |
+  // --------------------------------------------------------------
 
   double dt;
 
@@ -352,12 +349,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
     }
   }
 
-  //}
-
   // --------------------------------------------------------------
   // |                            gains                           |
   // --------------------------------------------------------------
-  //
+
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kp, Kv, Kq, Kw;
 

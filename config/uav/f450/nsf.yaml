@@ -24,8 +24,6 @@ lateral_mute_coefficitent: 0.0
 
 max_tilt_angle: 30.0 # [deg]
 
-yaw_offset: 0.0 # [deg]
-
 gains_filter:
   filter_rate: 20 # [Hz]
   perc_change_rate: 1.0

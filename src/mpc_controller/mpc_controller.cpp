@@ -77,10 +77,6 @@ private:
   mrs_uav_manager::MotorParams motor_params_;
   double                       hover_thrust;
 
-  double roll, pitch, yaw;
-
-  double yaw_offset;
-
   // actual gains (used and already filtered)
   double kpz, kvz, kaz, kiwxy, kibxy;
   double kiwxy_lim, kibxy_lim;
@@ -266,7 +262,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
   // convert to radians
   max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
-  yaw_offset      = (yaw_offset / 180.0) * PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
@@ -556,7 +551,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   Eigen::Vector3d Ep = Op - Rp;
   Eigen::Vector3d Ev = Ov - Rv;
 
-  /* calculate dt //{ */
+  // --------------------------------------------------------------
+  // |                      calculate the dt                      |
+  // --------------------------------------------------------------
 
   double dt;
 
@@ -589,7 +586,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
   }
 
-  //}
+  // --------------------------------------------------------------
+  // |          caculate the current oritentation angles          |
+  // --------------------------------------------------------------
+
+  double         yaw, pitch, roll;
+  tf::Quaternion quaternion_odometry;
+  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
+  tf::Matrix3x3 m(quaternion_odometry);
+  m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
   // |                            gains                           |
@@ -607,16 +612,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     Kq << kqxy, kqxy, kqz;
     Kw << kwxy, kwxy, kwz;
   }
-
-  // --------------------------------------------------------------
-  // |          caculate the current oritentation angles          |
-  // --------------------------------------------------------------
-
-  double         yaw, pitch, roll;
-  tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
-  tf::Matrix3x3 m(quaternion_odometry);
-  m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
   // |         mpc acceleration -> controller feed forward        |

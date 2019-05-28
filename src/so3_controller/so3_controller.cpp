@@ -322,13 +322,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
-  // --------------------------------------------------------------
-  // |                      calculate the dt                      |
-  // --------------------------------------------------------------
-
   if (!is_active) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
+
+  // --------------------------------------------------------------
+  // |                      calculate the dt                      |
+  // --------------------------------------------------------------
 
   double dt;
 
@@ -362,6 +362,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
     }
   }
+
+  // --------------------------------------------------------------
+  // |                 calculate the euler angles                 |
+  // --------------------------------------------------------------
+
+  double         yaw, pitch, roll;
+  tf::Quaternion quaternion_odometry;
+  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
+  tf::Matrix3x3 m(quaternion_odometry);
+  m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |

@@ -77,10 +77,6 @@ private:
   mrs_uav_manager::MotorParams motor_params_;
   double                       hover_thrust;
 
-  double roll, pitch, yaw;
-
-  double yaw_offset;
-
   // actual gains (used and already filtered)
   double kpxy, kiwxy, kibxy, kvxy, kaxy;
   double kpz, kvz, kaz;
@@ -180,9 +176,6 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // constraints
   param_loader.load_param("max_tilt_angle", max_tilt_angle_);
 
-  // yaw offset for compensating for heading error estimation
-  param_loader.load_param("yaw_offset", yaw_offset);
-
   // gain filtering
   param_loader.load_param("gains_filter/filter_rate", gains_filter_timer_rate_);
   param_loader.load_param("gains_filter/perc_change_rate", gains_filter_change_rate_);
@@ -198,7 +191,6 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
   // convert to radians
   max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
-  yaw_offset      = (yaw_offset / 180.0) * PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
@@ -621,7 +613,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   output_command->header.stamp = ros::Time::now();
 
   // rotate the feedback to the body frame
-  Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw + yaw_offset);
+  Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw);
 
   output_command->euler_attitude.x   = feedback_b[1];
   output_command->euler_attitude.y   = feedback_b[0];
