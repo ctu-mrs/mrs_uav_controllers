@@ -479,7 +479,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   Rp << 0, 0, reference->position.z;  // fill the desired position
   Rv << 0, 0, reference->velocity.z;
-  Ra << reference->acceleration.x, reference->acceleration.y, reference->acceleration.z;
   Rw << 0, 0, reference->yaw_dot;
 
   // Op - position in global frame
@@ -627,23 +626,31 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   double total_mass = uav_mass_ + uav_mass_difference;
 
+  double Ft = sqrt(pow(total_mass * (g_ + reference->acceleration.z - Kp[0] * Ep[0] - Kv[0] * Ev[0]), 2) + pow(total_mass * (reference->acceleration.x + u(0)), 2) +
+                   pow(total_mass * (reference->acceleration.y + u(1)), 2));
+
   // calculate the feed forwared acceleration
-  Eigen::Vector3d feed_forward(asin((total_mass * reference->acceleration.x) /
-                                    sqrt(pow(total_mass * g_ + reference->acceleration.z, 2) + pow(total_mass * reference->acceleration.x, 1))),
-                               asin((total_mass * reference->acceleration.y) /
-                                    sqrt(pow(total_mass * g_ + reference->acceleration.z, 2) + pow(total_mass * reference->acceleration.y, 1))),
+  Eigen::Vector3d feed_forward(atan(total_mass * (reference->acceleration.x + u(0)) / Ft), atan(total_mass * (reference->acceleration.y + u(1)) / Ft),
                                reference->acceleration.z);
 
   // --------------------------------------------------------------
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  tf::Quaternion desired_orientation =
-      tf::createQuaternionFromRPY(mpc_feed_forward[0] + feed_forward[0], mpc_feed_forward[1] + feed_forward[1], reference->yaw);
+  tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(-feed_forward[1], feed_forward[0], reference->yaw);
+
+  Ra << reference->acceleration.x + u(0), reference->acceleration.y + u(1), reference->acceleration.z;
 
   Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
 
-  Rq.coeffs() << desired_orientation.getX(), desired_orientation.getY(), desired_orientation.getZ(), desired_orientation.getW();
+  // | ------------- construct the rotational matrix ------------ |
+
+  Eigen::Vector3d f_norm = f.normalized();
+
+  Rd.col(2) = f_norm;
+  Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0));
+  Rd.col(1).normalize();
+  Rd.col(0) = Rd.col(1).cross(Rd.col(2));
   Rd = Rq.matrix();
 
   // --------------------------------------------------------------
@@ -664,6 +671,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   Ew = R.transpose() * (Ow - Rw);
 
   double thrust_force = f.dot(R.col(2));
+  /* double thrust_force = Ft; */
   double thrust       = 0;
 
   if (thrust_force >= 0) {

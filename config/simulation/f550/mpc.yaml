@@ -30,8 +30,8 @@ mpc_parameters:
       0, 0, 0, 0, 1, 0,
       0, 0, 0, 0, 0, 1]
 
-  P: [1, 0,
-      0, 1]
+  P: [100, 0,
+      0, 100]
 
   U: [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 20, 20, 20, 20]
 
@@ -42,8 +42,8 @@ attitude_vertical_feedback:
     horizontal:
 
       attitude:
-        kq: 6.0
-        kw: 0.0
+        kq: 10.0
+        kw: 1.0
 
     vertical:
       kp: 40.0
