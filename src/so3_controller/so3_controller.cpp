@@ -287,9 +287,9 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
-    activation_control_command_ = mrs_msgs::AttitudeCommand();
+    activation_control_command_                 = mrs_msgs::AttitudeCommand();
     activation_control_command_.mass_difference = 0;
-    uav_mass_difference         = 0;
+    uav_mass_difference                         = 0;
     ROS_WARN("[So3Controller]: activated without getting the last tracker's command.");
   } else {
     activation_control_command_ = *cmd;
@@ -699,9 +699,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
     if (output_mode_ == OUTPUT_ATTITUDE_RATE) {
 
       // output the desired attitude rate
-      output_command->attitude_rate.x   = 1 * t[0];
-      output_command->attitude_rate.y   = -1 * t[1];
-      output_command->attitude_rate.z   = -1 * t[2];
+      output_command->attitude_rate.x   = t[0];
+      output_command->attitude_rate.y   = t[1];
+      output_command->attitude_rate.z   = t[2];
       output_command->attitude_rate_set = true;
 
       Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);

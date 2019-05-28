@@ -472,9 +472,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  output_command->attitude_rate.x   = 1 * t[0];
-  output_command->attitude_rate.y   = -1 * t[1];
-  output_command->attitude_rate.z   = -1 * t[2];
+  output_command->attitude_rate.x   = t[0];
+  output_command->attitude_rate.y   = t[1];
+  output_command->attitude_rate.z   = t[2];
   output_command->attitude_rate_set = true;
 
   Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
