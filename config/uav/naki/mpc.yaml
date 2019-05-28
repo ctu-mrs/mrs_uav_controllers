@@ -1,0 +1,72 @@
+mpc_model:
+
+  number_of_states: 6
+  number_of_inputs: 2
+  dt: 0.05
+
+  A: [1, 0.05, 0, 0, 0, 0,
+      0, 1, 0.05, 0, 0, 0,
+      0, 0, 0, 0, 0, 0,
+      0, 0, 0, 1, 0.05, 0,
+      0, 0, 0, 0, 1, 0.05,
+      0, 0, 0, 0, 0, 0]
+
+  B: [0, 0,
+      0, 0,
+      1, 0,
+      0, 0,
+      0, 0,
+      0, 1]
+
+mpc_parameters:
+
+  horizon_len: 100
+  number_of_variables: 32
+
+  Q: [5, 0, 0, 0, 0, 0,
+      0, 2.0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0,
+      0, 0, 0, 5, 0, 0,
+      0, 0, 0, 0, 2.0, 0,
+      0, 0, 0, 0, 0, 0]
+
+  P: [0.1, 0,
+      0, 0.1]
+
+  U: [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 20, 20, 20, 20]
+
+integral_gains:
+
+  kiw: 0.1
+  kib: 0.1
+
+  kiw_lim: 10.0
+  kib_lim: 10.0
+
+attitude_vertical_feedback:
+
+  default_gains:
+
+    horizontal:
+
+      attitude:
+        kq: 10.0
+        kw: 1.0
+
+    vertical:
+      kp: 40.0
+      kv: 20.0
+      ka: 1.0
+
+      attitude:
+        kq: 20.0
+        kw: 5.0
+
+    weight_estimator:
+      km: 1.0
+      km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+
+  gains_filter:
+    filter_rate: 20 # [Hz]
+    perc_change_rate: 1.0
+    min_change_rate: 0.1 # perc of the difference
