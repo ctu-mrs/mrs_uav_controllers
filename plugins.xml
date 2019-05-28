@@ -21,3 +21,9 @@
     <description>This is So3Controller.</description>
   </class>
 </library>
+
+<library path="lib/libMpcController">
+  <class name="mrs_controllers/MpcController" type="mrs_controllers::mpc_controller::MpcController" base_class_type="mrs_uav_manager::Controller">
+    <description>This is MpcController.</description>
+  </class>
+</library>
