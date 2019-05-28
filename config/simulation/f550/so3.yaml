@@ -29,7 +29,7 @@ default_gains:
 
   weight_estimator:
     km: 1.0
-    km_lim: 2.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+    km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
 lateral_mute_coefficitent: 0.0
 
