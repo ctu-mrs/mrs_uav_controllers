@@ -82,7 +82,8 @@ private:
   double yaw_offset;
 
   // actual gains (used and already filtered)
-  double kpz, kvz, kaz;
+  double kpz, kvz, kaz, kiwxy, kibxy;
+  double kiwxy_lim, kibxy_lim;
   double km, km_lim;
   double kqxy, kqz;  // attitude gains
   double kwxy, kwz;  // attitude rate gains
@@ -118,13 +119,13 @@ private:
   Eigen::MatrixXd A;               // system matrix
   Eigen::MatrixXd B;               // input matrix
   Eigen::MatrixXd U;               // matrix for reshaping inputs
-  Eigen::MatrixXd A_roof;          // BIG main matrix
-  Eigen::MatrixXd B_roof;          // BIG input matrix
-  Eigen::MatrixXd B_roof_reduced;  // BIG input matrix reduced by U
-  Eigen::MatrixXd Q;               // small penalization matrix for large error
-  Eigen::MatrixXd P;               // small penalization of input actions
-  Eigen::MatrixXd Q_roof;          // BIG matrix of coeficients of quadratic penalization for large error
-  Eigen::MatrixXd P_roof;          // BIG matrix of coeficients of penalization of inputs
+  Eigen::MatrixXd A_roof;          // main matrix
+  Eigen::MatrixXd B_roof;          // input matrix
+  Eigen::MatrixXd B_roof_reduced;  // input matrix reduced by U
+  Eigen::MatrixXd Q;               // penalization matrix for large error
+  Eigen::MatrixXd P;               // penalization of input actions
+  Eigen::MatrixXd Q_roof;          // matrix of coeficients of quadratic penalization for large error
+  Eigen::MatrixXd P_roof;          // matrix of coeficients of penalization of inputs
   Eigen::MatrixXd H_inv;           // inversion of the main matrix of the quadratic form
   Eigen::MatrixXd H;               // inversion of the main matrix of the quadratic form
 
@@ -218,6 +219,14 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
     tempIdx2 += m;
   }
 
+  // | --------------------- integral gains --------------------- |
+
+  param_loader.load_param("integral_gains/kiw", kiwxy);
+  param_loader.load_param("integral_gains/kib", kibxy);
+
+  // integrator limits
+  param_loader.load_param("integral_gains/kiw_lim", kiwxy_lim);
+  param_loader.load_param("integral_gains/kib_lim", kibxy_lim);
 
   // | ------------- height and attitude controller ------------- |
 
@@ -342,6 +351,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
     Q_roof.block(i * n, i * n, n, n) = Q;
   }
+
+  /* Q_roof.block((horizon_len - 1) * n, (horizon_len - 1) * n, n, n) = S; */
 
   // P_roof matrix
   // penalizing control actions
@@ -477,14 +488,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   Eigen::Matrix3d Rd;
 
-  Rp << 0, 0, reference->position.z;  // fill the desired position
-  Rv << 0, 0, reference->velocity.z;
+  Rp << reference->position.x, reference->position.y, reference->position.z;  // fill the desired position
+  Rv << reference->velocity.x, reference->velocity.y, reference->velocity.z;
   Rw << 0, 0, reference->yaw_dot;
 
   // Op - position in global frame
   // Ov - velocity in global frame
-  Eigen::Vector3d Op(0, 0, odometry->pose.pose.position.z);
-  Eigen::Vector3d Ov(0, 0, odometry->twist.twist.linear.z);
+  Eigen::Vector3d Op(odometry->pose.pose.position.x, odometry->pose.pose.position.y, odometry->pose.pose.position.z);
+  Eigen::Vector3d Ov(odometry->twist.twist.linear.x, odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
 
   // Oq - UAV attitude quaternion
   Eigen::Quaternion<double> Oq;
@@ -502,11 +513,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   for (int i = 0; i < horizon_len; i++) {
 
     mpc_reference(i * n, 0)     = reference->position.x;
-    mpc_reference(i * n + 1, 0) = reference->velocity.x;
-    mpc_reference(i * n + 2, 0) = reference->acceleration.x;
+    mpc_reference(i * n + 1, 0) = 0;
+    mpc_reference(i * n + 2, 0) = 0;
     mpc_reference(i * n + 3, 0) = reference->position.y;
-    mpc_reference(i * n + 4, 0) = reference->velocity.y;
-    mpc_reference(i * n + 5, 0) = reference->acceleration.y;
+    mpc_reference(i * n + 4, 0) = 0;
+    mpc_reference(i * n + 5, 0) = 0;
   }
 
   // set the initial condition
@@ -612,7 +623,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   // calculate the feed forwared acceleration
-  Eigen::Vector3d mpc_feed_forward(asin((-u(1) * cos(pitch) * cos(roll)) / g_), asin((u(0) * cos(pitch) * cos(roll)) / g_), 0);
+  /* Eigen::Vector3d mpc_feed_forward(asin((-u(1) * cos(pitch) * cos(roll)) / g_), asin((u(0) * cos(pitch) * cos(roll)) / g_), 0); */
 
   // --------------------------------------------------------------
   // |                recalculate the hover thrust                |
@@ -624,34 +635,41 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // |                  feed forward from tracker                 |
   // --------------------------------------------------------------
 
-  double total_mass = uav_mass_ + uav_mass_difference;
+  /* double total_mass = uav_mass_ + uav_mass_difference; */
 
-  double Ft = sqrt(pow(total_mass * (g_ + reference->acceleration.z - Kp[0] * Ep[0] - Kv[0] * Ev[0]), 2) + pow(total_mass * (reference->acceleration.x + u(0)), 2) +
-                   pow(total_mass * (reference->acceleration.y + u(1)), 2));
+  /* double Ft = sqrt(pow(total_mass * (g_ + reference->acceleration.z), 2) + pow(total_mass * (reference->acceleration.x + u(0)), 2) + */
+  /*                  pow(total_mass * (reference->acceleration.y + u(1)), 2)); */
 
   // calculate the feed forwared acceleration
-  Eigen::Vector3d feed_forward(atan(total_mass * (reference->acceleration.x + u(0)) / Ft), atan(total_mass * (reference->acceleration.y + u(1)) / Ft),
-                               reference->acceleration.z);
+  /* Eigen::Vector3d feed_forward(atan(total_mass * (reference->acceleration.x + u(0)) / Ft), atan(total_mass * (reference->acceleration.y + u(1)) / Ft), */
+  /*                              reference->acceleration.z); */
 
   // --------------------------------------------------------------
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(-feed_forward[1], feed_forward[0], reference->yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
-  Ra << reference->acceleration.x + u(0), reference->acceleration.y + u(1), reference->acceleration.z;
+  Eigen::Vector3d Ip(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
 
-  Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
+  /* tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(-feed_forward[1], feed_forward[0], reference->yaw); */
+
+  /* Ra << reference->acceleration.x + u(0), reference->acceleration.y + u(1), reference->acceleration.z; */
+  Ra << u(0), u(1), reference->acceleration.z;
+
+  Eigen::Vector3d f      = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
+  Eigen::Vector3d f_norm = f.normalized();
+
+  // | ---------------------- yaw reference --------------------- |
+
+  Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
 
   // | ------------- construct the rotational matrix ------------ |
-
-  Eigen::Vector3d f_norm = f.normalized();
 
   Rd.col(2) = f_norm;
   Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0));
   Rd.col(1).normalize();
   Rd.col(0) = Rd.col(1).cross(Rd.col(2));
-  Rd = Rq.matrix();
 
   // --------------------------------------------------------------
   // |                      orientation error                     |
@@ -672,12 +690,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   double thrust_force = f.dot(R.col(2));
   /* double thrust_force = Ft; */
-  double thrust       = 0;
+  double thrust = 0;
 
   if (thrust_force >= 0) {
     thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
   } else {
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[MpcController]: Just so you know, the desired thrust force is negative (%f", thrust_force);
   }
 
   // saturate the thrust
@@ -701,6 +719,123 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     mutex_lateral_gains_after_toggle = true;
   }
   mute_lateral_gains = reference->disable_position_gains;
+
+  // --------------------------------------------------------------
+  // |                  integrate the body error                 |
+  // --------------------------------------------------------------
+
+  /* body error integrator //{ */
+
+  {
+    std::scoped_lock lock(mutex_gains);
+
+    // rotate the control errors to the body
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
+
+    // integrate the body error
+
+    // antiwindup
+    double temp_gain = kibxy;
+    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
+      kibxy = 0;
+      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for body integral kicks in");
+    }
+    Ib_b -= temp_gain * Ep_body * dt;
+
+    // saturate the body
+    double body_integral_saturated = false;
+    if (!std::isfinite(Ib_b[0])) {
+      Ib_b[0] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!");
+    } else if (Ib_b[0] > kibxy_lim) {
+      Ib_b[0]                 = kibxy_lim;
+      body_integral_saturated = true;
+    } else if (Ib_b[0] < -kibxy_lim) {
+      Ib_b[0]                 = -kibxy_lim;
+      body_integral_saturated = true;
+    }
+
+    if (kibxy_lim > 0 && body_integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[MpcController]: MPC's's body pitch integral is being saturated!");
+    }
+
+    // saturate the body
+    body_integral_saturated = false;
+    if (!std::isfinite(Ib_b[1])) {
+      Ib_b[1] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!");
+    } else if (Ib_b[1] > kibxy_lim) {
+      Ib_b[1]                 = kibxy_lim;
+      body_integral_saturated = true;
+    } else if (Ib_b[1] < -kibxy_lim) {
+      Ib_b[1]                 = -kibxy_lim;
+      body_integral_saturated = true;
+    }
+
+    if (kibxy_lim > 0 && body_integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[MpcController]: MPC's's body roll integral is being saturated!");
+    }
+  }
+
+  //}
+
+  /* world error integrator //{ */
+
+  // --------------------------------------------------------------
+  // |                  integrate the world error                 |
+  // --------------------------------------------------------------
+
+  {
+    std::scoped_lock lock(mutex_gains);
+
+    Eigen::Vector3d integration_switch(1, 1, 0);
+
+    // integrate the world error
+
+    // antiwindup
+    double temp_gain = kiwxy;
+    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
+      kibxy = 0;
+      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for world integral kicks in");
+    }
+    Iw_w -= temp_gain * Ep.head(2) * dt;
+
+    // saturate the world
+    double world_integral_saturated = false;
+    if (!std::isfinite(Iw_w[0])) {
+      Iw_w[0] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
+    } else if (Iw_w[0] > kiwxy_lim) {
+      Iw_w[0]                  = kiwxy_lim;
+      world_integral_saturated = true;
+    } else if (Iw_w[0] < -kiwxy_lim) {
+      Iw_w[0]                  = -kiwxy_lim;
+      world_integral_saturated = true;
+    }
+
+    if (kiwxy_lim >= 0 && world_integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[MpcController]: SO3's world X integral is being saturated!");
+    }
+
+    // saturate the world
+    world_integral_saturated = false;
+    if (!std::isfinite(Iw_w[1])) {
+      Iw_w[1] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
+    } else if (Iw_w[1] > kiwxy_lim) {
+      Iw_w[1]                  = kiwxy_lim;
+      world_integral_saturated = true;
+    } else if (Iw_w[1] < -kiwxy_lim) {
+      Iw_w[1]                  = -kiwxy_lim;
+      world_integral_saturated = true;
+    }
+
+    if (kiwxy_lim >= 0 && world_integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[MpcController]: SO3's world Y integral is being saturated!");
+    }
+  }
+
+  //}
 
   /* mass estimatior //{ */
 
@@ -732,6 +867,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   }
 
   //}
+
+  // --------------------------------------------------------------
+  // |            report on the values of the integrals           |
+  // --------------------------------------------------------------
+
+  ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f, y %.2f, lim: %.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[MpcController]:  body error integral: x %.2f, y %.2f, lim: %.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
 
   // --------------------------------------------------------------
   // |                 produce the control output                 |
@@ -896,6 +1038,7 @@ double MpcController::calculateGainChange(const double current_value, const doub
 bool MpcController::reset(void) {
 
   Iw_w = Eigen::Vector2d::Zero(2);
+  Ib_b = Eigen::Vector2d::Zero(2);
 
   return true;
 }
