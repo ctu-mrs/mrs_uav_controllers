@@ -701,7 +701,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // saturate the thrust
   if (!std::isfinite(thrust)) {
     thrust = 0;
-    ROS_ERROR("NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[MpcController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
   } else if (thrust > 0.8) {
     thrust = 0.8;
   } else if (thrust < 0.0) {

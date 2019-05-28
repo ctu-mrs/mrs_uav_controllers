@@ -79,10 +79,6 @@ private:
   double                       g_;
   mrs_uav_manager::MotorParams motor_params_;
 
-  double roll, pitch, yaw;
-
-  double yaw_offset;
-
   // actual gains (used and already filtered)
   double kpxy, kiwxy, kibxy, kvxy, kaxy;
   double kpz, kvz, kaz;
@@ -95,8 +91,9 @@ private:
   std::mutex mutex_gains;
   std::mutex mutex_drs_params;
 
-  double max_tilt_angle_;
-  double max_thrust_;
+  double tilt_angle_saturation_;
+  double tilt_angle_failsafe_;
+  double thrust_saturation_;
 
   mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
   mrs_msgs::AttitudeCommand           activation_control_command_;
@@ -195,11 +192,9 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   param_loader.load_param("g", g_);
 
   // constraints
-  param_loader.load_param("max_tilt_angle", max_tilt_angle_);
-  param_loader.load_param("max_thrust", max_thrust_);
-
-  // yaw offset for compensating for heading error estimation
-  param_loader.load_param("yaw_offset", yaw_offset);
+  param_loader.load_param("tilt_angle_saturation", tilt_angle_saturation_);
+  param_loader.load_param("tilt_angle_failsafe", tilt_angle_failsafe_);
+  param_loader.load_param("thrust_saturation", thrust_saturation_);
 
   // gain filtering
   param_loader.load_param("gains_filter/filter_rate", gains_filter_timer_rate_);
@@ -222,8 +217,8 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
-  yaw_offset      = (yaw_offset / 180.0) * PI;
+  tilt_angle_saturation_ = (tilt_angle_saturation_ / 180) * PI;
+  tilt_angle_failsafe_   = (tilt_angle_failsafe_ / 180) * PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
@@ -466,11 +461,26 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
   double theta = acos(f_norm[2]);
   double phi   = atan2(f_norm[1], f_norm[0]);
 
+  // check for the failsafe limit
   if (!std::isfinite(theta)) {
-    ROS_ERROR("NaN detected in variable \"theta\", not saturating");
-  } else if (theta > max_tilt_angle_) {
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0, (max_tilt_angle_ / PI) * 180.0);
-    theta = max_tilt_angle_;
+
+    ROS_ERROR("[So3Controller]: NaN detected in variable \"theta\", returning null");
+
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
+  if (tilt_angle_failsafe_ > 1e-3 && theta > tilt_angle_failsafe_) {
+
+    ROS_ERROR("[So3Controller]: The produced tilt angle would be over the failsafe limit, returning null");
+
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
+  // saturate the angle
+  if (tilt_angle_saturation_ > 1e-3 && theta > tilt_angle_saturation_) {
+    ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0,
+                      (tilt_angle_saturation_ / PI) * 180.0);
+    theta = tilt_angle_saturation_;
   }
 
   // reconstruct the vector
@@ -522,10 +532,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
     thrust = 0;
     ROS_ERROR("NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
 
-  } else if (thrust > max_thrust_) {
+  } else if (thrust > thrust_saturation_) {
 
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to %f", max_thrust_);
-    thrust = max_thrust_;
+    ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to %f", thrust_saturation_);
+    thrust = thrust_saturation_;
 
   } else if (thrust < 0.0) {
 

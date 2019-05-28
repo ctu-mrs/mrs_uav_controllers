@@ -409,13 +409,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
   if (thrust_force >= 0) {
     thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
   } else {
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[AttitudeController]: Just so you know, the desired thrust force is negative (%f", thrust_force);
   }
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
     thrust = 0;
-    ROS_ERROR("NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[AttitudeController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
   } else if (thrust > 0.8) {
     thrust = 0.8;
   } else if (thrust < 0.0) {

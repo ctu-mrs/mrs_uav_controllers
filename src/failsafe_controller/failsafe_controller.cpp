@@ -235,7 +235,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
 
   if (!std::isfinite(hover_thrust)) {
     hover_thrust = 0;
-    ROS_ERROR("NaN detected in variable \"hover_thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[FailsafeController]: NaN detected in variable \"hover_thrust\", setting it to 0 and returning!!!");
   } else if (hover_thrust > 1.0) {
     hover_thrust = 1.0;
   } else if (hover_thrust < 0.0) {
