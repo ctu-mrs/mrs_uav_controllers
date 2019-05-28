@@ -289,7 +289,7 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   } else {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
-    ROS_INFO("[So3Controller]: activated with a last trackers command.");
+    ROS_INFO("[So3Controller]: activated with a last trackers command, mass difference %.2f kg.", uav_mass_difference);
   }
 
   first_iteration = true;
