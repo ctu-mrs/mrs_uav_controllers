@@ -459,9 +459,37 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
 
   Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
-  Eigen::Vector3d Ip(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
+  double total_mass = uav_mass_ + uav_mass_difference;
 
-  Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
+  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
+  Eigen::Vector3d position_feedback = -Kp * Ep.array();
+  Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
+  Eigen::Vector3d integral_feedback(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
+
+  Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
+
+  // | ----------- limiting the downwards acceleration ---------- |
+  // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
+
+  // "safe while true"
+  for (int i = 0; i < 20; i++) {
+
+    // if the downwards part of the force is close to counter-act the gravity acceleration
+    if (f[2] < (0.15 * total_mass * g_)) {
+
+      ROS_ERROR("[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip (iteration #%d).", f[2], i);
+
+      // half the feedbacks
+      position_feedback /= 2.0;
+      velocity_feedback /= 2.0;
+
+      // recalculate the desired force vector
+      f = position_feedback + velocity_feedback + integral_feedback + total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
+    } else {
+
+      break;
+    }
+  }
 
   // | ------------------ limit the tilt angle ------------------ |
 
@@ -481,7 +509,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
 
   if (tilt_angle_failsafe_ > 1e-3 && theta > tilt_angle_failsafe_) {
 
-    ROS_ERROR("[So3Controller]: The produced tilt angle would be over the failsafe limit, returning null");
+    ROS_ERROR("[So3Controller]: The produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
+              (180.0 / M_PI) * tilt_angle_failsafe_);
+    ROS_INFO("[So3Controller]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
+    ROS_INFO("[So3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
+    ROS_INFO("[So3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
+    ROS_INFO("[So3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
+    ROS_INFO("[So3Controller]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y, reference->position.z,
+             reference->yaw);
+    ROS_INFO("[So3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", odometry->pose.pose.position.x, odometry->pose.pose.position.y,
+             odometry->pose.pose.position.z, yaw);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
