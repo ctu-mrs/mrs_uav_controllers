@@ -1,0 +1,62 @@
+# Produced by CVXGEN, 2019-06-04 10:54:42 -0400.
+# CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com.
+# The code in this file is Copyright (C) 2006-2017 Jacob Mattingley.
+# CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial
+# applications without prior written permission from Jacob Mattingley.
+
+# Filename: description.cvxgen.
+# Description: A description of the CVXGEN problem.
+
+dimensions
+  m = 1  # inputs
+  n = 3   # states
+  T = 26  # prediction horizon length
+end
+
+parameters
+  A (n,n)  {1,1 2,2 1,2 2,3}  # dynamics matrix
+  B (n,m)  {3,1} # transfer matrix
+
+  Af (n,n)  {1,1 2,2 1,2 2,3}  # dynamics matrix, first step
+  Bf (n,m)  {3,1} # transfer matrix, first step
+
+  Q (n,n) psd diagonal nonnegative   # state cost
+  Q_last (n,n) psd diagonal nonnegative   # state cost, last step in the prediction horizon
+
+  x[0] (n) # initial system state
+
+  u_max   # maximum acc (input to the system)
+
+  du_max  # input slew rate constrain
+  u_last  # system input from the last iteration, used for consistent slew rate
+
+  x_max_1   # maximum vel (state constrain)
+
+  x_ss[t] (n), t=1..T # given reference
+end
+
+variables
+  x[t] (n), t=1..T  # state
+  u[t] (m), t=0..T-1  # input
+end
+
+minimize
+  sum[t=1..T-1](quad(x[t]-x_ss[t], Q)) + (quad(x[T]-x_ss[T], Q_last))
+subject to
+
+  # dynamics constraints
+  x[1] == Af*x[0] + Bf*u[0]
+  x[t+1] == A*x[t] + B*u[t], t=1..T-1
+
+  #input constraints
+  abs(u[t]) <= u_max, t=0..T-1
+
+  #input slew rate constrain
+  abs(u[0] - u_last) <= du_max
+  abs(u[t] - u[t-1]) <= du_max, t=1..T-1
+
+  #state constraints
+  abs(x[t][1]) <= x_max_1, t=1..T
+
+
+end
