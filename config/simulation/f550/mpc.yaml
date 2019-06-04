@@ -1,39 +1,34 @@
 mpc_model:
 
-  number_of_states: 6
-  number_of_inputs: 2
-  dt: 0.05
+  number_of_states: 3
+  number_of_inputs: 1
 
-  A: [1, 0.05, 0, 0, 0, 0,
-      0, 1, 0.05, 0, 0, 0,
-      0, 0, 0, 0, 0, 0,
-      0, 0, 0, 1, 0.05, 0,
-      0, 0, 0, 0, 1, 0.05,
-      0, 0, 0, 0, 0, 0]
+  dt1: 0.01
+  dt2: 0.05
 
-  B: [0, 0,
-      0, 0,
-      1, 0,
-      0, 0,
-      0, 0,
-      0, 1]
+  A: [1, 0.01, 0,
+      0, 1, 0.01,
+      0, 0, 0]
+
+  B: [0,
+      0,
+      1]
 
 mpc_parameters:
 
-  horizon_len: 100
-  number_of_variables: 32
+  horizon_length: 26
 
-  Q: [5, 0, 0, 0, 0, 0,
-      0, 2.0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0,
-      0, 0, 0, 5, 0, 0,
-      0, 0, 0, 0, 2.0, 0,
-      0, 0, 0, 0, 0, 0]
+  Q: [1, 0, 0] # state error penalization
+  S: [1, 0, 0] # last state error penalization
 
-  P: [0.1, 0,
-      0, 0.1]
+  max_speed: 1.0
+  max_acceleration: 1.0
+  max_jerk: 1.0
 
-  U: [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 20, 20, 20, 20]
+cvx_parameters:
+
+  verbose: false
+  max_iterations: 30
 
 integral_gains:
 

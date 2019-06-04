@@ -6,6 +6,12 @@
 
 /* author: Daniel Hert */
 
+namespace mrs_controllers
+{
+
+namespace mpc_controller
+{
+
 class CvxWrapper {
 
 public:
@@ -26,5 +32,9 @@ private:
   int                 dim;
   int                 vel_q_persistent;
 };
+
+}  // namespace mpc_controller
+
+}  // namespace mrs_controllers
 
 #endif

@@ -107,36 +107,20 @@ private:
   // --------------------------------------------------------------
 
 private:
-  int n;            // number of states
-  int m;            // number of inputs
-  int horizon_len;  // lenght of the prediction horizon
-  int n_variables;  // number of variables in the optimization
+  int n;  // number of states
+  int m;  // number of inputs
 
-  double dt;
+  double dt1, dt2;
 
-  Eigen::MatrixXd A;               // system matrix
-  Eigen::MatrixXd B;               // input matrix
-  Eigen::MatrixXd U;               // matrix for reshaping inputs
-  Eigen::MatrixXd A_roof;          // main matrix
-  Eigen::MatrixXd B_roof;          // input matrix
-  Eigen::MatrixXd B_roof_reduced;  // input matrix reduced by U
-  Eigen::MatrixXd Q;               // penalization matrix for large error
-  Eigen::MatrixXd P;               // penalization of input actions
-  Eigen::MatrixXd Q_roof;          // matrix of coeficients of quadratic penalization for large error
-  Eigen::MatrixXd P_roof;          // matrix of coeficients of penalization of inputs
-  Eigen::MatrixXd H_inv;           // inversion of the main matrix of the quadratic form
-  Eigen::MatrixXd H;               // inversion of the main matrix of the quadratic form
+  int horizon_length_;
 
-  Eigen::MatrixXd X_0;
-  Eigen::MatrixXd c;
-  Eigen::MatrixXd u_cf;
-  Eigen::MatrixXd u;
-  Eigen::MatrixXd states;
+  double max_speed_, max_acceleration_, max_jerk_;
 
-  Eigen::MatrixXd mpc_reference;  // reference for the controller
-  Eigen::MatrixXd x;              // current state of the uav
+  mrs_controllers::mpc_controller::CvxWrapper *cvx_x;
+  mrs_controllers::mpc_controller::CvxWrapper *cvx_y;
 
-  Eigen::MatrixXd outputTrajectory;
+  bool cvx_verbose_ = false;
+  int  cvx_max_iterations_;
 
 private:
   mrs_lib::Profiler *profiler;
@@ -177,8 +161,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
   this->motor_params_ = motor_params;
 
-  std::vector<double> UvaluesList;
-
   // --------------------------------------------------------------
   // |                       load parameters                      |
   // --------------------------------------------------------------
@@ -192,30 +174,21 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // load the dynamicall model parameters
   param_loader.load_param("mpc_model/number_of_states", n);
   param_loader.load_param("mpc_model/number_of_inputs", m);
-  param_loader.load_param("mpc_model/dt", dt);
+  param_loader.load_param("mpc_model/dt1", dt1);
+  param_loader.load_param("mpc_model/dt2", dt2);
 
-  param_loader.load_matrix_static("mpc_model/A", A, n, n);
-  param_loader.load_matrix_static("mpc_model/B", B, n, m);
+  param_loader.load_param("mpc_parameters/horizon_length", horizon_length_);
 
-  param_loader.load_param("mpc_parameters/horizon_len", horizon_len);
-  param_loader.load_param("mpc_parameters/number_of_variables", n_variables);
-  param_loader.load_matrix_static("mpc_parameters/Q", Q, n, n);
-  param_loader.load_matrix_static("mpc_parameters/P", P, m, m);
-  param_loader.load_param("mpc_parameters/U", UvaluesList);
+  param_loader.load_param("mpc_parameters/max_speed", max_speed_);
+  param_loader.load_param("mpc_parameters/max_acceleration", max_acceleration_);
+  param_loader.load_param("mpc_parameters/max_jerk", max_jerk_);
 
-  // create the U matrix
-  int tempIdx  = 0;
-  int tempIdx2 = 0;
-  U            = Eigen::MatrixXd::Zero(horizon_len * m, n_variables);
+  std::vector<double> Q, S;
+  param_loader.load_param("mpc_parameters/Q", Q);
+  param_loader.load_param("mpc_parameters/S", S);
 
-  for (unsigned long i = 0; i < UvaluesList.size(); i++) {
-    for (int j = 0; j < UvaluesList[i]; j++) {
-
-      U.block(tempIdx, tempIdx2, m, m) = Eigen::MatrixXd::Identity(m, m);
-      tempIdx += m;
-    }
-    tempIdx2 += m;
-  }
+  param_loader.load_param("cvx_parameters/verbose", cvx_verbose_);
+  param_loader.load_param("cvx_parameters/max_iterations", cvx_max_iterations_);
 
   // | --------------------- integral gains --------------------- |
 
@@ -270,118 +243,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   Ib_b                = Eigen::Vector2d::Zero(2);
 
   // --------------------------------------------------------------
-  // |                 MPC parameters and matrices                |
+  // |                       prepare cvxgen                       |
   // --------------------------------------------------------------
 
-  // prepare the MPC matrice
-
-  // initialize the trajectory variables
-  mpc_reference = Eigen::MatrixXd::Zero(n * horizon_len, 1);
-
-  // prepare A_roof matrix
-  // A_roof = [A;
-  //           A^2;
-  //           A^4;
-  //           ...;
-  //           A^n];
-
-  A_roof = Eigen::MatrixXd::Zero(horizon_len * n, n);
-
-  Eigen::MatrixXd tempMatrix;
-
-  tempMatrix = Eigen::MatrixXd(n, n);  // for acumulating the powers of A
-
-  tempMatrix = A;
-
-  for (int i = 0; i < horizon_len; i++) {
-
-    A_roof.middleRows(i * n, n) = tempMatrix;
-    tempMatrix                  = tempMatrix * A;  // compute next power of A
-  }
-
-  // B_roof matrix
-  //			% n = prediction horizon length
-  //			% B_roof = [B1,        0,        0,   0;
-  //         				  AB1,       B2,       0,   0;
-  //         				  A^2B1,     AB2,      B2,  0;
-  //         				  ...;
-  //         				  A^(n-2)B1, A^(n-1)B2, ..., 0;
-  //         				  A^(n-1)B1, A^(n-2)B2, ..., B2;
-
-  B_roof = Eigen::MatrixXd::Zero(horizon_len * n, horizon_len * m);
-
-  B_roof.block(0, 0, n, m)         = B;
-  B_roof.block(1 * n, 0 * m, n, m) = A * B;
-  B_roof.block(1 * n, 1 * m, n, m) = B;
-
-  for (int i = 2; i < horizon_len; i++) {  // over rows of submatrices
-
-    for (int j = 2; j < horizon_len; j++) {  // over cols of submatrices
-
-      // replicate the previous line but shift it one block right
-      B_roof.block(i * n, j * m, n, m) = B_roof.block((i - 1) * n, (j - 1) * m, n, m);
-    }
-
-    // create the first block of the new line
-    B_roof.block(i * n, 0, n, m) = A * B_roof.block((i - 1) * n, 0, n, m);
-
-    // create the second block of the new line
-    B_roof.block(i * n, m, n, m) = A * B_roof.block((i - 1) * n, m, n, m);
-  }
-
-  // create the reduced version of B_roof
-  B_roof_reduced = Eigen::MatrixXd::Zero(horizon_len * n, n_variables);
-  B_roof_reduced = B_roof * U;
-
-  // Q_roof matrix
-  // n = number of system states
-  // Q = n*n
-  //     diagonal, penalizing control errors
-  // Q_roof = [Q,   0,   ...,  0;
-  //           0,   Q,   ...,  0;
-  //           ..., ..., Q,    0;
-  //           0,   ..., ...,  S];
-
-  Q_roof = Eigen::MatrixXd::Zero(horizon_len * n, horizon_len * n);
-
-  for (int i = 0; i < horizon_len; i++) {
-
-    Q_roof.block(i * n, i * n, n, n) = Q;
-  }
-
-  /* Q_roof.block((horizon_len - 1) * n, (horizon_len - 1) * n, n, n) = S; */
-
-  // P_roof matrix
-  // penalizing control actions
-  // P_roof = [P,   0,   ...,  0;
-  //           0,   P,   ...,  0;
-  //           ..., ..., P,    0;
-  //           0,   ..., ...,  P];
-
-  P_roof = Eigen::MatrixXd::Zero(n_variables, n_variables);
-
-  tempIdx = 0;
-  for (unsigned long i = 0; i < UvaluesList.size(); i++) {
-
-    P_roof.block(i * m, i * m, m, m) = P * UvaluesList[i];
-  }
-
-  // initialize other matrices
-  x                = Eigen::MatrixXd::Zero(n, 1);
-  X_0              = Eigen::MatrixXd::Zero(horizon_len * n, 1);
-  c                = Eigen::MatrixXd::Zero(n_variables * m, 1);
-  u_cf             = Eigen::MatrixXd::Zero(n_variables * m, 1);
-  u                = Eigen::MatrixXd::Zero(horizon_len * m, 1);
-  states           = Eigen::MatrixXd::Zero(horizon_len * n, 1);
-  H_inv            = Eigen::MatrixXd::Zero(n_variables, n_variables);
-  H                = Eigen::MatrixXd::Zero(n_variables, n_variables);
-  outputTrajectory = Eigen::MatrixXd::Zero(horizon_len * n, 1);
-
-  // calculate H
-  H = B_roof_reduced.transpose() * Q_roof * B_roof_reduced + P_roof;
-
-  // create the inversion of H matrix - the main matrix of the qudratic form
-  H_inv = (0.5 * H).inverse();
+  cvx_x = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
+  cvx_y = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -506,45 +372,54 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // |                     MPC lateral control                    |
   // --------------------------------------------------------------
 
+  // | ------------------- initial conditions ------------------- |
+
+  Eigen::MatrixXd initial_x = Eigen::MatrixXd::Zero(3, 1);
+  initial_x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, 0;
+
+  Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
+  initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, 0;
+
+  cvx_x->setInitialState(initial_x);
+  cvx_y->setInitialState(initial_y);
+
+  // | ---------------------- set reference --------------------- |
+
+  Eigen::MatrixXd mpc_reference_x = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
+  Eigen::MatrixXd mpc_reference_y = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
+
   // prepare the full reference vector
-  for (int i = 0; i < horizon_len; i++) {
+  for (int i = 0; i < horizon_length_; i++) {
 
-    mpc_reference(i * n, 0)     = reference->position.x;
-    mpc_reference(i * n + 1, 0) = 0;
-    mpc_reference(i * n + 2, 0) = 0;
-    mpc_reference(i * n + 3, 0) = reference->position.y;
-    mpc_reference(i * n + 4, 0) = 0;
-    mpc_reference(i * n + 5, 0) = 0;
+    mpc_reference_x(i * n, 0)     = reference->position.x;
+    mpc_reference_x(i * n + 1, 0) = reference->velocity.x;
+    mpc_reference_x(i * n + 2, 0) = reference->acceleration.x;
+
+    mpc_reference_y(i * n, 0)     = reference->position.y;
+    mpc_reference_y(i * n + 1, 0) = reference->velocity.y;
+    mpc_reference_y(i * n + 2, 0) = reference->acceleration.y;
   }
 
-  // set the initial condition
-  x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, 0, odometry->pose.pose.position.y, odometry->twist.twist.linear.y, 0;
+  cvx_x->loadReference(mpc_reference_x);
+  cvx_y->loadReference(mpc_reference_y);
 
-  // prepare the linear part of the qudratic function
-  X_0 = (A_roof * x - mpc_reference).transpose();
+  // | --------------------- set constraints -------------------- |
 
-  Eigen::MatrixXd temp(1, n * horizon_len);
+  cvx_x->setLimits(max_speed_, max_acceleration_, max_jerk_);
+  cvx_y->setLimits(max_speed_, max_acceleration_, max_jerk_);
 
-  // do clever product of X_0 and Q_roof
-  for (int i = 0; i < n * horizon_len; i++) {
-    if (i == 0 || i == (n * horizon_len - 1))
-      temp(0, i) = X_0(0, i) * Q_roof(i, i);
-    else
-      temp(0, i) = X_0(0, i - 1) * Q_roof(i, i - 1) + X_0(0, i) * Q_roof(i, i) + X_0(0, i + 1) * Q_roof(i, i + 1);
-  }
+  // | ------------------------ optimize ------------------------ |
 
-  c = (temp * B_roof_reduced).transpose();
+  [[maybe_unused]] int iters_x = cvx_x->solveCvx();
+  [[maybe_unused]] int iters_y = cvx_y->solveCvx();
 
-  // calculate the control actions
-  u_cf = H_inv * (c * (-0.5));
+  // | ------------------ retrieve the outputs ------------------ |
 
-  // stretch the control vector to its full length
-  u = U * u_cf;
+  double cvx_y_u = 0;
+  double cvx_x_u = 0;
 
-  /* ROS_INFO("[MpcController]: u[0] = %.2f, u[1] = %.2f", u(0), u(1)); */
-
-  // simulate the whole trajectory
-  states = A_roof * x + B_roof * u;
+  cvx_x_u = cvx_x->getFirstControlInput();
+  cvx_y_u = cvx_y->getFirstControlInput();
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -652,7 +527,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   /* tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(-feed_forward[1], feed_forward[0], reference->yaw); */
 
   /* Ra << reference->acceleration.x + u(0), reference->acceleration.y + u(1), reference->acceleration.z; */
-  Ra << u(0), u(1), reference->acceleration.z;
+  Ra << cvx_x_u, cvx_y_u, reference->acceleration.z;
 
   Eigen::Vector3d f      = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
   Eigen::Vector3d f_norm = f.normalized();

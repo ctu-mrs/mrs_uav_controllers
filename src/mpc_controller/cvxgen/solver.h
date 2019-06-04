@@ -21,13 +21,13 @@
 #endif
 #endif
 /* Space must be allocated somewhere (testsolver.c, csolve.c or your own */
-/* program) for the global variables vars, params, work and settings. */
+/* program) for the global variables varsController, paramsController, workController and settingsController. */
 /* At the bottom of this file, they are externed. */
 #ifndef ZERO_LIBRARY_MODE
 #include <math.h>
-#define pm(A, m, n) printmatrix(#A, A, m, n, 1)
+#define pm(A, m, n) printmatrixd_controller(#A, A, m, n, 1)
 #endif
-typedef struct Params_t {
+typedef struct ParamsController_t {
   double x_ss_1[3];
   double Q[3];
   double x_ss_2[3];
@@ -67,8 +67,8 @@ typedef struct Params_t {
   double x_max_1[1];
   double *x_ss[27];
   double *x[1];
-} Params;
-typedef struct Vars_t {
+} ParamsController;
+typedef struct VarsController_t {
   double *x_1; /* 3 rows. */
   double *x_2; /* 3 rows. */
   double *x_3; /* 3 rows. */
@@ -201,8 +201,8 @@ typedef struct Vars_t {
   double *t_78; /* 1 rows. */
   double *x[27];
   double *u[26];
-} Vars;
-typedef struct Workspace_t {
+} VarsController;
+typedef struct WorkspaceController_t {
   double h[234];
   double s_inv[234];
   double s_inv_z[234];
@@ -255,8 +255,8 @@ typedef struct Workspace_t {
   double quad_653656117248[1];
   double quad_758104227840[1];
   int converged;
-} Workspace;
-typedef struct Settings_t {
+} WorkspaceController;
+typedef struct SettingsController_t {
   double resid_tol;
   double eps;
   int max_iters;
@@ -271,61 +271,61 @@ typedef struct Settings_t {
   int debug;
   /* For regularization. Minimum value of abs(D_ii) in the kkt D factor. */
   double kkt_reg;
-} Settings;
-extern Vars vars;
-extern Params params;
-extern Workspace work;
-extern Settings settings;
+} SettingsController;
+extern VarsController varsController;
+extern ParamsController paramsController;
+extern WorkspaceController workController;
+extern SettingsController settingsController;
 /* Function definitions in ldl.c: */
-void ldl_solve(double *target, double *var);
-void ldl_factor(void);
-double check_factorization(void);
-void matrix_multiply(double *result, double *source);
-double check_residual(double *target, double *multiplicand);
-void fill_KKT(void);
+void ldl_solve_controller(double *target, double *var);
+void ldl_factor_controller(void);
+double check_factorization_controller(void);
+void matrix_multiply_controller(double *result, double *source);
+double check_residual_controller(double *target, double *multiplicand);
+void fill_KKT_controller(void);
 
 /* Function definitions in matrix_support.c: */
-void multbymA(double *lhs, double *rhs);
-void multbymAT(double *lhs, double *rhs);
-void multbymG(double *lhs, double *rhs);
-void multbymGT(double *lhs, double *rhs);
-void multbyP(double *lhs, double *rhs);
-void fillq(void);
-void fillh(void);
-void fillb(void);
-void pre_ops(void);
+void multbymA_controller(double *lhs, double *rhs);
+void multbymAT_controller(double *lhs, double *rhs);
+void multbymG_controller(double *lhs, double *rhs);
+void multbymGT_controller(double *lhs, double *rhs);
+void multbyP_controller(double *lhs, double *rhs);
+void fillq_controller(void);
+void fillh_controller(void);
+void fillb_controller(void);
+void pre_ops_controller(void);
 
 /* Function definitions in solver.c: */
-double eval_gap(void);
-void set_defaults(void);
-void setup_pointers(void);
-void setup_indexed_params(void);
-void setup_indexed_optvars(void);
-void setup_indexing(void);
-void set_start(void);
-double eval_objv(void);
-void fillrhs_aff(void);
-void fillrhs_cc(void);
-void refine(double *target, double *var);
-double calc_ineq_resid_squared(void);
-double calc_eq_resid_squared(void);
-void better_start(void);
-void fillrhs_start(void);
-long solve(void);
+double eval_gap_controller(void);
+void set_defaults_controller(void);
+void setup_pointers_controller(void);
+void setup_indexed_paramsController_controller(void);
+void setup_indexed_optvarsController_controller(void);
+void setup_indexing_controller(void);
+void set_start_controller(void);
+double eval_objv_controller(void);
+void fillrhs_aff_controller(void);
+void fillrhs_cc_controller(void);
+void refine_controller(double *target, double *var);
+double calc_ineq_resid_squared_controller(void);
+double calc_eq_resid_squared_controller(void);
+void better_start_controller(void);
+void fillrhs_start_controller(void);
+long solve_controller(void);
 
 /* Function definitions in testsolver.c: */
-int main(int argc, char **argv);
-void load_default_data(void);
+int main_controller(int argc, char **argv);
+void load_default_data_controller(void);
 
 /* Function definitions in util.c: */
-void tic(void);
-float toc(void);
-float tocq(void);
-void printmatrix(char *name, double *A, int m, int n, int sparse);
-double unif(double lower, double upper);
-float ran1(long*idum, int reset);
-float randn_internal(long *idum, int reset);
-double randn(void);
-void reset_rand(void);
+void tic_controller(void);
+float toc_controller(void);
+float tocq_controller(void);
+void printmatrixd_controller(char *name, double *A, int m, int n, int sparse);
+double unif_controller(double lower, double upper);
+float ran1d_controller(long*idum, int reset);
+float randn_internal_controller(long *idum, int reset);
+double randn_controller(void);
+void reset_rand_controller(void);
 
 #endif
