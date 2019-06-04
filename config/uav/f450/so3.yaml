@@ -1,7 +1,7 @@
 default_gains:
 
   # Gains in this file should not be changed, since they are not used most of the times.
-  # Gains which are actually used are in the MavManager package under the GainManager configs
+  # Gains which are actually used are in the mrs_uav_manager package under the gain_manager configs
 
   horizontal:
     kp: 3.2
@@ -25,11 +25,11 @@ default_gains:
 
     attitude:
       kq: 5.0
-      kw: 2.0
+      kw: 1.0
 
   weight_estimator:
     km: 1.0
-    km_lim: 2.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+    km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
 lateral_mute_coefficitent: 0.0
 

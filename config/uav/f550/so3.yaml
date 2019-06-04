@@ -1,15 +1,15 @@
 default_gains:
 
   # Gains in this file should not be changed, since they are not used most of the times.
-  # Gains which are actually used are in the MavManager package under the GainManager configs
+  # Gains which are actually used are in the mrs_uav_manager package under the gain_manager configs
 
   horizontal:
-    kp: 1.3
-    kv: 0.9
+    kp: 2.7
+    kv: 1.7
     ka: 1.0
 
     attitude:
-      kq: 5.0
+      kq: 8.0
       kw: 0.0
 
     kib: 0.1
@@ -24,7 +24,7 @@ default_gains:
     ka: 1.0
 
     attitude:
-      kq: 5.0
+      kq: 4.0
       kw: 1.0
 
   weight_estimator:

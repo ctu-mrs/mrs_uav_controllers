@@ -50,17 +50,17 @@ attitude_vertical_feedback:
     horizontal:
 
       attitude:
-        kq: 10.0
-        kw: 1.0
+        kq: 6.0
+        kw: 0.0
 
     vertical:
-      kp: 40.0
-      kv: 20.0
+      kp: 15.0
+      kv: 8.0
       ka: 1.0
 
       attitude:
-        kq: 20.0
-        kw: 5.0
+        kq: 10.0
+        kw: 1.0
 
     weight_estimator:
       km: 1.0
