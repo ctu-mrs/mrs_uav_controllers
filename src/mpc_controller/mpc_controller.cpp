@@ -479,30 +479,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   }
 
   // --------------------------------------------------------------
-  // |         mpc acceleration -> controller feed forward        |
-  // --------------------------------------------------------------
-
-  // calculate the feed forwared acceleration
-  /* Eigen::Vector3d mpc_feed_forward(asin((-u(1) * cos(pitch) * cos(roll)) / g_), asin((u(0) * cos(pitch) * cos(roll)) / g_), 0); */
-
-  // --------------------------------------------------------------
   // |                recalculate the hover thrust                |
   // --------------------------------------------------------------
 
   hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
-
-  // --------------------------------------------------------------
-  // |                  feed forward from tracker                 |
-  // --------------------------------------------------------------
-
-  /* double total_mass = uav_mass_ + uav_mass_difference; */
-
-  /* double Ft = sqrt(pow(total_mass * (g_ + reference->acceleration.z), 2) + pow(total_mass * (reference->acceleration.x + u(0)), 2) + */
-  /*                  pow(total_mass * (reference->acceleration.y + u(1)), 2)); */
-
-  // calculate the feed forwared acceleration
-  /* Eigen::Vector3d feed_forward(atan(total_mass * (reference->acceleration.x + u(0)) / Ft), atan(total_mass * (reference->acceleration.y + u(1)) / Ft), */
-  /*                              reference->acceleration.z); */
 
   // --------------------------------------------------------------
   // |                 desired orientation matrix                 |
@@ -511,8 +491,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
   Eigen::Vector3d Ip(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
-
-  /* tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(-feed_forward[1], feed_forward[0], reference->yaw); */
 
   Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z;
   /* Ra << cvx_x_u, cvx_y_u, reference->acceleration.z; */
