@@ -110,8 +110,10 @@ void CvxWrapper::loadReference(MatrixXd& reference) {
 /* solveCvx() //{ */
 
 int CvxWrapper::solveCvx() {
-  return solve_controller();
+
   paramsController.u_last[0] = *(varsController.u_0);
+
+  return solve_controller();
 }
 //}
 
