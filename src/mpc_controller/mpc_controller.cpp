@@ -108,7 +108,6 @@ private:
 
 private:
   int n;  // number of states
-  int m;  // number of inputs
 
   double dt1, dt2;
 
@@ -116,8 +115,8 @@ private:
 
   double max_speed_, max_acceleration_, max_jerk_;
 
-  mrs_controllers::mpc_controller::CvxWrapper *cvx_x;
-  mrs_controllers::mpc_controller::CvxWrapper *cvx_y;
+  mrs_controllers::mpc_controller::CvxWrapperX *cvx_x;
+  mrs_controllers::mpc_controller::CvxWrapperY *cvx_y;
 
   bool cvx_verbose_ = false;
   int  cvx_max_iterations_;
@@ -173,7 +172,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
   // load the dynamicall model parameters
   param_loader.load_param("mpc_model/number_of_states", n);
-  param_loader.load_param("mpc_model/number_of_inputs", m);
   param_loader.load_param("mpc_model/dt1", dt1);
   param_loader.load_param("mpc_model/dt2", dt2);
 
@@ -246,8 +244,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // |                       prepare cvxgen                       |
   // --------------------------------------------------------------
 
-  cvx_x = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
-  cvx_y = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
+  cvx_x = new mrs_controllers::mpc_controller::CvxWrapperX(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
+  cvx_y = new mrs_controllers::mpc_controller::CvxWrapperY(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -375,13 +373,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // | ------------------- initial conditions ------------------- |
 
   Eigen::MatrixXd initial_x = Eigen::MatrixXd::Zero(3, 1);
-  initial_x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, 0;
+  initial_x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, reference->acceleration.x;
 
   Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
-  initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, 0;
-
-  cvx_x->setInitialState(initial_x);
-  cvx_y->setInitialState(initial_y);
+  initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, reference->acceleration.y;
 
   // | ---------------------- set reference --------------------- |
 
@@ -391,35 +386,28 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // prepare the full reference vector
   for (int i = 0; i < horizon_length_; i++) {
 
-    mpc_reference_x(i * n, 0)     = reference->position.x;
-    mpc_reference_x(i * n + 1, 0) = reference->velocity.x;
-    mpc_reference_x(i * n + 2, 0) = reference->acceleration.x;
+    mpc_reference_x((i * n) + 0, 0) = reference->position.x;
+    mpc_reference_x((i * n) + 1, 0) = reference->velocity.x;
+    mpc_reference_x((i * n) + 2, 0) = reference->acceleration.x;
 
-    mpc_reference_y(i * n, 0)     = reference->position.y;
-    mpc_reference_y(i * n + 1, 0) = reference->velocity.y;
-    mpc_reference_y(i * n + 2, 0) = reference->acceleration.y;
+    mpc_reference_y((i * n) + 0, 0) = reference->position.y;
+    mpc_reference_y((i * n) + 1, 0) = reference->velocity.y;
+    mpc_reference_y((i * n) + 2, 0) = reference->acceleration.y;
   }
-
-  cvx_x->loadReference(mpc_reference_x);
-  cvx_y->loadReference(mpc_reference_y);
-
-  // | --------------------- set constraints -------------------- |
-
-  cvx_x->setLimits(max_speed_, max_acceleration_, max_jerk_);
-  cvx_y->setLimits(max_speed_, max_acceleration_, max_jerk_);
 
   // | ------------------------ optimize ------------------------ |
 
+  cvx_x->loadReference(mpc_reference_x);
+  cvx_x->setLimits(max_speed_, max_acceleration_, max_jerk_, dt1, dt2);
+  cvx_x->setInitialState(initial_x);
   [[maybe_unused]] int iters_x = cvx_x->solveCvx();
+  double               cvx_x_u = cvx_x->getFirstControlInput();
+
+  cvx_y->loadReference(mpc_reference_y);
+  cvx_y->setLimits(max_speed_, max_acceleration_, max_jerk_, dt1, dt2);
+  cvx_y->setInitialState(initial_y);
   [[maybe_unused]] int iters_y = cvx_y->solveCvx();
-
-  // | ------------------ retrieve the outputs ------------------ |
-
-  double cvx_y_u = 0;
-  double cvx_x_u = 0;
-
-  cvx_x_u = cvx_x->getFirstControlInput();
-  cvx_y_u = cvx_y->getFirstControlInput();
+  double               cvx_y_u = cvx_y->getFirstControlInput();
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -526,8 +514,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   /* tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(-feed_forward[1], feed_forward[0], reference->yaw); */
 
-  /* Ra << reference->acceleration.x + u(0), reference->acceleration.y + u(1), reference->acceleration.z; */
-  Ra << cvx_x_u, cvx_y_u, reference->acceleration.z;
+  Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z;
+  /* Ra << cvx_x_u, cvx_y_u, reference->acceleration.z; */
 
   Eigen::Vector3d f      = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
   Eigen::Vector3d f_norm = f.normalized();
@@ -609,7 +597,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     // antiwindup
     double temp_gain = kibxy;
     if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
-      kibxy = 0;
+      temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for body integral kicks in");
     }
     Ib_b -= temp_gain * Ep_body * dt;
@@ -667,7 +655,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     // antiwindup
     double temp_gain = kiwxy;
     if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
-      kibxy = 0;
+      temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for world integral kicks in");
     }
     Iw_w -= temp_gain * Ep.head(2) * dt;

@@ -1,29 +1,20 @@
 mpc_model:
 
   number_of_states: 3
-  number_of_inputs: 1
 
   dt1: 0.01
   dt2: 0.05
-
-  A: [1, 0.01, 0,
-      0, 1, 0.01,
-      0, 0, 0]
-
-  B: [0,
-      0,
-      1]
 
 mpc_parameters:
 
   horizon_length: 26
 
-  Q: [1, 0, 0] # state error penalization
-  S: [1, 0, 0] # last state error penalization
+  Q: [500, 100, 100] # state error penalization
+  S: [1000, 300, 300] # last state error penalization
 
-  max_speed: 1.0
-  max_acceleration: 1.0
-  max_jerk: 1.0
+  max_speed: 5.0
+  max_acceleration: 2.0
+  max_jerk: 10.0
 
 cvx_parameters:
 
@@ -45,8 +36,8 @@ attitude_vertical_feedback:
     horizontal:
 
       attitude:
-        kq: 10.0
-        kw: 1.0
+        kq: 13.0
+        kw: 0.0
 
     vertical:
       kp: 40.0

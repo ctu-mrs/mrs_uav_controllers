@@ -1,4 +1,4 @@
-/* Produced by CVXGEN, 2019-06-04 10:54:42 -0400.  */
+/* Produced by CVXGEN, 2019-06-05 08:31:43 -0400.  */
 /* CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com. */
 /* The code in this file is Copyright (C) 2006-2017 Jacob Mattingley. */
 /* CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial */
@@ -8,17 +8,17 @@
 /* Description: mex-able file for running cvxgen solver. */
 #include "mex.h"
 #include "solver.h"
-VarsController varsController;
-ParamsController paramsController;
-WorkspaceController workController;
-SettingsController settingsController;
+VarsControllerX varsControllerX;
+ParamsControllerX paramsControllerX;
+WorkspaceControllerX workControllerX;
+SettingsControllerX settingsControllerX;
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   int i, j;
   mxArray *xm, *cell, *xm_cell;
   double *src;
   double *dest;
   double *dest_cell;
-  int valid_varsController;
+  int valid_varsControllerX;
   int steps;
   int this_var_errors;
   int warned_diags;
@@ -32,35 +32,35 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   /* Avoid compiler warnings of unused variables by using a dummy assignment. */
   warned_diags = j = 0;
   extra_solves = 0;
-  set_defaults_controller();
+  set_defaults_controllerX();
   /* Check we got the right number of arguments. */
   if (nrhs == 0)
     mexErrMsgTxt("Not enough arguments: You need to specify at least the parameters.\n");
   if (nrhs > 1) {
-    /* Assume that the second argument is the settingsController. */
+    /* Assume that the second argument is the settingsControllerX. */
     if (mxGetField(prhs[1], 0, "eps") != NULL)
-      settingsController.eps = *mxGetPr(mxGetField(prhs[1], 0, "eps"));
+      settingsControllerX.eps = *mxGetPr(mxGetField(prhs[1], 0, "eps"));
     if (mxGetField(prhs[1], 0, "max_iters") != NULL)
-      settingsController.max_iters = *mxGetPr(mxGetField(prhs[1], 0, "max_iters"));
+      settingsControllerX.max_iters = *mxGetPr(mxGetField(prhs[1], 0, "max_iters"));
     if (mxGetField(prhs[1], 0, "refine_steps") != NULL)
-      settingsController.refine_steps = *mxGetPr(mxGetField(prhs[1], 0, "refine_steps"));
+      settingsControllerX.refine_steps = *mxGetPr(mxGetField(prhs[1], 0, "refine_steps"));
     if (mxGetField(prhs[1], 0, "verbose") != NULL)
-      settingsController.verbose = *mxGetPr(mxGetField(prhs[1], 0, "verbose"));
+      settingsControllerX.verbose = *mxGetPr(mxGetField(prhs[1], 0, "verbose"));
     if (mxGetField(prhs[1], 0, "better_start") != NULL)
-      settingsController.better_start = *mxGetPr(mxGetField(prhs[1], 0, "better_start"));
+      settingsControllerX.better_start = *mxGetPr(mxGetField(prhs[1], 0, "better_start"));
     if (mxGetField(prhs[1], 0, "verbose_refinement") != NULL)
-      settingsController.verbose_refinement = *mxGetPr(mxGetField(prhs[1], 0,
+      settingsControllerX.verbose_refinement = *mxGetPr(mxGetField(prhs[1], 0,
             "verbose_refinement"));
     if (mxGetField(prhs[1], 0, "debug") != NULL)
-      settingsController.debug = *mxGetPr(mxGetField(prhs[1], 0, "debug"));
+      settingsControllerX.debug = *mxGetPr(mxGetField(prhs[1], 0, "debug"));
     if (mxGetField(prhs[1], 0, "kkt_reg") != NULL)
-      settingsController.kkt_reg = *mxGetPr(mxGetField(prhs[1], 0, "kkt_reg"));
+      settingsControllerX.kkt_reg = *mxGetPr(mxGetField(prhs[1], 0, "kkt_reg"));
     if (mxGetField(prhs[1], 0, "s_init") != NULL)
-      settingsController.s_init = *mxGetPr(mxGetField(prhs[1], 0, "s_init"));
+      settingsControllerX.s_init = *mxGetPr(mxGetField(prhs[1], 0, "s_init"));
     if (mxGetField(prhs[1], 0, "z_init") != NULL)
-      settingsController.z_init = *mxGetPr(mxGetField(prhs[1], 0, "z_init"));
+      settingsControllerX.z_init = *mxGetPr(mxGetField(prhs[1], 0, "z_init"));
     if (mxGetField(prhs[1], 0, "resid_tol") != NULL)
-      settingsController.resid_tol = *mxGetPr(mxGetField(prhs[1], 0, "resid_tol"));
+      settingsControllerX.resid_tol = *mxGetPr(mxGetField(prhs[1], 0, "resid_tol"));
     if (mxGetField(prhs[1], 0, "extra_solves") != NULL)
       extra_solves = *mxGetPr(mxGetField(prhs[1], 0, "extra_solves"));
     else
@@ -68,11 +68,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     if (mxGetField(prhs[1], 0, "prepare_for_c") != NULL)
       prepare_for_c = *mxGetPr(mxGetField(prhs[1], 0, "prepare_for_c"));
   }
-  valid_varsController = 0;
+  valid_varsControllerX = 0;
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "A");
   if (xm == NULL) {
-    printf("could not find paramsController.A.\n");
+    printf("could not find paramsControllerX.A.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 3))) {
       printf("A must be size (3,3), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -91,19 +91,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.A;
+      dest = paramsControllerX.A;
       src = mxGetPr(xm);
       dest[0] = src[0];  /* (1,1) entry. */
       dest[1] = src[4];  /* (2,2) entry. */
       dest[2] = src[3];  /* (1,2) entry. */
       dest[3] = src[7];  /* (2,3) entry. */
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "Af");
   if (xm == NULL) {
-    printf("could not find paramsController.Af.\n");
+    printf("could not find paramsControllerX.Af.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 3))) {
       printf("Af must be size (3,3), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -122,19 +122,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.Af;
+      dest = paramsControllerX.Af;
       src = mxGetPr(xm);
       dest[0] = src[0];  /* (1,1) entry. */
       dest[1] = src[4];  /* (2,2) entry. */
       dest[2] = src[3];  /* (1,2) entry. */
       dest[3] = src[7];  /* (2,3) entry. */
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "B");
   if (xm == NULL) {
-    printf("could not find paramsController.B.\n");
+    printf("could not find paramsControllerX.B.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("B must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -153,16 +153,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.B;
+      dest = paramsControllerX.B;
       src = mxGetPr(xm);
       dest[0] = src[2];  /* (3,1) entry. */
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "Bf");
   if (xm == NULL) {
-    printf("could not find paramsController.Bf.\n");
+    printf("could not find paramsControllerX.Bf.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("Bf must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -181,16 +181,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.Bf;
+      dest = paramsControllerX.Bf;
       src = mxGetPr(xm);
       dest[0] = src[2];  /* (3,1) entry. */
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "Q");
   if (xm == NULL) {
-    printf("could not find paramsController.Q.\n");
+    printf("could not find paramsControllerX.Q.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 3))) {
       printf("Q must be size (3,3), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -209,7 +209,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.Q;
+      dest = paramsControllerX.Q;
       src = mxGetPr(xm);
       warned_diags = 0;
       for (i = 0; i < 3; i++) {
@@ -223,13 +223,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
           src++;
         }
       }
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "Q_last");
   if (xm == NULL) {
-    printf("could not find paramsController.Q_last.\n");
+    printf("could not find paramsControllerX.Q_last.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 3))) {
       printf("Q_last must be size (3,3), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -248,7 +248,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.Q_last;
+      dest = paramsControllerX.Q_last;
       src = mxGetPr(xm);
       warned_diags = 0;
       for (i = 0; i < 3; i++) {
@@ -262,13 +262,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
           src++;
         }
       }
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "du_max");
   if (xm == NULL) {
-    printf("could not find paramsController.du_max.\n");
+    printf("could not find paramsControllerX.du_max.\n");
   } else {
     if (!((mxGetM(xm) == 1) && (mxGetN(xm) == 1))) {
       printf("du_max must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -287,17 +287,46 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.du_max;
+      dest = paramsControllerX.du_max;
       src = mxGetPr(xm);
       for (i = 0; i < 1; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
+    }
+  }
+  this_var_errors = 0;
+  xm = mxGetField(prhs[0], 0, "du_max_f");
+  if (xm == NULL) {
+    printf("could not find paramsControllerX.du_max_f.\n");
+  } else {
+    if (!((mxGetM(xm) == 1) && (mxGetN(xm) == 1))) {
+      printf("du_max_f must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
+      this_var_errors++;
+    }
+    if (mxIsComplex(xm)) {
+      printf("parameter du_max_f must be real.\n");
+      this_var_errors++;
+    }
+    if (!mxIsClass(xm, "double")) {
+      printf("parameter du_max_f must be a full matrix of doubles.\n");
+      this_var_errors++;
+    }
+    if (mxIsSparse(xm)) {
+      printf("parameter du_max_f must be a full matrix.\n");
+      this_var_errors++;
+    }
+    if (this_var_errors == 0) {
+      dest = paramsControllerX.du_max_f;
+      src = mxGetPr(xm);
+      for (i = 0; i < 1; i++)
+        *dest++ = *src++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "u_last");
   if (xm == NULL) {
-    printf("could not find paramsController.u_last.\n");
+    printf("could not find paramsControllerX.u_last.\n");
   } else {
     if (!((mxGetM(xm) == 1) && (mxGetN(xm) == 1))) {
       printf("u_last must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -316,17 +345,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.u_last;
+      dest = paramsControllerX.u_last;
       src = mxGetPr(xm);
       for (i = 0; i < 1; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "u_max");
   if (xm == NULL) {
-    printf("could not find paramsController.u_max.\n");
+    printf("could not find paramsControllerX.u_max.\n");
   } else {
     if (!((mxGetM(xm) == 1) && (mxGetN(xm) == 1))) {
       printf("u_max must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -345,17 +374,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.u_max;
+      dest = paramsControllerX.u_max;
       src = mxGetPr(xm);
       for (i = 0; i < 1; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "x_0");
   if (xm == NULL) {
-    printf("could not find paramsController.x_0.\n");
+    printf("could not find paramsControllerX.x_0.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_0 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -374,17 +403,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_0;
+      dest = paramsControllerX.x_0;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
   xm = mxGetField(prhs[0], 0, "x_max_1");
   if (xm == NULL) {
-    printf("could not find paramsController.x_max_1.\n");
+    printf("could not find paramsControllerX.x_max_1.\n");
   } else {
     if (!((mxGetM(xm) == 1) && (mxGetN(xm) == 1))) {
       printf("x_max_1 must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -403,11 +432,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_max_1;
+      dest = paramsControllerX.x_max_1;
       src = mxGetPr(xm);
       for (i = 0; i < 1; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -419,7 +448,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 0);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_1 or paramsController.x_ss{1}.\n");
+    printf("could not find paramsControllerX.x_ss_1 or paramsControllerX.x_ss{1}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_1 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -438,11 +467,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_1;
+      dest = paramsControllerX.x_ss_1;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -454,7 +483,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 1);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_2 or paramsController.x_ss{2}.\n");
+    printf("could not find paramsControllerX.x_ss_2 or paramsControllerX.x_ss{2}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_2 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -473,11 +502,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_2;
+      dest = paramsControllerX.x_ss_2;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -489,7 +518,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 2);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_3 or paramsController.x_ss{3}.\n");
+    printf("could not find paramsControllerX.x_ss_3 or paramsControllerX.x_ss{3}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_3 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -508,11 +537,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_3;
+      dest = paramsControllerX.x_ss_3;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -524,7 +553,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 3);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_4 or paramsController.x_ss{4}.\n");
+    printf("could not find paramsControllerX.x_ss_4 or paramsControllerX.x_ss{4}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_4 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -543,11 +572,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_4;
+      dest = paramsControllerX.x_ss_4;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -559,7 +588,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 4);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_5 or paramsController.x_ss{5}.\n");
+    printf("could not find paramsControllerX.x_ss_5 or paramsControllerX.x_ss{5}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_5 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -578,11 +607,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_5;
+      dest = paramsControllerX.x_ss_5;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -594,7 +623,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 5);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_6 or paramsController.x_ss{6}.\n");
+    printf("could not find paramsControllerX.x_ss_6 or paramsControllerX.x_ss{6}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_6 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -613,11 +642,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_6;
+      dest = paramsControllerX.x_ss_6;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -629,7 +658,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 6);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_7 or paramsController.x_ss{7}.\n");
+    printf("could not find paramsControllerX.x_ss_7 or paramsControllerX.x_ss{7}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_7 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -648,11 +677,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_7;
+      dest = paramsControllerX.x_ss_7;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -664,7 +693,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 7);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_8 or paramsController.x_ss{8}.\n");
+    printf("could not find paramsControllerX.x_ss_8 or paramsControllerX.x_ss{8}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_8 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -683,11 +712,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_8;
+      dest = paramsControllerX.x_ss_8;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -699,7 +728,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 8);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_9 or paramsController.x_ss{9}.\n");
+    printf("could not find paramsControllerX.x_ss_9 or paramsControllerX.x_ss{9}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_9 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -718,11 +747,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_9;
+      dest = paramsControllerX.x_ss_9;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -734,7 +763,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 9);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_10 or paramsController.x_ss{10}.\n");
+    printf("could not find paramsControllerX.x_ss_10 or paramsControllerX.x_ss{10}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_10 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -753,11 +782,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_10;
+      dest = paramsControllerX.x_ss_10;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -769,7 +798,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 10);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_11 or paramsController.x_ss{11}.\n");
+    printf("could not find paramsControllerX.x_ss_11 or paramsControllerX.x_ss{11}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_11 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -788,11 +817,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_11;
+      dest = paramsControllerX.x_ss_11;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -804,7 +833,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 11);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_12 or paramsController.x_ss{12}.\n");
+    printf("could not find paramsControllerX.x_ss_12 or paramsControllerX.x_ss{12}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_12 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -823,11 +852,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_12;
+      dest = paramsControllerX.x_ss_12;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -839,7 +868,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 12);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_13 or paramsController.x_ss{13}.\n");
+    printf("could not find paramsControllerX.x_ss_13 or paramsControllerX.x_ss{13}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_13 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -858,11 +887,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_13;
+      dest = paramsControllerX.x_ss_13;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -874,7 +903,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 13);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_14 or paramsController.x_ss{14}.\n");
+    printf("could not find paramsControllerX.x_ss_14 or paramsControllerX.x_ss{14}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_14 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -893,11 +922,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_14;
+      dest = paramsControllerX.x_ss_14;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -909,7 +938,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 14);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_15 or paramsController.x_ss{15}.\n");
+    printf("could not find paramsControllerX.x_ss_15 or paramsControllerX.x_ss{15}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_15 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -928,11 +957,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_15;
+      dest = paramsControllerX.x_ss_15;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -944,7 +973,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 15);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_16 or paramsController.x_ss{16}.\n");
+    printf("could not find paramsControllerX.x_ss_16 or paramsControllerX.x_ss{16}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_16 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -963,11 +992,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_16;
+      dest = paramsControllerX.x_ss_16;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -979,7 +1008,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 16);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_17 or paramsController.x_ss{17}.\n");
+    printf("could not find paramsControllerX.x_ss_17 or paramsControllerX.x_ss{17}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_17 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -998,11 +1027,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_17;
+      dest = paramsControllerX.x_ss_17;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1014,7 +1043,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 17);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_18 or paramsController.x_ss{18}.\n");
+    printf("could not find paramsControllerX.x_ss_18 or paramsControllerX.x_ss{18}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_18 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1033,11 +1062,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_18;
+      dest = paramsControllerX.x_ss_18;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1049,7 +1078,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 18);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_19 or paramsController.x_ss{19}.\n");
+    printf("could not find paramsControllerX.x_ss_19 or paramsControllerX.x_ss{19}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_19 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1068,11 +1097,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_19;
+      dest = paramsControllerX.x_ss_19;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1084,7 +1113,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 19);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_20 or paramsController.x_ss{20}.\n");
+    printf("could not find paramsControllerX.x_ss_20 or paramsControllerX.x_ss{20}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_20 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1103,11 +1132,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_20;
+      dest = paramsControllerX.x_ss_20;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1119,7 +1148,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 20);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_21 or paramsController.x_ss{21}.\n");
+    printf("could not find paramsControllerX.x_ss_21 or paramsControllerX.x_ss{21}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_21 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1138,11 +1167,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_21;
+      dest = paramsControllerX.x_ss_21;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1154,7 +1183,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 21);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_22 or paramsController.x_ss{22}.\n");
+    printf("could not find paramsControllerX.x_ss_22 or paramsControllerX.x_ss{22}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_22 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1173,11 +1202,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_22;
+      dest = paramsControllerX.x_ss_22;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1189,7 +1218,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 22);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_23 or paramsController.x_ss{23}.\n");
+    printf("could not find paramsControllerX.x_ss_23 or paramsControllerX.x_ss{23}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_23 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1208,11 +1237,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_23;
+      dest = paramsControllerX.x_ss_23;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1224,7 +1253,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 23);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_24 or paramsController.x_ss{24}.\n");
+    printf("could not find paramsControllerX.x_ss_24 or paramsControllerX.x_ss{24}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_24 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1243,11 +1272,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_24;
+      dest = paramsControllerX.x_ss_24;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1259,7 +1288,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 24);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_25 or paramsController.x_ss{25}.\n");
+    printf("could not find paramsControllerX.x_ss_25 or paramsControllerX.x_ss{25}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_25 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1278,11 +1307,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_25;
+      dest = paramsControllerX.x_ss_25;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
   this_var_errors = 0;
@@ -1294,7 +1323,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       xm = mxGetCell(cell, 25);
   }
   if (xm == NULL) {
-    printf("could not find paramsController.x_ss_26 or paramsController.x_ss{26}.\n");
+    printf("could not find paramsControllerX.x_ss_26 or paramsControllerX.x_ss{26}.\n");
   } else {
     if (!((mxGetM(xm) == 3) && (mxGetN(xm) == 1))) {
       printf("x_ss_26 must be size (3,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
@@ -1313,114 +1342,116 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_ss_26;
+      dest = paramsControllerX.x_ss_26;
       src = mxGetPr(xm);
       for (i = 0; i < 3; i++)
         *dest++ = *src++;
-      valid_varsController++;
+      valid_varsControllerX++;
     }
   }
-  if (valid_varsController != 37) {
-    printf("Error: %d parameters are invalid.\n", 37 - valid_varsController);
+  if (valid_varsControllerX != 38) {
+    printf("Error: %d parameters are invalid.\n", 38 - valid_varsControllerX);
     mexErrMsgTxt("invalid parameters found.");
   }
   if (prepare_for_c) {
-    printf("settingsController.prepare_for_c == 1. thus, outputting for C.\n");
+    printf("settingsControllerX.prepare_for_c == 1. thus, outputting for C.\n");
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_1[%d] = %.6g;\n", i, paramsController.x_ss_1[i]);
+      printf("  paramsControllerX.x_ss_1[%d] = %.6g;\n", i, paramsControllerX.x_ss_1[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.Q[%d] = %.6g;\n", i, paramsController.Q[i]);
+      printf("  paramsControllerX.Q[%d] = %.6g;\n", i, paramsControllerX.Q[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_2[%d] = %.6g;\n", i, paramsController.x_ss_2[i]);
+      printf("  paramsControllerX.x_ss_2[%d] = %.6g;\n", i, paramsControllerX.x_ss_2[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_3[%d] = %.6g;\n", i, paramsController.x_ss_3[i]);
+      printf("  paramsControllerX.x_ss_3[%d] = %.6g;\n", i, paramsControllerX.x_ss_3[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_4[%d] = %.6g;\n", i, paramsController.x_ss_4[i]);
+      printf("  paramsControllerX.x_ss_4[%d] = %.6g;\n", i, paramsControllerX.x_ss_4[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_5[%d] = %.6g;\n", i, paramsController.x_ss_5[i]);
+      printf("  paramsControllerX.x_ss_5[%d] = %.6g;\n", i, paramsControllerX.x_ss_5[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_6[%d] = %.6g;\n", i, paramsController.x_ss_6[i]);
+      printf("  paramsControllerX.x_ss_6[%d] = %.6g;\n", i, paramsControllerX.x_ss_6[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_7[%d] = %.6g;\n", i, paramsController.x_ss_7[i]);
+      printf("  paramsControllerX.x_ss_7[%d] = %.6g;\n", i, paramsControllerX.x_ss_7[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_8[%d] = %.6g;\n", i, paramsController.x_ss_8[i]);
+      printf("  paramsControllerX.x_ss_8[%d] = %.6g;\n", i, paramsControllerX.x_ss_8[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_9[%d] = %.6g;\n", i, paramsController.x_ss_9[i]);
+      printf("  paramsControllerX.x_ss_9[%d] = %.6g;\n", i, paramsControllerX.x_ss_9[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_10[%d] = %.6g;\n", i, paramsController.x_ss_10[i]);
+      printf("  paramsControllerX.x_ss_10[%d] = %.6g;\n", i, paramsControllerX.x_ss_10[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_11[%d] = %.6g;\n", i, paramsController.x_ss_11[i]);
+      printf("  paramsControllerX.x_ss_11[%d] = %.6g;\n", i, paramsControllerX.x_ss_11[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_12[%d] = %.6g;\n", i, paramsController.x_ss_12[i]);
+      printf("  paramsControllerX.x_ss_12[%d] = %.6g;\n", i, paramsControllerX.x_ss_12[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_13[%d] = %.6g;\n", i, paramsController.x_ss_13[i]);
+      printf("  paramsControllerX.x_ss_13[%d] = %.6g;\n", i, paramsControllerX.x_ss_13[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_14[%d] = %.6g;\n", i, paramsController.x_ss_14[i]);
+      printf("  paramsControllerX.x_ss_14[%d] = %.6g;\n", i, paramsControllerX.x_ss_14[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_15[%d] = %.6g;\n", i, paramsController.x_ss_15[i]);
+      printf("  paramsControllerX.x_ss_15[%d] = %.6g;\n", i, paramsControllerX.x_ss_15[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_16[%d] = %.6g;\n", i, paramsController.x_ss_16[i]);
+      printf("  paramsControllerX.x_ss_16[%d] = %.6g;\n", i, paramsControllerX.x_ss_16[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_17[%d] = %.6g;\n", i, paramsController.x_ss_17[i]);
+      printf("  paramsControllerX.x_ss_17[%d] = %.6g;\n", i, paramsControllerX.x_ss_17[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_18[%d] = %.6g;\n", i, paramsController.x_ss_18[i]);
+      printf("  paramsControllerX.x_ss_18[%d] = %.6g;\n", i, paramsControllerX.x_ss_18[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_19[%d] = %.6g;\n", i, paramsController.x_ss_19[i]);
+      printf("  paramsControllerX.x_ss_19[%d] = %.6g;\n", i, paramsControllerX.x_ss_19[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_20[%d] = %.6g;\n", i, paramsController.x_ss_20[i]);
+      printf("  paramsControllerX.x_ss_20[%d] = %.6g;\n", i, paramsControllerX.x_ss_20[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_21[%d] = %.6g;\n", i, paramsController.x_ss_21[i]);
+      printf("  paramsControllerX.x_ss_21[%d] = %.6g;\n", i, paramsControllerX.x_ss_21[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_22[%d] = %.6g;\n", i, paramsController.x_ss_22[i]);
+      printf("  paramsControllerX.x_ss_22[%d] = %.6g;\n", i, paramsControllerX.x_ss_22[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_23[%d] = %.6g;\n", i, paramsController.x_ss_23[i]);
+      printf("  paramsControllerX.x_ss_23[%d] = %.6g;\n", i, paramsControllerX.x_ss_23[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_24[%d] = %.6g;\n", i, paramsController.x_ss_24[i]);
+      printf("  paramsControllerX.x_ss_24[%d] = %.6g;\n", i, paramsControllerX.x_ss_24[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_25[%d] = %.6g;\n", i, paramsController.x_ss_25[i]);
+      printf("  paramsControllerX.x_ss_25[%d] = %.6g;\n", i, paramsControllerX.x_ss_25[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_ss_26[%d] = %.6g;\n", i, paramsController.x_ss_26[i]);
+      printf("  paramsControllerX.x_ss_26[%d] = %.6g;\n", i, paramsControllerX.x_ss_26[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.Q_last[%d] = %.6g;\n", i, paramsController.Q_last[i]);
+      printf("  paramsControllerX.Q_last[%d] = %.6g;\n", i, paramsControllerX.Q_last[i]);
     for (i = 0; i < 4; i++)
-      printf("  paramsController.Af[%d] = %.6g;\n", i, paramsController.Af[i]);
+      printf("  paramsControllerX.Af[%d] = %.6g;\n", i, paramsControllerX.Af[i]);
     for (i = 0; i < 3; i++)
-      printf("  paramsController.x_0[%d] = %.6g;\n", i, paramsController.x_0[i]);
+      printf("  paramsControllerX.x_0[%d] = %.6g;\n", i, paramsControllerX.x_0[i]);
     for (i = 0; i < 1; i++)
-      printf("  paramsController.Bf[%d] = %.6g;\n", i, paramsController.Bf[i]);
+      printf("  paramsControllerX.Bf[%d] = %.6g;\n", i, paramsControllerX.Bf[i]);
     for (i = 0; i < 4; i++)
-      printf("  paramsController.A[%d] = %.6g;\n", i, paramsController.A[i]);
+      printf("  paramsControllerX.A[%d] = %.6g;\n", i, paramsControllerX.A[i]);
     for (i = 0; i < 1; i++)
-      printf("  paramsController.B[%d] = %.6g;\n", i, paramsController.B[i]);
+      printf("  paramsControllerX.B[%d] = %.6g;\n", i, paramsControllerX.B[i]);
     for (i = 0; i < 1; i++)
-      printf("  paramsController.u_max[%d] = %.6g;\n", i, paramsController.u_max[i]);
+      printf("  paramsControllerX.u_max[%d] = %.6g;\n", i, paramsControllerX.u_max[i]);
     for (i = 0; i < 1; i++)
-      printf("  paramsController.u_last[%d] = %.6g;\n", i, paramsController.u_last[i]);
+      printf("  paramsControllerX.u_last[%d] = %.6g;\n", i, paramsControllerX.u_last[i]);
     for (i = 0; i < 1; i++)
-      printf("  paramsController.du_max[%d] = %.6g;\n", i, paramsController.du_max[i]);
+      printf("  paramsControllerX.du_max_f[%d] = %.6g;\n", i, paramsControllerX.du_max_f[i]);
     for (i = 0; i < 1; i++)
-      printf("  paramsController.x_max_1[%d] = %.6g;\n", i, paramsController.x_max_1[i]);
+      printf("  paramsControllerX.du_max[%d] = %.6g;\n", i, paramsControllerX.du_max[i]);
+    for (i = 0; i < 1; i++)
+      printf("  paramsControllerX.x_max_1[%d] = %.6g;\n", i, paramsControllerX.x_max_1[i]);
   }
   /* Perform the actual solve in here. */
-  steps = solve_controller();
+  steps = solve_controllerX();
   /* For profiling purposes, allow extra silent solves if desired. */
-  settingsController.verbose = 0;
+  settingsControllerX.verbose = 0;
   for (i = 0; i < extra_solves; i++)
-    solve_controller();
+    solve_controllerX();
   /* Update the status variables. */
   plhs[1] = mxCreateStructArray(1, dims1x1of1, 4, status_names);
   xm = mxCreateDoubleMatrix(1, 1, mxREAL);
   mxSetField(plhs[1], 0, "optval", xm);
-  *mxGetPr(xm) = workController.optval;
+  *mxGetPr(xm) = workControllerX.optval;
   xm = mxCreateDoubleMatrix(1, 1, mxREAL);
   mxSetField(plhs[1], 0, "gap", xm);
-  *mxGetPr(xm) = workController.gap;
+  *mxGetPr(xm) = workControllerX.gap;
   xm = mxCreateDoubleMatrix(1, 1, mxREAL);
   mxSetField(plhs[1], 0, "steps", xm);
   *mxGetPr(xm) = steps;
   xm = mxCreateDoubleMatrix(1, 1, mxREAL);
   mxSetField(plhs[1], 0, "converged", xm);
-  *mxGetPr(xm) = workController.converged;
+  *mxGetPr(xm) = workControllerX.converged;
   /* Extract variable values. */
   plhs[0] = mxCreateStructArray(1, dims1x1of1, num_var_names, var_names);
   /* Create cell arrays for indexed variables. */
@@ -1433,7 +1464,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   xm = mxCreateDoubleMatrix(1, 1, mxREAL);
   mxSetField(plhs[0], 0, "u_0", xm);
   dest = mxGetPr(xm);
-  src = varsController.u_0;
+  src = varsControllerX.u_0;
   for (i = 0; i < 1; i++) {
     *dest++ = *src++;
   }
@@ -1444,7 +1475,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 0, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_1;
+  src = varsControllerX.u_1;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1456,7 +1487,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 1, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_2;
+  src = varsControllerX.u_2;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1468,7 +1499,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 2, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_3;
+  src = varsControllerX.u_3;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1480,7 +1511,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 3, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_4;
+  src = varsControllerX.u_4;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1492,7 +1523,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 4, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_5;
+  src = varsControllerX.u_5;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1504,7 +1535,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 5, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_6;
+  src = varsControllerX.u_6;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1516,7 +1547,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 6, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_7;
+  src = varsControllerX.u_7;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1528,7 +1559,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 7, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_8;
+  src = varsControllerX.u_8;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1540,7 +1571,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 8, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_9;
+  src = varsControllerX.u_9;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1552,7 +1583,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 9, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_10;
+  src = varsControllerX.u_10;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1564,7 +1595,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 10, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_11;
+  src = varsControllerX.u_11;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1576,7 +1607,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 11, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_12;
+  src = varsControllerX.u_12;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1588,7 +1619,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 12, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_13;
+  src = varsControllerX.u_13;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1600,7 +1631,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 13, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_14;
+  src = varsControllerX.u_14;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1612,7 +1643,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 14, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_15;
+  src = varsControllerX.u_15;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1624,7 +1655,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 15, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_16;
+  src = varsControllerX.u_16;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1636,7 +1667,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 16, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_17;
+  src = varsControllerX.u_17;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1648,7 +1679,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 17, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_18;
+  src = varsControllerX.u_18;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1660,7 +1691,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 18, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_19;
+  src = varsControllerX.u_19;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1672,7 +1703,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 19, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_20;
+  src = varsControllerX.u_20;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1684,7 +1715,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 20, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_21;
+  src = varsControllerX.u_21;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1696,7 +1727,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 21, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_22;
+  src = varsControllerX.u_22;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1708,7 +1739,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 22, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_23;
+  src = varsControllerX.u_23;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1720,7 +1751,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 23, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_24;
+  src = varsControllerX.u_24;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1732,7 +1763,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 24, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.u_25;
+  src = varsControllerX.u_25;
   for (i = 0; i < 1; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1744,7 +1775,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 0, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_1;
+  src = varsControllerX.x_1;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1756,7 +1787,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 1, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_2;
+  src = varsControllerX.x_2;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1768,7 +1799,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 2, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_3;
+  src = varsControllerX.x_3;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1780,7 +1811,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 3, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_4;
+  src = varsControllerX.x_4;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1792,7 +1823,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 4, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_5;
+  src = varsControllerX.x_5;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1804,7 +1835,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 5, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_6;
+  src = varsControllerX.x_6;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1816,7 +1847,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 6, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_7;
+  src = varsControllerX.x_7;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1828,7 +1859,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 7, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_8;
+  src = varsControllerX.x_8;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1840,7 +1871,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 8, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_9;
+  src = varsControllerX.x_9;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1852,7 +1883,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 9, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_10;
+  src = varsControllerX.x_10;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1864,7 +1895,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 10, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_11;
+  src = varsControllerX.x_11;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1876,7 +1907,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 11, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_12;
+  src = varsControllerX.x_12;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1888,7 +1919,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 12, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_13;
+  src = varsControllerX.x_13;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1900,7 +1931,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 13, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_14;
+  src = varsControllerX.x_14;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1912,7 +1943,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 14, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_15;
+  src = varsControllerX.x_15;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1924,7 +1955,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 15, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_16;
+  src = varsControllerX.x_16;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1936,7 +1967,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 16, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_17;
+  src = varsControllerX.x_17;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1948,7 +1979,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 17, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_18;
+  src = varsControllerX.x_18;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1960,7 +1991,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 18, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_19;
+  src = varsControllerX.x_19;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1972,7 +2003,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 19, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_20;
+  src = varsControllerX.x_20;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1984,7 +2015,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 20, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_21;
+  src = varsControllerX.x_21;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -1996,7 +2027,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 21, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_22;
+  src = varsControllerX.x_22;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -2008,7 +2039,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 22, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_23;
+  src = varsControllerX.x_23;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -2020,7 +2051,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 23, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_24;
+  src = varsControllerX.x_24;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -2032,7 +2063,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 24, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_25;
+  src = varsControllerX.x_25;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;
@@ -2044,7 +2075,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   mxSetCell(cell, 25, xm_cell);
   dest = mxGetPr(xm);
   dest_cell = mxGetPr(xm_cell);
-  src = varsController.x_26;
+  src = varsControllerX.x_26;
   for (i = 0; i < 3; i++) {
     *dest++ = *src;
     *dest_cell++ = *src++;

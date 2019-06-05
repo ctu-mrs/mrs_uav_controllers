@@ -58,7 +58,7 @@
 %     abs(u_23) <= u_max
 %     abs(u_24) <= u_max
 %     abs(u_25) <= u_max
-%     abs(u_0 - u_last) <= du_max
+%     abs(u_0 - u_last) <= du_max_f
 %     abs(u_1 - u_0) <= du_max
 %     abs(u_2 - u_1) <= du_max
 %     abs(u_3 - u_2) <= du_max
@@ -84,32 +84,32 @@
 %     abs(u_23 - u_22) <= du_max
 %     abs(u_24 - u_23) <= du_max
 %     abs(u_25 - u_24) <= du_max
-%     abs(x_1(1)) <= x_max_1
-%     abs(x_2(1)) <= x_max_1
-%     abs(x_3(1)) <= x_max_1
-%     abs(x_4(1)) <= x_max_1
-%     abs(x_5(1)) <= x_max_1
-%     abs(x_6(1)) <= x_max_1
-%     abs(x_7(1)) <= x_max_1
-%     abs(x_8(1)) <= x_max_1
-%     abs(x_9(1)) <= x_max_1
-%     abs(x_10(1)) <= x_max_1
-%     abs(x_11(1)) <= x_max_1
-%     abs(x_12(1)) <= x_max_1
-%     abs(x_13(1)) <= x_max_1
-%     abs(x_14(1)) <= x_max_1
-%     abs(x_15(1)) <= x_max_1
-%     abs(x_16(1)) <= x_max_1
-%     abs(x_17(1)) <= x_max_1
-%     abs(x_18(1)) <= x_max_1
-%     abs(x_19(1)) <= x_max_1
-%     abs(x_20(1)) <= x_max_1
-%     abs(x_21(1)) <= x_max_1
-%     abs(x_22(1)) <= x_max_1
-%     abs(x_23(1)) <= x_max_1
-%     abs(x_24(1)) <= x_max_1
-%     abs(x_25(1)) <= x_max_1
-%     abs(x_26(1)) <= x_max_1
+%     abs(x_1(2)) <= x_max_1
+%     abs(x_2(2)) <= x_max_1
+%     abs(x_3(2)) <= x_max_1
+%     abs(x_4(2)) <= x_max_1
+%     abs(x_5(2)) <= x_max_1
+%     abs(x_6(2)) <= x_max_1
+%     abs(x_7(2)) <= x_max_1
+%     abs(x_8(2)) <= x_max_1
+%     abs(x_9(2)) <= x_max_1
+%     abs(x_10(2)) <= x_max_1
+%     abs(x_11(2)) <= x_max_1
+%     abs(x_12(2)) <= x_max_1
+%     abs(x_13(2)) <= x_max_1
+%     abs(x_14(2)) <= x_max_1
+%     abs(x_15(2)) <= x_max_1
+%     abs(x_16(2)) <= x_max_1
+%     abs(x_17(2)) <= x_max_1
+%     abs(x_18(2)) <= x_max_1
+%     abs(x_19(2)) <= x_max_1
+%     abs(x_20(2)) <= x_max_1
+%     abs(x_21(2)) <= x_max_1
+%     abs(x_22(2)) <= x_max_1
+%     abs(x_23(2)) <= x_max_1
+%     abs(x_24(2)) <= x_max_1
+%     abs(x_25(2)) <= x_max_1
+%     abs(x_26(2)) <= x_max_1
 %
 % with variables
 %      u_0   1 x 1
@@ -173,6 +173,7 @@
 %        Q   3 x 3    positive, PSD, diagonal
 %   Q_last   3 x 3    positive, PSD, diagonal
 %   du_max   1 x 1
+% du_max_f   1 x 1
 %   u_last   1 x 1
 %    u_max   1 x 1
 %      x_0   3 x 1
@@ -213,7 +214,7 @@
 %
 % Specify params.A, ..., params.x_ss_26, then run
 %   [vars, status] = csolve(params, settings)
-% Produced by CVXGEN, 2019-06-04 10:54:42 -0400.
+% Produced by CVXGEN, 2019-06-05 08:31:43 -0400.
 % CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com.
 % The code in this file is Copyright (C) 2006-2017 Jacob Mattingley.
 % CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial

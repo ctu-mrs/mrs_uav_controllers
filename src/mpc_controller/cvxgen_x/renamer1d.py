@@ -3,7 +3,7 @@
 def replace( filename ):
     with open(filename, 'r') as file :
         filedata = file.read()
-        
+
         filedata = filedata.replace('ldl_solve(', 'ldl_solve' + new_suffix_functions + '(')
         filedata = filedata.replace('ldl_factor(', 'ldl_factor' + new_suffix_functions + '(')
         filedata = filedata.replace('check_factorization(', 'check_factorization' + new_suffix_functions + '(')
@@ -46,7 +46,7 @@ def replace( filename ):
         filedata = filedata.replace('randn_internal(', 'randn_internal' + new_suffix_functions + '(')
         filedata = filedata.replace('randn(', 'randn' + new_suffix_functions + '(')
         filedata = filedata.replace('reset_rand(', 'reset_rand' + new_suffix_functions + '(')
-        
+
         filedata = filedata.replace('Params', 'Params' + new_suffix_variables)
         filedata = filedata.replace('params', 'params' + new_suffix_variables)
         filedata = filedata.replace('Vars', 'Vars' + new_suffix_variables)
@@ -56,12 +56,11 @@ def replace( filename ):
         filedata = filedata.replace('Workspace', 'Workspace' + new_suffix_variables)
         filedata = filedata.replace('work', 'work' + new_suffix_variables)
 
-
     with open(filename, 'w') as file :
         file.write(filedata)
 
-new_suffix_variables = 'Controller'
-new_suffix_functions = '_controller'
+new_suffix_variables = 'ControllerX'
+new_suffix_functions = '_controllerX'
 replace("solver.h")
 replace("solver.c")
 replace("csolve.c")

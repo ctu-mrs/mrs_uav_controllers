@@ -1,4 +1,4 @@
-# Produced by CVXGEN, 2019-06-04 10:54:42 -0400.
+# Produced by CVXGEN, 2019-06-05 08:31:44 -0400.
 # CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com.
 # The code in this file is Copyright (C) 2006-2017 Jacob Mattingley.
 # CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial
@@ -28,6 +28,8 @@ parameters
   u_max   # maximum acc (input to the system)
 
   du_max  # input slew rate constrain
+  du_max_f  # input slew rate constrain
+
   u_last  # system input from the last iteration, used for consistent slew rate
 
   x_max_1   # maximum vel (state constrain)
@@ -52,11 +54,11 @@ subject to
   abs(u[t]) <= u_max, t=0..T-1
 
   #input slew rate constrain
-  abs(u[0] - u_last) <= du_max
+  abs(u[0] - u_last) <= du_max_f
   abs(u[t] - u[t-1]) <= du_max, t=1..T-1
 
   #state constraints
-  abs(x[t][1]) <= x_max_1, t=1..T
+  abs(x[t][2]) <= x_max_1, t=1..T
 
 
 end

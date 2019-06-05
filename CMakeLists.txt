@@ -88,11 +88,18 @@ target_link_libraries(So3Controller
 
 # Mpc controller
 
-add_library(MpcControllerCvxgen src/mpc_controller/cvx_wrapper.cpp
-  src/mpc_controller/cvxgen/ldl.c
-  src/mpc_controller/cvxgen/matrix_support.c
-  src/mpc_controller/cvxgen/solver.c
-  src/mpc_controller/cvxgen/util.c
+add_library(MpcControllerCvxgenX src/mpc_controller/cvx_wrapper_x.cpp
+  src/mpc_controller/cvxgen_x/ldl.c
+  src/mpc_controller/cvxgen_x/matrix_support.c
+  src/mpc_controller/cvxgen_x/solver.c
+  src/mpc_controller/cvxgen_x/util.c
+  )
+
+add_library(MpcControllerCvxgenY src/mpc_controller/cvx_wrapper_y.cpp
+  src/mpc_controller/cvxgen_y/ldl.c
+  src/mpc_controller/cvxgen_y/matrix_support.c
+  src/mpc_controller/cvxgen_y/solver.c
+  src/mpc_controller/cvxgen_y/util.c
   )
 
 add_library(MpcController
@@ -107,7 +114,8 @@ add_dependencies(MpcController
 
 target_link_libraries(MpcController
   ${catkin_LIBRARIES}
-  MpcControllerCvxgen
+  MpcControllerCvxgenX
+  MpcControllerCvxgenY
   )
 
 # attitude controller
