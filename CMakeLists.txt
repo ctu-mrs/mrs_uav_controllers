@@ -48,6 +48,8 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
+  include
+  include/mpc_controller
   ${catkin_INCLUDE_DIRS}
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
@@ -86,6 +88,20 @@ target_link_libraries(So3Controller
 
 # Mpc controller
 
+add_library(MpcControllerCvxgenX src/mpc_controller/cvx_wrapper_x.cpp
+  src/mpc_controller/cvxgen_x/ldl.c
+  src/mpc_controller/cvxgen_x/matrix_support.c
+  src/mpc_controller/cvxgen_x/solver.c
+  src/mpc_controller/cvxgen_x/util.c
+  )
+
+add_library(MpcControllerCvxgenY src/mpc_controller/cvx_wrapper_y.cpp
+  src/mpc_controller/cvxgen_y/ldl.c
+  src/mpc_controller/cvxgen_y/matrix_support.c
+  src/mpc_controller/cvxgen_y/solver.c
+  src/mpc_controller/cvxgen_y/util.c
+  )
+
 add_library(MpcController
   src/mpc_controller/mpc_controller.cpp
   )
@@ -98,6 +114,8 @@ add_dependencies(MpcController
 
 target_link_libraries(MpcController
   ${catkin_LIBRARIES}
+  MpcControllerCvxgenX
+  MpcControllerCvxgenY
   )
 
 # attitude controller
