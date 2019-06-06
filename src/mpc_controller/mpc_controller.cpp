@@ -111,12 +111,16 @@ private:
 
   double dt1, dt2;
 
+  double cvx_x_u = 0;
+  double cvx_y_u = 0;
+  double cvx_z_u = 0;
+
   int horizon_length_;
 
   double max_speed_, max_acceleration_, max_jerk_;
 
-  mrs_controllers::mpc_controller::CvxWrapperX *cvx_x;
-  mrs_controllers::mpc_controller::CvxWrapperY *cvx_y;
+  mrs_controllers::mpc_controller::CvxWrapper *cvx_x;
+  mrs_controllers::mpc_controller::CvxWrapper *cvx_y;
 
   bool cvx_verbose_ = false;
   int  cvx_max_iterations_;
@@ -244,8 +248,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // |                       prepare cvxgen                       |
   // --------------------------------------------------------------
 
-  cvx_x = new mrs_controllers::mpc_controller::CvxWrapperX(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
-  cvx_y = new mrs_controllers::mpc_controller::CvxWrapperY(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
+  cvx_x = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
+  cvx_y = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -397,17 +401,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // | ------------------------ optimize ------------------------ |
 
+  cvx_x->setLastInput(cvx_x_u);
   cvx_x->loadReference(mpc_reference_x);
   cvx_x->setLimits(max_speed_, max_acceleration_, max_jerk_, dt1, dt2);
   cvx_x->setInitialState(initial_x);
   [[maybe_unused]] int iters_x = cvx_x->solveCvx();
-  double               cvx_x_u = cvx_x->getFirstControlInput();
+  cvx_x_u                      = cvx_x->getFirstControlInput();
 
+  cvx_y->setLastInput(cvx_y_u);
   cvx_y->loadReference(mpc_reference_y);
   cvx_y->setLimits(max_speed_, max_acceleration_, max_jerk_, dt1, dt2);
   cvx_y->setInitialState(initial_y);
   [[maybe_unused]] int iters_y = cvx_y->solveCvx();
-  double               cvx_y_u = cvx_y->getFirstControlInput();
+  cvx_y_u                      = cvx_y->getFirstControlInput();
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
