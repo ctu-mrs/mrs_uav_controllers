@@ -113,7 +113,6 @@ private:
 
   double cvx_x_u = 0;
   double cvx_y_u = 0;
-  double cvx_z_u = 0;
 
   int horizon_length_;
 
