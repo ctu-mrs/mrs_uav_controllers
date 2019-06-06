@@ -80,7 +80,7 @@ private:
   double                       hover_thrust;
 
   // actual gains (used and already filtered)
-  double kiwxy, kibxy;
+  double kpz, kvz, kaz, kiwxy, kibxy;
   double kiwxy_lim, kibxy_lim;
   double km, km_lim;
   double kqxy, kqz;  // attitude gains
@@ -121,7 +121,6 @@ private:
 
   mrs_controllers::mpc_controller::CvxWrapper *cvx_x;
   mrs_controllers::mpc_controller::CvxWrapper *cvx_y;
-  mrs_controllers::mpc_controller::CvxWrapper *cvx_z;
 
   bool cvx_verbose_ = false;
   int  cvx_max_iterations_;
@@ -186,14 +185,9 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   param_loader.load_param("mpc_parameters/max_acceleration", max_acceleration_);
   param_loader.load_param("mpc_parameters/max_jerk", max_jerk_);
 
-  std::vector<double> Q_vertical, S_vertical;
-  std::vector<double> Q_horizontal, S_horizontal;
-
-  param_loader.load_param("mpc_parameters/vertical/Q", Q_vertical);
-  param_loader.load_param("mpc_parameters/vertical/S", S_vertical);
-
-  param_loader.load_param("mpc_parameters/horizontal/Q", Q_horizontal);
-  param_loader.load_param("mpc_parameters/horizontal/S", S_horizontal);
+  std::vector<double> Q, S;
+  param_loader.load_param("mpc_parameters/Q", Q);
+  param_loader.load_param("mpc_parameters/S", S);
 
   param_loader.load_param("cvx_parameters/verbose", cvx_verbose_);
   param_loader.load_param("cvx_parameters/max_iterations", cvx_max_iterations_);
@@ -208,6 +202,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   param_loader.load_param("integral_gains/kib_lim", kibxy_lim);
 
   // | ------------- height and attitude controller ------------- |
+
+  // height gains
+  param_loader.load_param("attitude_vertical_feedback/default_gains/vertical/kp", kpz);
+  param_loader.load_param("attitude_vertical_feedback/default_gains/vertical/kv", kvz);
+  param_loader.load_param("attitude_vertical_feedback/default_gains/vertical/ka", kaz);
 
   // attitude gains
   param_loader.load_param("attitude_vertical_feedback/default_gains/horizontal/attitude/kq", kqxy);
@@ -249,14 +248,16 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // |                       prepare cvxgen                       |
   // --------------------------------------------------------------
 
-  cvx_x = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q_horizontal, S_horizontal, dt1, dt2);
-  cvx_y = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q_horizontal, S_horizontal, dt1, dt2);
-  cvx_z = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q_vertical, S_vertical, dt1, dt2);
+  cvx_x = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
+  cvx_y = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
+  drs_desired_gains.kpz    = kpz;
+  drs_desired_gains.kvz    = kvz;
+  drs_desired_gains.kaz    = kaz;
   drs_desired_gains.kqxy   = kqxy;
   drs_desired_gains.kqz    = kqz;
   drs_desired_gains.kwxy   = kwxy;
@@ -381,14 +382,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
   initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, reference->acceleration.y;
 
-  Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
-  initial_z << odometry->pose.pose.position.z, odometry->twist.twist.linear.z, reference->acceleration.z;
-
   // | ---------------------- set reference --------------------- |
 
   Eigen::MatrixXd mpc_reference_x = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
   Eigen::MatrixXd mpc_reference_y = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
-  Eigen::MatrixXd mpc_reference_z = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
 
   // prepare the full reference vector
   for (int i = 0; i < horizon_length_; i++) {
@@ -400,10 +397,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     mpc_reference_y((i * n) + 0, 0) = reference->position.y;
     mpc_reference_y((i * n) + 1, 0) = reference->velocity.y;
     mpc_reference_y((i * n) + 2, 0) = reference->acceleration.y;
-
-    mpc_reference_z((i * n) + 0, 0) = reference->position.z;
-    mpc_reference_z((i * n) + 1, 0) = reference->velocity.z;
-    mpc_reference_z((i * n) + 2, 0) = reference->acceleration.z;
   }
 
   // | ------------------------ optimize ------------------------ |
@@ -422,18 +415,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   [[maybe_unused]] int iters_y = cvx_y->solveCvx();
   cvx_y_u                      = cvx_y->getFirstControlInput();
 
-  cvx_z->setLastInput(cvx_z_u);
-  cvx_z->loadReference(mpc_reference_z);
-  cvx_z->setLimits(max_speed_, 100*max_acceleration_, 100*max_jerk_, dt1, dt2);
-  cvx_z->setInitialState(initial_z);
-  [[maybe_unused]] int iters_z = cvx_z->solveCvx();
-  cvx_z_u                      = cvx_z->getFirstControlInput();
-
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
   // --------------------------------------------------------------
 
   Eigen::Vector3d Ep = Op - Rp;
+  Eigen::Vector3d Ev = Ov - Rv;
 
   // --------------------------------------------------------------
   // |                      calculate the dt                      |
@@ -484,11 +471,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // |                            gains                           |
   // --------------------------------------------------------------
   //
-  Eigen::Array3d Kq, Kw;
+  Eigen::Vector3d Ka;
+  Eigen::Array3d  Kp, Kv, Kq, Kw;
 
   {
     std::scoped_lock lock(mutex_gains);
 
+    Kp << 0, 0, kpz;
+    Kv << 0, 0, kvz;
+    Ka << 0, 0, kaz;
     Kq << kqxy, kqxy, kqz;
     Kw << kwxy, kwxy, kwz;
   }
@@ -507,9 +498,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   Eigen::Vector3d Ip(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
 
-  Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
+  Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z;
+  /* Ra << cvx_x_u, cvx_y_u, reference->acceleration.z; */
 
-  Eigen::Vector3d f      = Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
+  Eigen::Vector3d f      = -Kp * Ep.array() - Kv * Ev.array() + Ip.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
   Eigen::Vector3d f_norm = f.normalized();
 
   // | ---------------------- yaw reference --------------------- |
@@ -824,6 +816,9 @@ void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
   {
     std::scoped_lock lock(mutex_gains, mutex_desired_gains);
 
+    kpz    = calculateGainChange(kpz, drs_desired_gains.kpz, false, "kpz");
+    kvz    = calculateGainChange(kvz, drs_desired_gains.kvz, false, "kvz");
+    kaz    = calculateGainChange(kaz, drs_desired_gains.kaz, false, "kaz");
     kqxy   = calculateGainChange(kqxy, drs_desired_gains.kqxy, false, "kqxy");
     kqz    = calculateGainChange(kqz, drs_desired_gains.kqz, false, "kqz");
     kwxy   = calculateGainChange(kwxy, drs_desired_gains.kwxy, false, "kwxy");

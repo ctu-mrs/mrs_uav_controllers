@@ -9,13 +9,8 @@ mpc_parameters:
 
   horizon_length: 26
 
-  horizontal:
-    Q: [500, 100, 100] # state error penalization
-    S: [1000, 300, 300] # last state error penalization
-
-  vertical:
-    Q: [100, 500, 100] # state error penalization
-    S: [1000, 300, 300] # last state error penalization
+  Q: [500, 100, 100] # state error penalization
+  S: [1000, 300, 300] # last state error penalization
 
   max_speed: 5.0
   max_acceleration: 2.0
