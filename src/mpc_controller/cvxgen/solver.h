@@ -21,13 +21,13 @@
 #endif
 #endif
 /* Space must be allocated somewhere (testsolver.c, csolve.c or your own */
-/* program) for the global variables varsControllerX, paramsControllerX, workControllerX and settingsControllerX. */
+/* program) for the global variables varsController, paramsController, workController and settingsController. */
 /* At the bottom of this file, they are externed. */
 #ifndef ZERO_LIBRARY_MODE
 #include <math.h>
-#define pm(A, m, n) printmatrixd_controllerX(#A, A, m, n, 1)
+#define pm(A, m, n) printmatrixd_controller(#A, A, m, n, 1)
 #endif
-typedef struct ParamsControllerX_t {
+typedef struct ParamsController_t {
   double x_ss_1[3];
   double Q[3];
   double x_ss_2[3];
@@ -68,8 +68,8 @@ typedef struct ParamsControllerX_t {
   double x_max_1[1];
   double *x_ss[27];
   double *x[1];
-} ParamsControllerX;
-typedef struct VarsControllerX_t {
+} ParamsController;
+typedef struct VarsController_t {
   double *x_1; /* 3 rows. */
   double *x_2; /* 3 rows. */
   double *x_3; /* 3 rows. */
@@ -202,8 +202,8 @@ typedef struct VarsControllerX_t {
   double *t_78; /* 1 rows. */
   double *x[27];
   double *u[26];
-} VarsControllerX;
-typedef struct WorkspaceControllerX_t {
+} VarsController;
+typedef struct WorkspaceController_t {
   double h[234];
   double s_inv[234];
   double s_inv_z[234];
@@ -256,8 +256,8 @@ typedef struct WorkspaceControllerX_t {
   double quad_653656117248[1];
   double quad_758104227840[1];
   int converged;
-} WorkspaceControllerX;
-typedef struct SettingsControllerX_t {
+} WorkspaceController;
+typedef struct SettingsController_t {
   double resid_tol;
   double eps;
   int max_iters;
@@ -272,61 +272,61 @@ typedef struct SettingsControllerX_t {
   int debug;
   /* For regularization. Minimum value of abs(D_ii) in the kkt D factor. */
   double kkt_reg;
-} SettingsControllerX;
-extern VarsControllerX varsControllerX;
-extern ParamsControllerX paramsControllerX;
-extern WorkspaceControllerX workControllerX;
-extern SettingsControllerX settingsControllerX;
+} SettingsController;
+extern VarsController varsController;
+extern ParamsController paramsController;
+extern WorkspaceController workController;
+extern SettingsController settingsController;
 /* Function definitions in ldl.c: */
-void ldl_solve_controllerX(double *target, double *var);
-void ldl_factor_controllerX(void);
-double check_factorization_controllerX(void);
-void matrix_multiply_controllerX(double *result, double *source);
-double check_residual_controllerX(double *target, double *multiplicand);
-void fill_KKT_controllerX(void);
+void ldl_solve_controller(double *target, double *var);
+void ldl_factor_controller(void);
+double check_factorization_controller(void);
+void matrix_multiply_controller(double *result, double *source);
+double check_residual_controller(double *target, double *multiplicand);
+void fill_KKT_controller(void);
 
 /* Function definitions in matrix_support.c: */
-void multbymA_controllerX(double *lhs, double *rhs);
-void multbymAT_controllerX(double *lhs, double *rhs);
-void multbymG_controllerX(double *lhs, double *rhs);
-void multbymGT_controllerX(double *lhs, double *rhs);
-void multbyP_controllerX(double *lhs, double *rhs);
-void fillq_controllerX(void);
-void fillh_controllerX(void);
-void fillb_controllerX(void);
-void pre_ops_controllerX(void);
+void multbymA_controller(double *lhs, double *rhs);
+void multbymAT_controller(double *lhs, double *rhs);
+void multbymG_controller(double *lhs, double *rhs);
+void multbymGT_controller(double *lhs, double *rhs);
+void multbyP_controller(double *lhs, double *rhs);
+void fillq_controller(void);
+void fillh_controller(void);
+void fillb_controller(void);
+void pre_ops_controller(void);
 
 /* Function definitions in solver.c: */
-double eval_gap_controllerX(void);
-void set_defaults_controllerX(void);
-void setup_pointers_controllerX(void);
-void setup_indexed_paramsControllerX_controllerX(void);
-void setup_indexed_optvarsControllerX_controllerX(void);
-void setup_indexing_controllerX(void);
-void set_start_controllerX(void);
-double eval_objv_controllerX(void);
-void fillrhs_aff_controllerX(void);
-void fillrhs_cc_controllerX(void);
-void refine_controllerX(double *target, double *var);
-double calc_ineq_resid_squared_controllerX(void);
-double calc_eq_resid_squared_controllerX(void);
-void better_start_controllerX(void);
-void fillrhs_start_controllerX(void);
-long solve_controllerX(void);
+double eval_gap_controller(void);
+void set_defaults_controller(void);
+void setup_pointers_controller(void);
+void setup_indexed_paramsController_controller(void);
+void setup_indexed_optvarsController_controller(void);
+void setup_indexing_controller(void);
+void set_start_controller(void);
+double eval_objv_controller(void);
+void fillrhs_aff_controller(void);
+void fillrhs_cc_controller(void);
+void refine_controller(double *target, double *var);
+double calc_ineq_resid_squared_controller(void);
+double calc_eq_resid_squared_controller(void);
+void better_start_controller(void);
+void fillrhs_start_controller(void);
+long solve_controller(void);
 
 /* Function definitions in testsolver.c: */
-int main_controllerX(int argc, char **argv);
-void load_default_data_controllerX(void);
+int main_controller(int argc, char **argv);
+void load_default_data_controller(void);
 
 /* Function definitions in util.c: */
-void tic_controllerX(void);
-float toc_controllerX(void);
-float tocq_controllerX(void);
-void printmatrixd_controllerX(char *name, double *A, int m, int n, int sparse);
-double unif_controllerX(double lower, double upper);
-float ran1d_controllerX(long*idum, int reset);
-float randn_internal_controllerX(long *idum, int reset);
-double randn_controllerX(void);
-void reset_rand_controllerX(void);
+void tic_controller(void);
+float toc_controller(void);
+float tocq_controller(void);
+void printmatrixd_controller(char *name, double *A, int m, int n, int sparse);
+double unif_controller(double lower, double upper);
+float ran1d_controller(long*idum, int reset);
+float randn_internal_controller(long *idum, int reset);
+double randn_controller(void);
+void reset_rand_controller(void);
 
 #endif

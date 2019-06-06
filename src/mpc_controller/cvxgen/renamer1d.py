@@ -59,8 +59,8 @@ def replace( filename ):
     with open(filename, 'w') as file :
         file.write(filedata)
 
-new_suffix_variables = 'ControllerX'
-new_suffix_functions = '_controllerX'
+new_suffix_variables = 'Controller'
+new_suffix_functions = '_controller'
 replace("solver.h")
 replace("solver.c")
 replace("csolve.c")

@@ -12,21 +12,21 @@
 #include <math.h>
 long global_seed = 1;
 static clock_t tic_timestart;
-void tic_controllerY(void) {
+void tic_controller(void) {
   tic_timestart = clock();
 }
-float toc_controllerY(void) {
+float toc_controller(void) {
   clock_t tic_timestop;
   tic_timestop = clock();
   printf("time: %8.2f.\n", (float)(tic_timestop - tic_timestart) / CLOCKS_PER_SEC);
   return (float)(tic_timestop - tic_timestart) / CLOCKS_PER_SEC;
 }
-float tocq_controllerY(void) {
+float tocq_controller(void) {
   clock_t tic_timestop;
   tic_timestop = clock();
   return (float)(tic_timestop - tic_timestart) / CLOCKS_PER_SEC;
 }
-void printmatrixd_controllerY(char *name, double *A, int m, int n, int sparse) {
+void printmatrixd_controller(char *name, double *A, int m, int n, int sparse) {
   int i, j;
   printf("%s = [...\n", name);
   for (i = 0; i < m; i++) {
@@ -39,7 +39,7 @@ void printmatrixd_controllerY(char *name, double *A, int m, int n, int sparse) {
   }
   printf("];\n");
 }
-double unif_controllerY(double lower, double upper) {
+double unif_controller(double lower, double upper) {
   return lower + ((upper - lower)*rand())/RAND_MAX;
 }
 /* Next function is from numerical recipes in C. */
@@ -52,7 +52,7 @@ double unif_controllerY(double lower, double upper) {
 #define NDIV (1+(IM-1)/NTAB)
 #define EPS 1.2e-7
 #define RNMX (1.0-EPS)
-float ran1d_controllerY(long*idum, int reset) {
+float ran1d_controller(long*idum, int reset) {
   int j;
   long k;
   static long iy=0;
@@ -82,7 +82,7 @@ float ran1d_controllerY(long*idum, int reset) {
   else return temp;
 }
 /* Next function is from numerical recipes in C. */
-float randn_internal_controllerY(long *idum, int reset) {
+float randn_internal_controller(long *idum, int reset) {
   static int iset=0;
   static float gset;
   float fac, rsq, v1, v2;
@@ -91,8 +91,8 @@ float randn_internal_controllerY(long *idum, int reset) {
   }
   if (iset==0) {
     do {
-      v1 = 2.0*ran1d_controllerY(idum, reset)-1.0;
-      v2 = 2.0*ran1d_controllerY(idum, reset)-1.0;
+      v1 = 2.0*ran1d_controller(idum, reset)-1.0;
+      v2 = 2.0*ran1d_controller(idum, reset)-1.0;
       rsq = v1*v1+v2*v2;
     } while(rsq >= 1.0 || rsq == 0.0);
     fac = sqrt(-2.0*log(rsq)/rsq);
@@ -104,11 +104,11 @@ float randn_internal_controllerY(long *idum, int reset) {
     return gset;
   }
 }
-double randn_controllerY(void) {
-  return randn_internal_controllerY(&global_seed, 0);
+double randn_controller(void) {
+  return randn_internal_controller(&global_seed, 0);
 }
-void reset_rand_controllerY(void) {
+void reset_rand_controller(void) {
   srand(15);
   global_seed = 1;
-  randn_internal_controllerY(&global_seed, 1);
+  randn_internal_controller(&global_seed, 1);
 }
