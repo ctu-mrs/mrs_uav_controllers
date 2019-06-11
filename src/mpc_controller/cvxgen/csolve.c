@@ -1,4 +1,4 @@
-/* Produced by CVXGEN, 2019-06-05 08:31:43 -0400.  */
+/* Produced by CVXGEN, 2019-06-11 03:54:17 -0400.  */
 /* CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com. */
 /* The code in this file is Copyright (C) 2006-2017 Jacob Mattingley. */
 /* CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial */
@@ -95,8 +95,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       src = mxGetPr(xm);
       dest[0] = src[0];  /* (1,1) entry. */
       dest[1] = src[4];  /* (2,2) entry. */
-      dest[2] = src[3];  /* (1,2) entry. */
-      dest[3] = src[7];  /* (2,3) entry. */
+      dest[2] = src[8];  /* (3,3) entry. */
+      dest[3] = src[3];  /* (1,2) entry. */
+      dest[4] = src[7];  /* (2,3) entry. */
       valid_varsController++;
     }
   }
@@ -126,8 +127,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       src = mxGetPr(xm);
       dest[0] = src[0];  /* (1,1) entry. */
       dest[1] = src[4];  /* (2,2) entry. */
-      dest[2] = src[3];  /* (1,2) entry. */
-      dest[3] = src[7];  /* (2,3) entry. */
+      dest[2] = src[8];  /* (3,3) entry. */
+      dest[3] = src[3];  /* (1,2) entry. */
+      dest[4] = src[7];  /* (2,3) entry. */
       valid_varsController++;
     }
   }
@@ -411,28 +413,57 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     }
   }
   this_var_errors = 0;
-  xm = mxGetField(prhs[0], 0, "x_max_1");
+  xm = mxGetField(prhs[0], 0, "x_max_2");
   if (xm == NULL) {
-    printf("could not find paramsController.x_max_1.\n");
+    printf("could not find paramsController.x_max_2.\n");
   } else {
     if (!((mxGetM(xm) == 1) && (mxGetN(xm) == 1))) {
-      printf("x_max_1 must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
+      printf("x_max_2 must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
       this_var_errors++;
     }
     if (mxIsComplex(xm)) {
-      printf("parameter x_max_1 must be real.\n");
+      printf("parameter x_max_2 must be real.\n");
       this_var_errors++;
     }
     if (!mxIsClass(xm, "double")) {
-      printf("parameter x_max_1 must be a full matrix of doubles.\n");
+      printf("parameter x_max_2 must be a full matrix of doubles.\n");
       this_var_errors++;
     }
     if (mxIsSparse(xm)) {
-      printf("parameter x_max_1 must be a full matrix.\n");
+      printf("parameter x_max_2 must be a full matrix.\n");
       this_var_errors++;
     }
     if (this_var_errors == 0) {
-      dest = paramsController.x_max_1;
+      dest = paramsController.x_max_2;
+      src = mxGetPr(xm);
+      for (i = 0; i < 1; i++)
+        *dest++ = *src++;
+      valid_varsController++;
+    }
+  }
+  this_var_errors = 0;
+  xm = mxGetField(prhs[0], 0, "x_max_3");
+  if (xm == NULL) {
+    printf("could not find paramsController.x_max_3.\n");
+  } else {
+    if (!((mxGetM(xm) == 1) && (mxGetN(xm) == 1))) {
+      printf("x_max_3 must be size (1,1), not (%d,%d).\n", mxGetM(xm), mxGetN(xm));
+      this_var_errors++;
+    }
+    if (mxIsComplex(xm)) {
+      printf("parameter x_max_3 must be real.\n");
+      this_var_errors++;
+    }
+    if (!mxIsClass(xm, "double")) {
+      printf("parameter x_max_3 must be a full matrix of doubles.\n");
+      this_var_errors++;
+    }
+    if (mxIsSparse(xm)) {
+      printf("parameter x_max_3 must be a full matrix.\n");
+      this_var_errors++;
+    }
+    if (this_var_errors == 0) {
+      dest = paramsController.x_max_3;
       src = mxGetPr(xm);
       for (i = 0; i < 1; i++)
         *dest++ = *src++;
@@ -1349,8 +1380,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       valid_varsController++;
     }
   }
-  if (valid_varsController != 38) {
-    printf("Error: %d parameters are invalid.\n", 38 - valid_varsController);
+  if (valid_varsController != 39) {
+    printf("Error: %d parameters are invalid.\n", 39 - valid_varsController);
     mexErrMsgTxt("invalid parameters found.");
   }
   if (prepare_for_c) {
@@ -1411,13 +1442,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
       printf("  paramsController.x_ss_26[%d] = %.6g;\n", i, paramsController.x_ss_26[i]);
     for (i = 0; i < 3; i++)
       printf("  paramsController.Q_last[%d] = %.6g;\n", i, paramsController.Q_last[i]);
-    for (i = 0; i < 4; i++)
+    for (i = 0; i < 5; i++)
       printf("  paramsController.Af[%d] = %.6g;\n", i, paramsController.Af[i]);
     for (i = 0; i < 3; i++)
       printf("  paramsController.x_0[%d] = %.6g;\n", i, paramsController.x_0[i]);
     for (i = 0; i < 1; i++)
       printf("  paramsController.Bf[%d] = %.6g;\n", i, paramsController.Bf[i]);
-    for (i = 0; i < 4; i++)
+    for (i = 0; i < 5; i++)
       printf("  paramsController.A[%d] = %.6g;\n", i, paramsController.A[i]);
     for (i = 0; i < 1; i++)
       printf("  paramsController.B[%d] = %.6g;\n", i, paramsController.B[i]);
@@ -1430,7 +1461,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     for (i = 0; i < 1; i++)
       printf("  paramsController.du_max[%d] = %.6g;\n", i, paramsController.du_max[i]);
     for (i = 0; i < 1; i++)
-      printf("  paramsController.x_max_1[%d] = %.6g;\n", i, paramsController.x_max_1[i]);
+      printf("  paramsController.x_max_2[%d] = %.6g;\n", i, paramsController.x_max_2[i]);
+    for (i = 0; i < 1; i++)
+      printf("  paramsController.x_max_3[%d] = %.6g;\n", i, paramsController.x_max_3[i]);
   }
   /* Perform the actual solve in here. */
   steps = solve_controller();

@@ -1,4 +1,4 @@
-/* Produced by CVXGEN, 2019-06-05 08:31:54 -0400.  */
+/* Produced by CVXGEN, 2019-06-11 03:54:38 -0400.  */
 /* CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com. */
 /* The code in this file is Copyright (C) 2006-2017 Jacob Mattingley. */
 /* CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial */
@@ -136,18 +136,21 @@ void load_default_data(void) {
   params.Af[1] = 0.16407869343908477;
   params.Af[2] = 0.8287224032315907;
   params.Af[3] = -0.9444533161899464;
-  params.x_0[0] = 1.7069027370149112;
-  params.x_0[1] = 1.3567722311998827;
-  params.x_0[2] = 0.9052779937121489;
-  params.Bf[0] = -0.07904017565835986;
-  params.A[0] = 1.3684127435065871;
-  params.A[1] = 0.979009293697437;
-  params.A[2] = 0.6413036255984501;
-  params.A[3] = 1.6559010680237511;
-  params.B[0] = 0.5346622551502991;
-  params.u_max[0] = -0.5362376605895625;
-  params.u_last[0] = 0.2113782926017822;
-  params.du_max_f[0] = -1.2144776931994525;
-  params.du_max[0] = -1.2317108144255875;
-  params.x_max_1[0] = 0.9026784957312834;
+  params.Af[4] = 1.7069027370149112;
+  params.x_0[0] = 1.3567722311998827;
+  params.x_0[1] = 0.9052779937121489;
+  params.x_0[2] = -0.07904017565835986;
+  params.Bf[0] = 1.3684127435065871;
+  params.A[0] = 0.979009293697437;
+  params.A[1] = 0.6413036255984501;
+  params.A[2] = 1.6559010680237511;
+  params.A[3] = 0.5346622551502991;
+  params.A[4] = -0.5362376605895625;
+  params.B[0] = 0.2113782926017822;
+  params.u_max[0] = -1.2144776931994525;
+  params.u_last[0] = -1.2317108144255875;
+  params.du_max_f[0] = 0.9026784957312834;
+  params.du_max[0] = 1.1397468137245244;
+  params.x_max_2[0] = 1.8883934547350631;
+  params.x_max_3[0] = 1.4038856681660068;
 }

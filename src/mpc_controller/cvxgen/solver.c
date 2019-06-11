@@ -1,4 +1,4 @@
-/* Produced by CVXGEN, 2019-06-05 08:31:52 -0400.  */
+/* Produced by CVXGEN, 2019-06-11 03:54:34 -0400.  */
 /* CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com. */
 /* The code in this file is Copyright (C) 2006-2017 Jacob Mattingley. */
 /* CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial */
@@ -11,7 +11,7 @@ double eval_gap_controller(void) {
   int i;
   double gap;
   gap = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     gap += workController.z[i]*workController.s[i];
   return gap;
 }
@@ -29,61 +29,61 @@ void set_defaults_controller(void) {
   settingsController.kkt_reg = 1e-7;
 }
 void setup_pointers_controller(void) {
-  workController.y = workController.x + 182;
-  workController.s = workController.x + 260;
-  workController.z = workController.x + 494;
-  varsController.u_0 = workController.x + 78;
-  varsController.u_1 = workController.x + 79;
-  varsController.u_2 = workController.x + 80;
-  varsController.u_3 = workController.x + 81;
-  varsController.u_4 = workController.x + 82;
-  varsController.u_5 = workController.x + 83;
-  varsController.u_6 = workController.x + 84;
-  varsController.u_7 = workController.x + 85;
-  varsController.u_8 = workController.x + 86;
-  varsController.u_9 = workController.x + 87;
-  varsController.u_10 = workController.x + 88;
-  varsController.u_11 = workController.x + 89;
-  varsController.u_12 = workController.x + 90;
-  varsController.u_13 = workController.x + 91;
-  varsController.u_14 = workController.x + 92;
-  varsController.u_15 = workController.x + 93;
-  varsController.u_16 = workController.x + 94;
-  varsController.u_17 = workController.x + 95;
-  varsController.u_18 = workController.x + 96;
-  varsController.u_19 = workController.x + 97;
-  varsController.u_20 = workController.x + 98;
-  varsController.u_21 = workController.x + 99;
-  varsController.u_22 = workController.x + 100;
-  varsController.u_23 = workController.x + 101;
-  varsController.u_24 = workController.x + 102;
-  varsController.u_25 = workController.x + 103;
-  varsController.x_1 = workController.x + 104;
-  varsController.x_2 = workController.x + 107;
-  varsController.x_3 = workController.x + 110;
-  varsController.x_4 = workController.x + 113;
-  varsController.x_5 = workController.x + 116;
-  varsController.x_6 = workController.x + 119;
-  varsController.x_7 = workController.x + 122;
-  varsController.x_8 = workController.x + 125;
-  varsController.x_9 = workController.x + 128;
-  varsController.x_10 = workController.x + 131;
-  varsController.x_11 = workController.x + 134;
-  varsController.x_12 = workController.x + 137;
-  varsController.x_13 = workController.x + 140;
-  varsController.x_14 = workController.x + 143;
-  varsController.x_15 = workController.x + 146;
-  varsController.x_16 = workController.x + 149;
-  varsController.x_17 = workController.x + 152;
-  varsController.x_18 = workController.x + 155;
-  varsController.x_19 = workController.x + 158;
-  varsController.x_20 = workController.x + 161;
-  varsController.x_21 = workController.x + 164;
-  varsController.x_22 = workController.x + 167;
-  varsController.x_23 = workController.x + 170;
-  varsController.x_24 = workController.x + 173;
-  varsController.x_25 = workController.x + 176;
-  varsController.x_26 = workController.x + 179;
+  workController.y = workController.x + 208;
+  workController.s = workController.x + 286;
+  workController.z = workController.x + 598;
+  varsController.u_0 = workController.x + 104;
+  varsController.u_1 = workController.x + 105;
+  varsController.u_2 = workController.x + 106;
+  varsController.u_3 = workController.x + 107;
+  varsController.u_4 = workController.x + 108;
+  varsController.u_5 = workController.x + 109;
+  varsController.u_6 = workController.x + 110;
+  varsController.u_7 = workController.x + 111;
+  varsController.u_8 = workController.x + 112;
+  varsController.u_9 = workController.x + 113;
+  varsController.u_10 = workController.x + 114;
+  varsController.u_11 = workController.x + 115;
+  varsController.u_12 = workController.x + 116;
+  varsController.u_13 = workController.x + 117;
+  varsController.u_14 = workController.x + 118;
+  varsController.u_15 = workController.x + 119;
+  varsController.u_16 = workController.x + 120;
+  varsController.u_17 = workController.x + 121;
+  varsController.u_18 = workController.x + 122;
+  varsController.u_19 = workController.x + 123;
+  varsController.u_20 = workController.x + 124;
+  varsController.u_21 = workController.x + 125;
+  varsController.u_22 = workController.x + 126;
+  varsController.u_23 = workController.x + 127;
+  varsController.u_24 = workController.x + 128;
+  varsController.u_25 = workController.x + 129;
+  varsController.x_1 = workController.x + 130;
+  varsController.x_2 = workController.x + 133;
+  varsController.x_3 = workController.x + 136;
+  varsController.x_4 = workController.x + 139;
+  varsController.x_5 = workController.x + 142;
+  varsController.x_6 = workController.x + 145;
+  varsController.x_7 = workController.x + 148;
+  varsController.x_8 = workController.x + 151;
+  varsController.x_9 = workController.x + 154;
+  varsController.x_10 = workController.x + 157;
+  varsController.x_11 = workController.x + 160;
+  varsController.x_12 = workController.x + 163;
+  varsController.x_13 = workController.x + 166;
+  varsController.x_14 = workController.x + 169;
+  varsController.x_15 = workController.x + 172;
+  varsController.x_16 = workController.x + 175;
+  varsController.x_17 = workController.x + 178;
+  varsController.x_18 = workController.x + 181;
+  varsController.x_19 = workController.x + 184;
+  varsController.x_20 = workController.x + 187;
+  varsController.x_21 = workController.x + 190;
+  varsController.x_22 = workController.x + 193;
+  varsController.x_23 = workController.x + 196;
+  varsController.x_24 = workController.x + 199;
+  varsController.x_25 = workController.x + 202;
+  varsController.x_26 = workController.x + 205;
 }
 void setup_indexed_paramsController_controller(void) {
   /* In CVXGEN, you can say */
@@ -191,13 +191,13 @@ void setup_indexing_controller(void) {
 }
 void set_start_controller(void) {
   int i;
-  for (i = 0; i < 182; i++)
+  for (i = 0; i < 208; i++)
     workController.x[i] = 0;
   for (i = 0; i < 78; i++)
     workController.y[i] = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     workController.s[i] = (workController.h[i] > 0) ? workController.h[i] : settingsController.s_init;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     workController.z[i] = settingsController.z_init;
 }
 double eval_objv_controller(void) {
@@ -206,10 +206,10 @@ double eval_objv_controller(void) {
   /* Borrow space in workController.rhs. */
   multbyP_controller(workController.rhs, workController.x);
   objv = 0;
-  for (i = 0; i < 182; i++)
+  for (i = 0; i < 208; i++)
     objv += workController.x[i]*workController.rhs[i];
   objv *= 0.5;
-  for (i = 0; i < 182; i++)
+  for (i = 0; i < 208; i++)
     objv += workController.q[i]*workController.x[i];
   objv += workController.quad_600568381440[0]+workController.quad_898851794944[0]+workController.quad_88433618944[0]+workController.quad_240204779520[0]+workController.quad_635618762752[0]+workController.quad_732753989632[0]+workController.quad_427523055616[0]+workController.quad_976046530560[0]+workController.quad_688550678528[0]+workController.quad_304816418816[0]+workController.quad_819339411456[0]+workController.quad_101800079360[0]+workController.quad_976903761920[0]+workController.quad_141299838976[0]+workController.quad_343404097536[0]+workController.quad_815806124032[0]+workController.quad_997002137600[0]+workController.quad_141630619648[0]+workController.quad_835263414272[0]+workController.quad_962643562496[0]+workController.quad_928463360000[0]+workController.quad_380101586944[0]+workController.quad_150659375104[0]+workController.quad_392524365824[0]+workController.quad_653656117248[0]+workController.quad_758104227840[0];
   return objv;
@@ -218,23 +218,23 @@ void fillrhs_aff_controller(void) {
   int i;
   double *r1, *r2, *r3, *r4;
   r1 = workController.rhs;
-  r2 = workController.rhs + 182;
-  r3 = workController.rhs + 416;
-  r4 = workController.rhs + 650;
+  r2 = workController.rhs + 208;
+  r3 = workController.rhs + 520;
+  r4 = workController.rhs + 832;
   /* r1 = -A^Ty - G^Tz - Px - q. */
   multbymAT_controller(r1, workController.y);
   multbymGT_controller(workController.buffer, workController.z);
-  for (i = 0; i < 182; i++)
+  for (i = 0; i < 208; i++)
     r1[i] += workController.buffer[i];
   multbyP_controller(workController.buffer, workController.x);
-  for (i = 0; i < 182; i++)
+  for (i = 0; i < 208; i++)
     r1[i] -= workController.buffer[i] + workController.q[i];
   /* r2 = -z. */
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     r2[i] = -workController.z[i];
   /* r3 = -Gx - s + h. */
   multbymG_controller(r3, workController.x);
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     r3[i] += -workController.s[i] + workController.h[i];
   /* r4 = -Ax + b. */
   multbymA_controller(r4, workController.x);
@@ -250,19 +250,19 @@ void fillrhs_cc_controller(void) {
   double sigma;
   double smu;
   double minval;
-  r2 = workController.rhs + 182;
-  ds_aff = workController.lhs_aff + 182;
-  dz_aff = workController.lhs_aff + 416;
+  r2 = workController.rhs + 208;
+  ds_aff = workController.lhs_aff + 208;
+  dz_aff = workController.lhs_aff + 520;
   mu = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     mu += workController.s[i]*workController.z[i];
   /* Don't finish calculating mu quite yet. */
   /* Find min(min(ds./s), min(dz./z)). */
   minval = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     if (ds_aff[i] < minval*workController.s[i])
       minval = ds_aff[i]/workController.s[i];
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     if (dz_aff[i] < minval*workController.z[i])
       minval = dz_aff[i]/workController.z[i];
   /* Find alpha. */
@@ -271,20 +271,20 @@ void fillrhs_cc_controller(void) {
   else
       alpha = -1/minval;
   sigma = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     sigma += (workController.s[i] + alpha*ds_aff[i])*
       (workController.z[i] + alpha*dz_aff[i]);
   sigma /= mu;
   sigma = sigma*sigma*sigma;
   /* Finish calculating mu now. */
-  mu *= 0.004273504273504274;
+  mu *= 0.003205128205128205;
   smu = sigma*mu;
   /* Fill-in the rhs. */
-  for (i = 0; i < 182; i++)
+  for (i = 0; i < 208; i++)
     workController.rhs[i] = 0;
-  for (i = 416; i < 728; i++)
+  for (i = 520; i < 910; i++)
     workController.rhs[i] = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     r2[i] = workController.s_inv[i]*(smu - ds_aff[i]*dz_aff[i]);
 }
 void refine_controller(double *target, double *var) {
@@ -295,7 +295,7 @@ void refine_controller(double *target, double *var) {
   for (j = 0; j < settingsController.refine_steps; j++) {
     norm2 = 0;
     matrix_multiply_controller(residual, var);
-    for (i = 0; i < 728; i++) {
+    for (i = 0; i < 910; i++) {
       residual[i] = residual[i] - target[i];
       norm2 += residual[i]*residual[i];
     }
@@ -310,7 +310,7 @@ void refine_controller(double *target, double *var) {
     /* Solve to find new_var = KKT \ (target - A*var). */
     ldl_solve_controller(residual, new_var);
     /* Update var += new_var, or var += KKT \ (target - A*var). */
-    for (i = 0; i < 728; i++) {
+    for (i = 0; i < 910; i++) {
       var[i] -= new_var[i];
     }
   }
@@ -320,7 +320,7 @@ void refine_controller(double *target, double *var) {
     /* it's expensive. */
     norm2 = 0;
     matrix_multiply_controller(residual, var);
-    for (i = 0; i < 728; i++) {
+    for (i = 0; i < 910; i++) {
       residual[i] = residual[i] - target[i];
       norm2 += residual[i]*residual[i];
     }
@@ -338,11 +338,11 @@ double calc_ineq_resid_squared_controller(void) {
   /* Find -Gx. */
   multbymG_controller(workController.buffer, workController.x);
   /* Add -s + h. */
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     workController.buffer[i] += -workController.s[i] + workController.h[i];
   /* Now find the squared norm. */
   norm2_squared = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     norm2_squared += workController.buffer[i]*workController.buffer[i];
   return norm2_squared;
 }
@@ -369,7 +369,7 @@ void better_start_controller(void) {
   double alpha;
   workController.block_33[0] = -1;
   /* Make sure sinvz is 1 to make hijacked KKT system ok. */
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     workController.s_inv_z[i] = 1;
   fill_KKT_controller();
   ldl_factor_controller();
@@ -378,40 +378,40 @@ void better_start_controller(void) {
   ldl_solve_controller(workController.rhs, workController.lhs_aff);
   /* Don't do any refinement for now. Precision doesn't matter too much. */
   x = workController.lhs_aff;
-  s = workController.lhs_aff + 182;
-  z = workController.lhs_aff + 416;
-  y = workController.lhs_aff + 650;
+  s = workController.lhs_aff + 208;
+  z = workController.lhs_aff + 520;
+  y = workController.lhs_aff + 832;
   /* Just set x and y as is. */
-  for (i = 0; i < 182; i++)
+  for (i = 0; i < 208; i++)
     workController.x[i] = x[i];
   for (i = 0; i < 78; i++)
     workController.y[i] = y[i];
   /* Now complete the initialization. Start with s. */
   /* Must have alpha > max(z). */
   alpha = -1e99;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     if (alpha < z[i])
       alpha = z[i];
   if (alpha < 0) {
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       workController.s[i] = -z[i];
   } else {
     alpha += 1;
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       workController.s[i] = -z[i] + alpha;
   }
   /* Now initialize z. */
   /* Now must have alpha > max(-z). */
   alpha = -1e99;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     if (alpha < -z[i])
       alpha = -z[i];
   if (alpha < 0) {
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       workController.z[i] = z[i];
   } else {
     alpha += 1;
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       workController.z[i] = z[i] + alpha;
   }
 }
@@ -420,14 +420,14 @@ void fillrhs_start_controller(void) {
   int i;
   double *r1, *r2, *r3, *r4;
   r1 = workController.rhs;
-  r2 = workController.rhs + 182;
-  r3 = workController.rhs + 416;
-  r4 = workController.rhs + 650;
-  for (i = 0; i < 182; i++)
+  r2 = workController.rhs + 208;
+  r3 = workController.rhs + 520;
+  r4 = workController.rhs + 832;
+  for (i = 0; i < 208; i++)
     r1[i] = -workController.q[i];
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     r2[i] = 0;
-  for (i = 0; i < 234; i++)
+  for (i = 0; i < 312; i++)
     r3[i] = workController.h[i];
   for (i = 0; i < 78; i++)
     r4[i] = workController.b[i];
@@ -453,7 +453,7 @@ long solve_controller(void) {
   else
     set_start_controller();
   for (iter = 0; iter < settingsController.max_iters; iter++) {
-    for (i = 0; i < 234; i++) {
+    for (i = 0; i < 312; i++) {
       workController.s_inv[i] = 1.0 / workController.s[i];
       workController.s_inv_z[i] = workController.s_inv[i]*workController.z[i];
     }
@@ -469,19 +469,19 @@ long solve_controller(void) {
     ldl_solve_controller(workController.rhs, workController.lhs_cc);
     refine_controller(workController.rhs, workController.lhs_cc);
     /* Add the two together and store in aff. */
-    for (i = 0; i < 728; i++)
+    for (i = 0; i < 910; i++)
       workController.lhs_aff[i] += workController.lhs_cc[i];
     /* Rename aff to reflect its new meaning. */
     dx = workController.lhs_aff;
-    ds = workController.lhs_aff + 182;
-    dz = workController.lhs_aff + 416;
-    dy = workController.lhs_aff + 650;
+    ds = workController.lhs_aff + 208;
+    dz = workController.lhs_aff + 520;
+    dy = workController.lhs_aff + 832;
     /* Find min(min(ds./s), min(dz./z)). */
     minval = 0;
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       if (ds[i] < minval*workController.s[i])
         minval = ds[i]/workController.s[i];
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       if (dz[i] < minval*workController.z[i])
         minval = dz[i]/workController.z[i];
     /* Find alpha. */
@@ -490,11 +490,11 @@ long solve_controller(void) {
     else
       alpha = -0.99/minval;
     /* Update the primal and dual variables. */
-    for (i = 0; i < 182; i++)
+    for (i = 0; i < 208; i++)
       workController.x[i] += alpha*dx[i];
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       workController.s[i] += alpha*ds[i];
-    for (i = 0; i < 234; i++)
+    for (i = 0; i < 312; i++)
       workController.z[i] += alpha*dz[i];
     for (i = 0; i < 78; i++)
       workController.y[i] += alpha*dy[i];

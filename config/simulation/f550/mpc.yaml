@@ -9,12 +9,23 @@ mpc_parameters:
 
   horizon_length: 26
 
-  Q: [500, 100, 100] # state error penalization
-  S: [1000, 300, 300] # last state error penalization
+  horizontal:
 
-  max_speed: 5.0
-  max_acceleration: 2.0
-  max_jerk: 10.0
+    Q: [500, 100, 100] # state error penalization
+    S: [1000, 300, 300] # last state error penalization
+
+    max_speed: 5.0
+    max_acceleration: 2.0
+    max_jerk: 10.0
+
+  vertical:
+
+    Q: [100, 10, 10] # state error penalization
+    S: [100, 10, 10] # last state error penalization
+
+    max_speed: 2.0
+    max_acceleration: 1.5
+    max_u: 50.0
 
 cvx_parameters:
 
@@ -40,10 +51,6 @@ attitude_vertical_feedback:
         kw: 0.0
 
     vertical:
-      kp: 40.0
-      kv: 20.0
-      ka: 1.0
-
       attitude:
         kq: 20.0
         kw: 5.0
@@ -56,3 +63,11 @@ attitude_vertical_feedback:
     filter_rate: 20 # [Hz]
     perc_change_rate: 1.0
     min_change_rate: 0.1 # perc of the difference
+
+  # saturations and limits
+  tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
+  tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
+  thrust_saturation: 0.85 # [-], range from 0 to 1
+
+# output mode to PixHawk
+output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}

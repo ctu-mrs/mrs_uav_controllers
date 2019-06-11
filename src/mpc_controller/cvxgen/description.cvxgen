@@ -1,4 +1,4 @@
-# Produced by CVXGEN, 2019-06-05 08:31:44 -0400.
+# Produced by CVXGEN, 2019-06-11 03:54:17 -0400.
 # CVXGEN is Copyright (C) 2006-2017 Jacob Mattingley, jem@cvxgen.com.
 # The code in this file is Copyright (C) 2006-2017 Jacob Mattingley.
 # CVXGEN, or solvers produced by CVXGEN, cannot be used for commercial
@@ -14,10 +14,10 @@ dimensions
 end
 
 parameters
-  A (n,n)  {1,1 2,2 1,2 2,3}  # dynamics matrix
+  A (n,n)  {1,1 2,2 3,3 1,2 2,3}  # dynamics matrix
   B (n,m)  {3,1} # transfer matrix
 
-  Af (n,n)  {1,1 2,2 1,2 2,3}  # dynamics matrix, first step
+  Af (n,n)  {1,1 2,2 3,3 1,2 2,3}  # dynamics matrix, first step
   Bf (n,m)  {3,1} # transfer matrix, first step
 
   Q (n,n) psd diagonal nonnegative   # state cost
@@ -32,7 +32,8 @@ parameters
 
   u_last  # system input from the last iteration, used for consistent slew rate
 
-  x_max_1   # maximum vel (state constrain)
+  x_max_2   # maximum vel (state constrain)
+  x_max_3   # maximum acc (state constrain)
 
   x_ss[t] (n), t=1..T # given reference
 end
@@ -57,8 +58,11 @@ subject to
   abs(u[0] - u_last) <= du_max_f
   abs(u[t] - u[t-1]) <= du_max, t=1..T-1
 
-  #state constraints
-  abs(x[t][2]) <= x_max_1, t=1..T
+  #state constraints vel
+  abs(x[t][2]) <= x_max_2, t=1..T
+
+  #state constraints acc
+  abs(x[t][3]) <= x_max_3, t=1..T
 
 
 end
