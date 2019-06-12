@@ -39,8 +39,6 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
-  virtual const mrs_msgs::TrackerConstraintsResponse::ConstPtr setConstraints(const mrs_msgs::TrackerConstraintsRequest::ConstPtr &cmd);
-
 private:
   bool is_initialized = false;
   bool is_active      = false;
@@ -282,15 +280,6 @@ const mrs_msgs::ControllerStatus::Ptr FailsafeController::getStatus() {
 
     return mrs_msgs::ControllerStatus::Ptr();
   }
-}
-
-//}
-
-/* //{ setConstraints() */
-
-const mrs_msgs::TrackerConstraintsResponse::ConstPtr FailsafeController::setConstraints([[maybe_unused]] const mrs_msgs::TrackerConstraintsRequest::ConstPtr &cmd) {
-
-  return mrs_msgs::TrackerConstraintsResponse::ConstPtr(new mrs_msgs::TrackerConstraintsResponse());
 }
 
 //}

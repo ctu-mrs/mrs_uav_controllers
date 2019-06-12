@@ -27,6 +27,8 @@
 #define Y 1
 #define Z 2
 
+#define PI 3.141592653
+
 #define OUTPUT_ATTITUDE_RATE 1
 #define OUTPUT_ATTITUDE_QUATERNION 2
 
@@ -55,8 +57,6 @@ public:
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
-
-  const mrs_msgs::TrackerConstraintsResponse::ConstPtr setConstraints(const mrs_msgs::TrackerConstraintsRequest::ConstPtr &cmd);
 
   bool reset(void);
 
@@ -124,9 +124,8 @@ private:
 
   int horizon_length_;
 
-  std::mutex mutex_constraints;
-  double     max_speed_horizontal_, max_acceleration_horizontal_, max_jerk_;
-  double     max_speed_vertical_, max_acceleration_vertical_, max_u_vertical_;
+  double max_speed_horizontal_, max_acceleration_horizontal_, max_jerk_;
+  double max_speed_vertical_, max_acceleration_vertical_, max_u_vertical_;
 
   mrs_controllers::mpc_controller::CvxWrapper *cvx_x;
   mrs_controllers::mpc_controller::CvxWrapper *cvx_y;
@@ -267,7 +266,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 180) * M_PI;
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
@@ -404,13 +403,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // | ------------------- initial conditions ------------------- |
 
   Eigen::MatrixXd initial_x = Eigen::MatrixXd::Zero(3, 1);
-  initial_x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, 0;
+  initial_x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, reference->acceleration.x;
 
   Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
-  initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, 0;
+  initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, reference->acceleration.y;
 
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
-  initial_z << odometry->pose.pose.position.z, odometry->twist.twist.linear.z, 0;
+  initial_z << odometry->pose.pose.position.z, odometry->twist.twist.linear.z, reference->acceleration.z;
 
   // | ---------------------- set reference --------------------- |
 
@@ -439,24 +438,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   cvx_x->setParams();
   cvx_x->setLastInput(cvx_x_u);
   cvx_x->loadReference(mpc_reference_x);
-  {
-    std::scoped_lock lock(mutex_constraints);
-
-    cvx_x->setLimits(max_speed_horizontal_, 999, max_acceleration_horizontal_, max_jerk_, dt1, dt2);
-  }
+  cvx_x->setLimits(max_speed_horizontal_, 999, max_acceleration_horizontal_, max_jerk_, dt1, dt2);
   cvx_x->setInitialState(initial_x);
-
   [[maybe_unused]] int iters_x = cvx_x->solveCvx();
   cvx_x_u                      = cvx_x->getFirstControlInput();
 
   cvx_y->setParams();
   cvx_y->setLastInput(cvx_y_u);
   cvx_y->loadReference(mpc_reference_y);
-  {
-    std::scoped_lock lock(mutex_constraints);
-
-    cvx_y->setLimits(max_speed_horizontal_, 999, max_acceleration_horizontal_, max_jerk_, dt1, dt2);
-  }
+  cvx_y->setLimits(max_speed_horizontal_, 999, max_acceleration_horizontal_, max_jerk_, dt1, dt2);
   cvx_y->setInitialState(initial_y);
   [[maybe_unused]] int iters_y = cvx_y->solveCvx();
   cvx_y_u                      = cvx_y->getFirstControlInput();
@@ -464,11 +454,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   cvx_z->setParams();
   cvx_z->setLastInput(cvx_z_u);
   cvx_z->loadReference(mpc_reference_z);
-  {
-    std::scoped_lock lock(mutex_constraints);
-
-    cvx_z->setLimits(max_speed_vertical_, max_acceleration_vertical_, max_u_vertical_, 999.0, dt1, dt2);
-  }
+  cvx_z->setLimits(max_speed_vertical_, max_acceleration_vertical_, max_u_vertical_, 999.0, dt1, dt2);
   cvx_z->setInitialState(initial_z);
   [[maybe_unused]] int iters_z = cvx_z->solveCvx();
   cvx_z_u                      = cvx_z->getFirstControlInput();
@@ -550,14 +536,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
-  Ra << cvx_x_u, cvx_y_u, cvx_z_u;
+  Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
 
   double total_mass = uav_mass_ + uav_mass_difference;
 
   Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
   Eigen::Vector3d integral_feedback(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
 
-  Eigen::Vector3d f = integral_feedback + feed_forward;
+  Eigen::Vector3d f      = integral_feedback + feed_forward;
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
@@ -614,8 +600,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // saturate the angle
   if (tilt_angle_saturation_ > 1e-3 && theta > tilt_angle_saturation_) {
-    ROS_WARN_THROTTLE(1.0, "[MpcController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / M_PI) * 180.0,
-                      (tilt_angle_saturation_ / M_PI) * 180.0);
+    ROS_WARN_THROTTLE(1.0, "[MpcController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0,
+                      (tilt_angle_saturation_ / PI) * 180.0);
     theta = tilt_angle_saturation_;
   }
 
@@ -922,47 +908,6 @@ const mrs_msgs::ControllerStatus::Ptr MpcController::getStatus() {
 
     return mrs_msgs::ControllerStatus::Ptr();
   }
-}
-
-//}
-
-/* //{ setConstraints() */
-
-const mrs_msgs::TrackerConstraintsResponse::ConstPtr MpcController::setConstraints([[maybe_unused]] const mrs_msgs::TrackerConstraintsRequest::ConstPtr &cmd) {
-
-  std::scoped_lock lock(mutex_constraints);
-
-  // only use the new constraints if they are slower than the defaults
-
-  if (cmd->horizontal_speed < max_speed_horizontal_) {
-    max_speed_horizontal_ = cmd->horizontal_speed;
-  }
-
-  if (cmd->horizontal_acceleration < max_acceleration_horizontal_) {
-    max_acceleration_horizontal_ = cmd->horizontal_acceleration;
-  }
-
-  if (cmd->horizontal_jerk < max_jerk_) {
-    max_jerk_ = cmd->horizontal_jerk;
-  }
-
-  double new_max_speed_vertical_ =
-      cmd->vertical_ascending_speed > cmd->vertical_descending_speed ? cmd->vertical_descending_speed : cmd->vertical_ascending_speed;
-
-  if (new_max_speed_vertical_ < max_speed_vertical_) {
-    max_speed_vertical_ = new_max_speed_vertical_;
-  }
-
-  double new_max_acceleration_vertical = cmd->vertical_ascending_acceleration > cmd->vertical_descending_acceleration ? cmd->vertical_descending_acceleration
-                                                                                                                      : cmd->vertical_ascending_acceleration;
-
-  if (new_max_acceleration_vertical < max_acceleration_vertical_) {
-    max_acceleration_vertical_ = new_max_acceleration_vertical;
-  }
-
-  ROS_INFO("[MpcController]: constraints updated");
-
-  return mrs_msgs::TrackerConstraintsResponse::ConstPtr(new mrs_msgs::TrackerConstraintsResponse());
 }
 
 //}

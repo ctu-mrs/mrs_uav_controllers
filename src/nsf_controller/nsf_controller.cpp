@@ -25,6 +25,8 @@
 #define Y 1
 #define Z 2
 
+#define PI 3.141592653
+
 namespace mrs_controllers
 {
 
@@ -52,8 +54,6 @@ public:
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
   bool reset(void);
-
-  virtual const mrs_msgs::TrackerConstraintsResponse::ConstPtr setConstraints(const mrs_msgs::TrackerConstraintsRequest::ConstPtr &cmd);
 
 private:
   bool is_initialized = false;
@@ -190,7 +190,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 180) * M_PI;
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
@@ -655,15 +655,6 @@ const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 
     return mrs_msgs::ControllerStatus::Ptr();
   }
-}
-
-//}
-
-/* //{ setConstraints() */
-
-const mrs_msgs::TrackerConstraintsResponse::ConstPtr NsfController::setConstraints([[maybe_unused]] const mrs_msgs::TrackerConstraintsRequest::ConstPtr &cmd) {
-
-  return mrs_msgs::TrackerConstraintsResponse::ConstPtr(new mrs_msgs::TrackerConstraintsResponse());
 }
 
 //}
