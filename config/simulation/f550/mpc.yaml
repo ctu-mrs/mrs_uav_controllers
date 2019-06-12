@@ -14,9 +14,9 @@ mpc_parameters:
     Q: [500, 100, 100] # state error penalization
     S: [1000, 300, 300] # last state error penalization
 
-    max_speed: 5.0
-    max_acceleration: 2.0
-    max_jerk: 10.0
+    max_speed: 2.0
+    max_acceleration: 1.5
+    max_jerk: 3.0
 
   vertical:
 
@@ -45,7 +45,6 @@ attitude_vertical_feedback:
   default_gains:
 
     horizontal:
-
       attitude:
         kq: 13.0
         kw: 0.0

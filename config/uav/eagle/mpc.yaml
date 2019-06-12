@@ -45,16 +45,11 @@ attitude_vertical_feedback:
   default_gains:
 
     horizontal:
-
       attitude:
         kq: 5.0
         kw: 0.0
 
     vertical:
-      kp: 10.0
-      kv: 6.0
-      ka: 1.0
-
       attitude:
         kq: 5.0
         kw: 1.0

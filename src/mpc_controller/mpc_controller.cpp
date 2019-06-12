@@ -798,7 +798,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
     // antiwindup
     double temp_gain = km;
-    if (sqrt(pow(odometry->twist.twist.linear.z, 2) + pow(odometry->twist.twist.linear.z, 2)) > 0.3) {
+    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2) + pow(odometry->twist.twist.linear.z, 2)) > 0.3) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for the mass kicks in");
     }
@@ -818,7 +818,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: The uav_mass_difference is being saturated to %1.3f!", uav_mass_difference);
+      ROS_WARN_THROTTLE(1.0, "[MpcController]: The uav_mass_difference is being saturated to %0.2f!", uav_mass_difference);
     }
   }
 
