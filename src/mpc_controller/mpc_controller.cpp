@@ -798,7 +798,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
     // antiwindup
     double temp_gain = km;
-    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2) + pow(odometry->twist.twist.linear.z, 2)) > 0.5) {
+    if (fabs(odometry->twist.twist.linear.z) > 0.3 && ((Ep[2] < 0 && odometry->twist.twist.linear.z > 0) || (Ep[2] > 0 && odometry->twist.twist.linear.z < 0))) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for the mass kicks in");
     }
