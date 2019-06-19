@@ -3,16 +3,16 @@ default_gains:
   horizontal:
     
     attitude:
-      kq: 5.0
+      kq: 8.0
       kw: 0.0
 
   vertical:
-    kp: 10.0
-    kv: 10.0
+    kp: 15.0
+    kv: 6.0
     ka: 1.0
 
     attitude:
-      kq: 1.0
+      kq: 4.0
       kw: 1.0
 
   weight_estimator:
