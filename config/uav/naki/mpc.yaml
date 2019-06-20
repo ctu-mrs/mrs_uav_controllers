@@ -51,12 +51,12 @@ attitude_vertical_feedback:
 
     vertical:
       attitude:
-        kq: 20.0
-        kw: 1.0
+        kq: 2.5
+        kw: 0.2
 
     weight_estimator:
       km: 1.0
-      km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+      km_lim: 4.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
   gains_filter:
     filter_rate: 20 # [Hz]
