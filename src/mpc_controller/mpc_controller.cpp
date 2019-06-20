@@ -333,7 +333,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   } else {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
-    ROS_INFO("[MpcController]: activated with a last trackers command.");
+    ROS_INFO("[MpcController]: activated with the last tracker's command.");
   }
 
   first_iteration = true;
