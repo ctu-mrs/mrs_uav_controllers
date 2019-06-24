@@ -789,6 +789,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
 
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion");
     }
+
+    output_command->desired_acceleration.x = f[0] / total_mass;
+    output_command->desired_acceleration.y = f[1] / total_mass;
+    output_command->desired_acceleration.z = f[2] / total_mass;
   }
 
   output_command->thrust          = thrust;

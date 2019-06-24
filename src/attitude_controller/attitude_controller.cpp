@@ -369,8 +369,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
   // --------------------------------------------------------------
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
+  //
+  double total_mass = uav_mass_ + uav_mass_difference;
 
-  Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + (uav_mass_ + uav_mass_difference) * (Eigen::Vector3d(0, 0, g_) + Ra).array();
+  Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + total_mass * (Eigen::Vector3d(0, 0, g_) + Ra).array();
 
   Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;
   Rd = Rq.matrix();
@@ -478,6 +480,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
   output_command->quter_attitude.y    = thrust_vec.y();
   output_command->quter_attitude.z    = thrust_vec.z();
   output_command->quater_attitude_set = true;
+
+  output_command->desired_acceleration.x = f[0] / total_mass;
+  output_command->desired_acceleration.y = f[1] / total_mass;
+  output_command->desired_acceleration.z = f[2] / total_mass;
 
   output_command->euler_attitude_set = false;
 

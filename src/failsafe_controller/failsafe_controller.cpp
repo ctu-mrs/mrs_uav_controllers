@@ -135,9 +135,9 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
   std::scoped_lock lock(mutex_hover_thrust);
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
-    activation_control_command_ = mrs_msgs::AttitudeCommand();
+    activation_control_command_                 = mrs_msgs::AttitudeCommand();
     activation_control_command_.mass_difference = 0;
-    uav_mass_difference         = 0;
+    uav_mass_difference                         = 0;
     ROS_WARN("[FailsafeController]: activated without getting the last tracker's command.");
   } else {
     activation_control_command_ = *cmd;
@@ -252,6 +252,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
 
   output_command->thrust    = hover_thrust;
   output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
+
+  output_command->desired_acceleration.x = 0;
+  output_command->desired_acceleration.y = 0;
+  output_command->desired_acceleration.z = 0;
 
   last_output_command = output_command;
 

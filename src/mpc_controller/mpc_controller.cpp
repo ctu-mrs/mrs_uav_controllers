@@ -543,7 +543,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
   Eigen::Vector3d integral_feedback(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
 
-  Eigen::Vector3d f      = integral_feedback + feed_forward;
+  Eigen::Vector3d f = integral_feedback + feed_forward;
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
@@ -798,7 +798,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
     // antiwindup
     double temp_gain = km;
-    if (fabs(odometry->twist.twist.linear.z) > 0.3 && ((Ep[2] < 0 && odometry->twist.twist.linear.z > 0) || (Ep[2] > 0 && odometry->twist.twist.linear.z < 0))) {
+    if (fabs(odometry->twist.twist.linear.z) > 0.3 &&
+        ((Ep[2] < 0 && odometry->twist.twist.linear.z > 0) || (Ep[2] > 0 && odometry->twist.twist.linear.z < 0))) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for the mass kicks in");
     }
@@ -877,6 +878,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
       ROS_WARN_THROTTLE(1.0, "[MpcController]: outputting attitude quaternion");
     }
+
+    output_command->desired_acceleration.x = f[0] / total_mass;
+    output_command->desired_acceleration.y = f[1] / total_mass;
+    output_command->desired_acceleration.z = f[2] / total_mass;
   }
 
   output_command->thrust          = thrust;
