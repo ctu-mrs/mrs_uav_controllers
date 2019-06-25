@@ -460,6 +460,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   cvx_z_u                      = cvx_z->getFirstControlInput();
 
   // --------------------------------------------------------------
+  // |           disble lateral feedback during takeoff           |
+  // --------------------------------------------------------------
+
+  if (reference->disable_position_gains) {
+    cvx_x_u = 0;
+    cvx_y_u = 0;
+  }
+
+  // --------------------------------------------------------------
   // |                  calculate control errors                  |
   // --------------------------------------------------------------
 
