@@ -2,8 +2,8 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.0.2 (2019-07-01)
+------------------
 * added feedback disablation to mpc controller during takeoff
 * added desired acceleration to outputs
 * increased failsafe thrust constants
