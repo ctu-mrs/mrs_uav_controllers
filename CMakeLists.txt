@@ -22,6 +22,7 @@ generate_dynamic_reconfigure_options(
   cfg/so3_gains.cfg
   cfg/attitude_gains.cfg
   cfg/mpc_gains.cfg
+  cfg/acceleration_gains.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color")
@@ -52,6 +53,15 @@ include_directories(
   include/mpc_controller
   ${catkin_INCLUDE_DIRS}
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
+  )
+
+# CVX wrapper
+
+add_library(MpcControllerCvxgen src/cvx_wrapper/cvx_wrapper.cpp
+  src/cvx_wrapper/cvxgen/ldl.c
+  src/cvx_wrapper/cvxgen/matrix_support.c
+  src/cvx_wrapper/cvxgen/solver.c
+  src/cvx_wrapper/cvxgen/util.c
   )
 
 # NSF controller
@@ -88,13 +98,6 @@ target_link_libraries(So3Controller
 
 # Mpc controller
 
-add_library(MpcControllerCvxgen src/cvx_wrapper/cvx_wrapper.cpp
-  src/cvx_wrapper/cvxgen/ldl.c
-  src/cvx_wrapper/cvxgen/matrix_support.c
-  src/cvx_wrapper/cvxgen/solver.c
-  src/cvx_wrapper/cvxgen/util.c
-  )
-
 add_library(MpcController
   src/mpc_controller/mpc_controller.cpp
   )
@@ -110,7 +113,24 @@ target_link_libraries(MpcController
   MpcControllerCvxgen
   )
 
-# attitude controller
+# acceleration controller
+
+add_library(AccelerationController
+  src/acceleration_controller/acceleration_controller.cpp
+  )
+
+add_dependencies(AccelerationController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
+  )
+
+target_link_libraries(AccelerationController
+  ${catkin_LIBRARIES}
+  MpcControllerCvxgen
+  )
+
+# Attitude controller
 
 add_library(AttitudeController
   src/attitude_controller/attitude_controller.cpp

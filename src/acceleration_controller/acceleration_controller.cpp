@@ -13,7 +13,7 @@
 #include <mrs_msgs/ControllerStatus.h>
 #include <mrs_uav_manager/Controller.h>
 
-#include <mrs_controllers/mpc_gainsConfig.h>
+#include <mrs_controllers/acceleration_gainsConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
@@ -35,15 +35,15 @@
 namespace mrs_controllers
 {
 
-namespace mpc_controller
+namespace acceleration_controller
 {
 
-/* //{ class MpcController */
+/* //{ class AccelerationController */
 
-class MpcController : public mrs_uav_manager::Controller {
+class AccelerationController : public mrs_uav_manager::Controller {
 
 public:
-  MpcController(void);
+  AccelerationController(void);
 
   void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
@@ -52,7 +52,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
-  void dynamicReconfigureCallback(mrs_controllers::mpc_gainsConfig &config, uint32_t level);
+  void dynamicReconfigureCallback(mrs_controllers::acceleration_gainsConfig &config, uint32_t level);
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
@@ -68,12 +68,12 @@ private:
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  boost::recursive_mutex                      config_mutex_;
-  typedef mrs_controllers::mpc_gainsConfig    Config;
-  typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
-  boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-  void                                        drs_callback(mrs_controllers::mpc_gainsConfig &config, uint32_t level);
-  mrs_controllers::mpc_gainsConfig            drs_desired_gains;
+  boost::recursive_mutex                            config_mutex_;
+  typedef mrs_controllers::acceleration_gainsConfig Config;
+  typedef dynamic_reconfigure::Server<Config>       ReconfigureServer;
+  boost::shared_ptr<ReconfigureServer>              reconfigure_server_;
+  void                                              drs_callback(mrs_controllers::acceleration_gainsConfig &config, uint32_t level);
+  mrs_controllers::acceleration_gainsConfig         drs_desired_gains;
 
 private:
   double                       uav_mass_;
@@ -83,8 +83,6 @@ private:
   double                       hover_thrust;
 
   // actual gains (used and already filtered)
-  double kiwxy, kibxy;
-  double kiwxy_lim, kibxy_lim;
   double km, km_lim;
   double kqxy, kqz;  // attitude gains
   double kwxy, kwz;  // attitude rate gains
@@ -118,17 +116,12 @@ private:
 
   double dt1, dt2;
 
-  double cvx_x_u = 0;
-  double cvx_y_u = 0;
   double cvx_z_u = 0;
 
   int horizon_length_;
 
-  double max_speed_horizontal_, max_acceleration_horizontal_, max_jerk_;
   double max_speed_vertical_, max_acceleration_vertical_, max_u_vertical_;
 
-  mrs_controllers::cvx_wrapper::CvxWrapper *cvx_x;
-  mrs_controllers::cvx_wrapper::CvxWrapper *cvx_y;
   mrs_controllers::cvx_wrapper::CvxWrapper *cvx_z;
 
   bool cvx_verbose_ = false;
@@ -152,13 +145,9 @@ private:
 private:
   int        output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
   std::mutex mutex_output_mode;
-
-private:
-  Eigen::Vector2d Ib_b;  // body error integral in the body frame
-  Eigen::Vector2d Iw_w;  // world error integral in the world_frame
 };
 
-MpcController::MpcController(void) {
+AccelerationController::AccelerationController(void) {
 }
 
 //}
@@ -169,9 +158,9 @@ MpcController::MpcController(void) {
 
 /* //{ initialize() */
 
-void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params) {
+void AccelerationController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params) {
 
-  ros::NodeHandle nh_(parent_nh, "mpc_controller");
+  ros::NodeHandle nh_(parent_nh, "acceleration_controller");
 
   ros::Time::waitForValid();
 
@@ -181,7 +170,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // |                       load parameters                      |
   // --------------------------------------------------------------
 
-  mrs_lib::ParamLoader param_loader(nh_, "MpcController");
+  mrs_lib::ParamLoader param_loader(nh_, "AccelerationController");
 
   param_loader.load_param("enable_profiler", profiler_enabled_);
 
@@ -194,14 +183,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
   param_loader.load_param("mpc_parameters/horizon_length", horizon_length_);
 
-  param_loader.load_param("mpc_parameters/horizontal/max_speed", max_speed_horizontal_);
-  param_loader.load_param("mpc_parameters/horizontal/max_acceleration", max_acceleration_horizontal_);
-  param_loader.load_param("mpc_parameters/horizontal/max_jerk", max_jerk_);
-
-  std::vector<double> Q, S;
-  param_loader.load_param("mpc_parameters/horizontal/Q", Q);
-  param_loader.load_param("mpc_parameters/horizontal/S", S);
-
   param_loader.load_param("mpc_parameters/vertical/max_speed", max_speed_vertical_);
   param_loader.load_param("mpc_parameters/vertical/max_acceleration", max_acceleration_vertical_);
   param_loader.load_param("mpc_parameters/vertical/max_u", max_u_vertical_);
@@ -212,15 +193,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
   param_loader.load_param("cvx_parameters/verbose", cvx_verbose_);
   param_loader.load_param("cvx_parameters/max_iterations", cvx_max_iterations_);
-
-  // | --------------------- integral gains --------------------- |
-
-  param_loader.load_param("integral_gains/kiw", kiwxy);
-  param_loader.load_param("integral_gains/kib", kibxy);
-
-  // integrator limits
-  param_loader.load_param("integral_gains/kiw_lim", kiwxy_lim);
-  param_loader.load_param("integral_gains/kib_lim", kibxy_lim);
 
   // | ------------- height and attitude controller ------------- |
 
@@ -257,11 +229,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   param_loader.load_param("output_mode", output_mode_);
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[MpcController]: output mode has to be {1, 2}!");
+    ROS_ERROR("[AccelerationController]: output mode has to be {1, 2}!");
   }
 
   if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[MpcController]: Could not load all parameters!");
+    ROS_ERROR("[AccelerationController]: Could not load all parameters!");
     ros::shutdown();
   }
 
@@ -269,15 +241,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
 
   uav_mass_difference = 0;
-  Iw_w                = Eigen::Vector2d::Zero(2);
-  Ib_b                = Eigen::Vector2d::Zero(2);
 
   // --------------------------------------------------------------
   // |                       prepare cvxgen                       |
   // --------------------------------------------------------------
 
-  cvx_x = new mrs_controllers::cvx_wrapper::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2, 0, 1.0);
-  cvx_y = new mrs_controllers::cvx_wrapper::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2, 0, 1.0);
   cvx_z = new mrs_controllers::cvx_wrapper::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q_z, S_z, dt1, dt2, 0.5, 0.5);
 
   // --------------------------------------------------------------
@@ -293,29 +261,29 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(drs_desired_gains);
-  ReconfigureServer::CallbackType f = boost::bind(&MpcController::dynamicReconfigureCallback, this, _1, _2);
+  ReconfigureServer::CallbackType f = boost::bind(&AccelerationController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
 
   // --------------------------------------------------------------
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler = new mrs_lib::Profiler(nh_, "MpcController", profiler_enabled_);
+  profiler = new mrs_lib::Profiler(nh_, "AccelerationController", profiler_enabled_);
 
   // --------------------------------------------------------------
   // |                           timers                           |
   // --------------------------------------------------------------
 
-  timer_gain_filter = nh_.createTimer(ros::Rate(gains_filter_timer_rate_), &MpcController::timerGainsFilter, this);
+  timer_gain_filter = nh_.createTimer(ros::Rate(gains_filter_timer_rate_), &AccelerationController::timerGainsFilter, this);
 
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[MpcController]: Could not load all parameters!");
+    ROS_ERROR("[AccelerationController]: Could not load all parameters!");
     ros::shutdown();
   }
 
-  ROS_INFO("[MpcController]: initialized");
+  ROS_INFO("[AccelerationController]: initialized");
 
   is_initialized = true;
 }
@@ -324,21 +292,21 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 
 /* //{ activate() */
 
-bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
     activation_control_command_ = mrs_msgs::AttitudeCommand();
     uav_mass_difference         = 0;
-    ROS_WARN("[MpcController]: activated without getting the last tracker's command.");
+    ROS_WARN("[AccelerationController]: activated without getting the last tracker's command.");
   } else {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
-    ROS_INFO("[MpcController]: activated with the last tracker's command.");
+    ROS_INFO("[AccelerationController]: activated with the last tracker's command.");
   }
 
   first_iteration = true;
 
-  ROS_INFO("[MpcController]: activated");
+  ROS_INFO("[AccelerationController]: activated");
 
   is_active = true;
 
@@ -349,20 +317,20 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
 /* //{ deactivate() */
 
-void MpcController::deactivate(void) {
+void AccelerationController::deactivate(void) {
 
   first_iteration     = false;
   uav_mass_difference = 0;
 
-  ROS_INFO("[MpcController]: deactivated");
+  ROS_INFO("[AccelerationController]: deactivated");
 }
 
 //}
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
-                                                                const mrs_msgs::PositionCommand::ConstPtr &reference) {
+const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
+                                                                         const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
@@ -371,7 +339,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   // Rp - position reference in global frame
-  // Rv - velocity reference in global frame
+  // Rc - velocity reference in global frame
   // Ra - velocity reference in global frame
   // Rw - angular velocity reference
   Eigen::Vector3d           Rp, Rv, Ra, Rw;
@@ -379,7 +347,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   Eigen::Matrix3d Rd;
 
-  Rp << reference->position.x, reference->position.y, reference->position.z;  // fill the desired position
+  Rp << reference->position.x, reference->position.y, reference->position.z;
   Rv << reference->velocity.x, reference->velocity.y, reference->velocity.z;
   Rw << 0, 0, reference->yaw_dot;
 
@@ -402,31 +370,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // | ------------------- initial conditions ------------------- |
 
-  Eigen::MatrixXd initial_x = Eigen::MatrixXd::Zero(3, 1);
-  initial_x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, reference->acceleration.x;
-
-  Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
-  initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, reference->acceleration.y;
-
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
   initial_z << odometry->pose.pose.position.z, odometry->twist.twist.linear.z, reference->acceleration.z;
 
   // | ---------------------- set reference --------------------- |
 
-  Eigen::MatrixXd mpc_reference_x = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
-  Eigen::MatrixXd mpc_reference_y = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
   Eigen::MatrixXd mpc_reference_z = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
 
   // prepare the full reference vector
   for (int i = 0; i < horizon_length_; i++) {
-
-    mpc_reference_x((i * n) + 0, 0) = reference->position.x;
-    mpc_reference_x((i * n) + 1, 0) = reference->velocity.x;
-    mpc_reference_x((i * n) + 2, 0) = reference->acceleration.x;
-
-    mpc_reference_y((i * n) + 0, 0) = reference->position.y;
-    mpc_reference_y((i * n) + 1, 0) = reference->velocity.y;
-    mpc_reference_y((i * n) + 2, 0) = reference->acceleration.y;
 
     mpc_reference_z((i * n) + 0, 0) = reference->position.z;
     mpc_reference_z((i * n) + 1, 0) = reference->velocity.z;
@@ -435,22 +387,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // | ------------------------ optimize ------------------------ |
 
-  cvx_x->setParams();
-  cvx_x->setLastInput(cvx_x_u);
-  cvx_x->loadReference(mpc_reference_x);
-  cvx_x->setLimits(max_speed_horizontal_, 999, max_acceleration_horizontal_, max_jerk_, dt1, dt2);
-  cvx_x->setInitialState(initial_x);
-  [[maybe_unused]] int iters_x = cvx_x->solveCvx();
-  cvx_x_u                      = cvx_x->getFirstControlInput();
-
-  cvx_y->setParams();
-  cvx_y->setLastInput(cvx_y_u);
-  cvx_y->loadReference(mpc_reference_y);
-  cvx_y->setLimits(max_speed_horizontal_, 999, max_acceleration_horizontal_, max_jerk_, dt1, dt2);
-  cvx_y->setInitialState(initial_y);
-  [[maybe_unused]] int iters_y = cvx_y->solveCvx();
-  cvx_y_u                      = cvx_y->getFirstControlInput();
-
   cvx_z->setParams();
   cvx_z->setLastInput(cvx_z_u);
   cvx_z->loadReference(mpc_reference_z);
@@ -458,15 +394,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   cvx_z->setInitialState(initial_z);
   [[maybe_unused]] int iters_z = cvx_z->solveCvx();
   cvx_z_u                      = cvx_z->getFirstControlInput();
-
-  // --------------------------------------------------------------
-  // |           disble lateral feedback during takeoff           |
-  // --------------------------------------------------------------
-
-  if (reference->disable_position_gains) {
-    cvx_x_u = 0;
-    cvx_y_u = 0;
-  }
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -497,8 +424,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[MpcController]: last " << last_update << ", current " << odometry->header.stamp);
-    ROS_WARN_THROTTLE(1.0, "[MpcController]: the last odometry message came too close! %f", dt);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[AccelerationController]: last " << last_update << ", current " << odometry->header.stamp);
+    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
       return last_output_command;
@@ -543,16 +470,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
-
-  Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
+  Ra << reference->acceleration.x, reference->acceleration.y, reference->acceleration.z + cvx_z_u;
 
   double total_mass = uav_mass_ + uav_mass_difference;
 
   Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
-  Eigen::Vector3d integral_feedback(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
 
-  Eigen::Vector3d f = integral_feedback + feed_forward;
+  Eigen::Vector3d f = feed_forward;
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
@@ -563,13 +487,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     // if the downwards part of the force is close to counter-act the gravity acceleration
     if (f[2] < (0.15 * total_mass * g_)) {
 
-      ROS_ERROR("[MpcController]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip (iteration #%d).", f[2], i);
+      ROS_ERROR("[AccelerationController]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip (iteration #%d).", f[2], i);
 
       // half the feedbacks
       feed_forward /= 2.0;
 
       // recalculate the desired force vector
-      f = integral_feedback + feed_forward;
+      f = feed_forward;
     } else {
 
       break;
@@ -587,21 +511,20 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // check for the failsafe limit
   if (!std::isfinite(theta)) {
 
-    ROS_ERROR("[MpcController]: NaN detected in variable \"theta\", returning null");
+    ROS_ERROR("[AccelerationController]: NaN detected in variable \"theta\", returning null");
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
   if (tilt_angle_failsafe_ > 1e-3 && theta > tilt_angle_failsafe_) {
 
-    ROS_ERROR("[MpcController]: The produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
-              (180.0 / M_PI) * tilt_angle_failsafe_);
-    ROS_INFO("[MpcController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
-    ROS_INFO("[MpcController]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[MpcController]: feed forward: [%.2f, %.2f, %.2f]", feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[MpcController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y, reference->position.z,
-             reference->yaw);
-    ROS_INFO("[MpcController]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", odometry->pose.pose.position.x, odometry->pose.pose.position.y,
+    ROS_ERROR("[AccelerationController]: The produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null",
+              (180.0 / M_PI) * theta, (180.0 / M_PI) * tilt_angle_failsafe_);
+    ROS_INFO("[AccelerationController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
+    ROS_INFO("[AccelerationController]: feed forward: [%.2f, %.2f, %.2f]", feed_forward[0], feed_forward[1], feed_forward[2]);
+    ROS_INFO("[AccelerationController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y,
+             reference->position.z, reference->yaw);
+    ROS_INFO("[AccelerationController]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", odometry->pose.pose.position.x, odometry->pose.pose.position.y,
              odometry->pose.pose.position.z, yaw);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
@@ -609,7 +532,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // saturate the angle
   if (tilt_angle_saturation_ > 1e-3 && theta > tilt_angle_saturation_) {
-    ROS_WARN_THROTTLE(1.0, "[MpcController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0,
+    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0,
                       (tilt_angle_saturation_ / PI) * 180.0);
     theta = tilt_angle_saturation_;
   }
@@ -654,13 +577,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   if (thrust_force >= 0) {
     thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
   } else {
-    ROS_WARN_THROTTLE(1.0, "[MpcController]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: Just so you know, the desired thrust force is negative (%f", thrust_force);
   }
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
     thrust = 0;
-    ROS_ERROR("[MpcController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[AccelerationController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
   } else if (thrust > 0.8) {
     thrust = 0.8;
   } else if (thrust < 0.0) {
@@ -679,123 +602,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   }
   mute_lateral_gains = reference->disable_position_gains;
 
-  // --------------------------------------------------------------
-  // |                  integrate the body error                 |
-  // --------------------------------------------------------------
-
-  /* body error integrator //{ */
-
-  {
-    std::scoped_lock lock(mutex_gains);
-
-    // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
-
-    // integrate the body error
-
-    // antiwindup
-    double temp_gain = kibxy;
-    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
-      temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for body integral kicks in");
-    }
-    Ib_b -= temp_gain * Ep_body * dt;
-
-    // saturate the body
-    double body_integral_saturated = false;
-    if (!std::isfinite(Ib_b[0])) {
-      Ib_b[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!");
-    } else if (Ib_b[0] > kibxy_lim) {
-      Ib_b[0]                 = kibxy_lim;
-      body_integral_saturated = true;
-    } else if (Ib_b[0] < -kibxy_lim) {
-      Ib_b[0]                 = -kibxy_lim;
-      body_integral_saturated = true;
-    }
-
-    if (kibxy_lim > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: MPC's's body pitch integral is being saturated!");
-    }
-
-    // saturate the body
-    body_integral_saturated = false;
-    if (!std::isfinite(Ib_b[1])) {
-      Ib_b[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!");
-    } else if (Ib_b[1] > kibxy_lim) {
-      Ib_b[1]                 = kibxy_lim;
-      body_integral_saturated = true;
-    } else if (Ib_b[1] < -kibxy_lim) {
-      Ib_b[1]                 = -kibxy_lim;
-      body_integral_saturated = true;
-    }
-
-    if (kibxy_lim > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: MPC's's body roll integral is being saturated!");
-    }
-  }
-
-  //}
-
-  /* world error integrator //{ */
-
-  // --------------------------------------------------------------
-  // |                  integrate the world error                 |
-  // --------------------------------------------------------------
-
-  {
-    std::scoped_lock lock(mutex_gains);
-
-    Eigen::Vector3d integration_switch(1, 1, 0);
-
-    // integrate the world error
-
-    // antiwindup
-    double temp_gain = kiwxy;
-    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
-      temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for world integral kicks in");
-    }
-    Iw_w -= temp_gain * Ep.head(2) * dt;
-
-    // saturate the world
-    double world_integral_saturated = false;
-    if (!std::isfinite(Iw_w[0])) {
-      Iw_w[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
-    } else if (Iw_w[0] > kiwxy_lim) {
-      Iw_w[0]                  = kiwxy_lim;
-      world_integral_saturated = true;
-    } else if (Iw_w[0] < -kiwxy_lim) {
-      Iw_w[0]                  = -kiwxy_lim;
-      world_integral_saturated = true;
-    }
-
-    if (kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: SO3's world X integral is being saturated!");
-    }
-
-    // saturate the world
-    world_integral_saturated = false;
-    if (!std::isfinite(Iw_w[1])) {
-      Iw_w[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
-    } else if (Iw_w[1] > kiwxy_lim) {
-      Iw_w[1]                  = kiwxy_lim;
-      world_integral_saturated = true;
-    } else if (Iw_w[1] < -kiwxy_lim) {
-      Iw_w[1]                  = -kiwxy_lim;
-      world_integral_saturated = true;
-    }
-
-    if (kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: SO3's world Y integral is being saturated!");
-    }
-  }
-
-  //}
-
   /* mass estimatior //{ */
 
   // --------------------------------------------------------------
@@ -810,7 +616,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     if (fabs(odometry->twist.twist.linear.z) > 0.3 &&
         ((Ep[2] < 0 && odometry->twist.twist.linear.z > 0) || (Ep[2] > 0 && odometry->twist.twist.linear.z < 0))) {
       temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for the mass kicks in");
+      ROS_INFO_THROTTLE(1.0, "[AccelerationController]: anti-windup for the mass kicks in");
     }
     uav_mass_difference -= temp_gain * Ep[2] * dt;
 
@@ -818,7 +624,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference)) {
       uav_mass_difference = 0;
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
+      ROS_WARN_THROTTLE(1.0, "[AccelerationController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
     } else if (uav_mass_difference > km_lim) {
       uav_mass_difference = km_lim;
       uav_mass_saturated  = true;
@@ -828,18 +634,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: The uav_mass_difference is being saturated to %0.2f!", uav_mass_difference);
+      ROS_WARN_THROTTLE(1.0, "[AccelerationController]: The uav_mass_difference is being saturated to %0.2f!", uav_mass_difference);
     }
   }
 
   //}
-
-  // --------------------------------------------------------------
-  // |            report on the values of the integrals           |
-  // --------------------------------------------------------------
-
-  ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f, y %.2f, lim: %.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-  ROS_INFO_THROTTLE(5.0, "[MpcController]:  body error integral: x %.2f, y %.2f, lim: %.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
 
   // --------------------------------------------------------------
   // |                 produce the control output                 |
@@ -885,7 +684,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
       output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
 
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: outputting attitude quaternion");
+      ROS_WARN_THROTTLE(1.0, "[AccelerationController]: outputting attitude quaternion");
     }
 
     output_command->desired_acceleration.x = f[0] / total_mass;
@@ -905,7 +704,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
 /* //{ getStatus() */
 
-const mrs_msgs::ControllerStatus::Ptr MpcController::getStatus() {
+const mrs_msgs::ControllerStatus::Ptr AccelerationController::getStatus() {
 
   if (is_initialized) {
 
@@ -932,7 +731,7 @@ const mrs_msgs::ControllerStatus::Ptr MpcController::getStatus() {
 
 /* //{ dynamicReconfigureCallback() */
 
-void MpcController::dynamicReconfigureCallback(mrs_controllers::mpc_gainsConfig &config, [[maybe_unused]] uint32_t level) {
+void AccelerationController::dynamicReconfigureCallback(mrs_controllers::acceleration_gainsConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_desired_gains);
@@ -940,7 +739,7 @@ void MpcController::dynamicReconfigureCallback(mrs_controllers::mpc_gainsConfig 
     drs_desired_gains = config;
   }
 
-  ROS_INFO("[MpcController]: DRS updated gains");
+  ROS_INFO("[AccelerationController]: DRS updated gains");
 }
 
 //}
@@ -951,7 +750,7 @@ void MpcController::dynamicReconfigureCallback(mrs_controllers::mpc_gainsConfig 
 
 /* timerGainFilter() //{ */
 
-void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
+void AccelerationController::timerGainsFilter(const ros::TimerEvent &event) {
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
@@ -983,7 +782,7 @@ void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
 
 /* calculateGainChange() //{ */
 
-double MpcController::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
+double AccelerationController::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
 
   double change = desired_value - current_value;
 
@@ -1016,7 +815,7 @@ double MpcController::calculateGainChange(const double current_value, const doub
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[MpcController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[AccelerationController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
   }
 
   return current_value + change;
@@ -1026,10 +825,7 @@ double MpcController::calculateGainChange(const double current_value, const doub
 
 /* reset() //{ */
 
-bool MpcController::reset(void) {
-
-  Iw_w = Eigen::Vector2d::Zero(2);
-  Ib_b = Eigen::Vector2d::Zero(2);
+bool AccelerationController::reset(void) {
 
   return true;
 }
@@ -1038,7 +834,7 @@ bool MpcController::reset(void) {
 
 /* rotate2d() //{ */
 
-Eigen::Vector2d MpcController::rotate2d(const Eigen::Vector2d vector_in, double angle) {
+Eigen::Vector2d AccelerationController::rotate2d(const Eigen::Vector2d vector_in, double angle) {
 
   Eigen::Rotation2D<double> rot2(angle);
 
@@ -1047,9 +843,9 @@ Eigen::Vector2d MpcController::rotate2d(const Eigen::Vector2d vector_in, double 
 
 //}
 
-}  // namespace mpc_controller
+}  // namespace acceleration_controller
 
 }  // namespace mrs_controllers
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mrs_controllers::mpc_controller::MpcController, mrs_uav_manager::Controller)
+PLUGINLIB_EXPORT_CLASS(mrs_controllers::acceleration_controller::AccelerationController, mrs_uav_manager::Controller)
