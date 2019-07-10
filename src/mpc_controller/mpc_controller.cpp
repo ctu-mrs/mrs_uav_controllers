@@ -127,6 +127,9 @@ private:
   double max_speed_horizontal_, max_acceleration_horizontal_, max_jerk_;
   double max_speed_vertical_, max_acceleration_vertical_, max_u_vertical_;
 
+  std::vector<double> Q, S;
+  std::vector<double> Q_z, S_z;
+
   mrs_controllers::cvx_wrapper::CvxWrapper *cvx_x;
   mrs_controllers::cvx_wrapper::CvxWrapper *cvx_y;
   mrs_controllers::cvx_wrapper::CvxWrapper *cvx_z;
@@ -198,7 +201,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   param_loader.load_param("mpc_parameters/horizontal/max_acceleration", max_acceleration_horizontal_);
   param_loader.load_param("mpc_parameters/horizontal/max_jerk", max_jerk_);
 
-  std::vector<double> Q, S;
   param_loader.load_param("mpc_parameters/horizontal/Q", Q);
   param_loader.load_param("mpc_parameters/horizontal/S", S);
 
@@ -206,7 +208,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   param_loader.load_param("mpc_parameters/vertical/max_acceleration", max_acceleration_vertical_);
   param_loader.load_param("mpc_parameters/vertical/max_u", max_u_vertical_);
 
-  std::vector<double> Q_z, S_z;
   param_loader.load_param("mpc_parameters/vertical/Q", Q_z);
   param_loader.load_param("mpc_parameters/vertical/S", S_z);
 
@@ -435,6 +436,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // | ------------------------ optimize ------------------------ |
 
+  cvx_x->setQ(Q);
+  cvx_x->setS(S);
   cvx_x->setParams();
   cvx_x->setLastInput(cvx_x_u);
   cvx_x->loadReference(mpc_reference_x);
@@ -443,6 +446,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   [[maybe_unused]] int iters_x = cvx_x->solveCvx();
   cvx_x_u                      = cvx_x->getFirstControlInput();
 
+  cvx_y->setQ(Q);
+  cvx_y->setS(S);
   cvx_y->setParams();
   cvx_y->setLastInput(cvx_y_u);
   cvx_y->loadReference(mpc_reference_y);
@@ -451,6 +456,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   [[maybe_unused]] int iters_y = cvx_y->solveCvx();
   cvx_y_u                      = cvx_y->getFirstControlInput();
 
+  cvx_z->setQ(Q_z);
+  cvx_z->setS(S_z);
   cvx_z->setParams();
   cvx_z->setLastInput(cvx_z_u);
   cvx_z->loadReference(mpc_reference_z);
