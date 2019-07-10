@@ -8,7 +8,7 @@ using namespace Eigen;
 namespace mrs_controllers
 {
 
-namespace mpc_controller
+namespace cvx_wrapper
 {
 
 extern "C" {
@@ -171,6 +171,6 @@ double CvxWrapper::getFirstControlInput() {
 
 //}
 
-}  // namespace mpc_controller
+}  // namespace cvx_wrapper
 
 }  // namespace mrs_controllers

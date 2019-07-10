@@ -127,9 +127,9 @@ private:
   double max_speed_horizontal_, max_acceleration_horizontal_, max_jerk_;
   double max_speed_vertical_, max_acceleration_vertical_, max_u_vertical_;
 
-  mrs_controllers::mpc_controller::CvxWrapper *cvx_x;
-  mrs_controllers::mpc_controller::CvxWrapper *cvx_y;
-  mrs_controllers::mpc_controller::CvxWrapper *cvx_z;
+  mrs_controllers::cvx_wrapper::CvxWrapper *cvx_x;
+  mrs_controllers::cvx_wrapper::CvxWrapper *cvx_y;
+  mrs_controllers::cvx_wrapper::CvxWrapper *cvx_z;
 
   bool cvx_verbose_ = false;
   int  cvx_max_iterations_;
@@ -276,9 +276,9 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // |                       prepare cvxgen                       |
   // --------------------------------------------------------------
 
-  cvx_x = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2, 0, 1.0);
-  cvx_y = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2, 0, 1.0);
-  cvx_z = new mrs_controllers::mpc_controller::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q_z, S_z, dt1, dt2, 0.5, 0.5);
+  cvx_x = new mrs_controllers::cvx_wrapper::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2, 0, 1.0);
+  cvx_y = new mrs_controllers::cvx_wrapper::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q, S, dt1, dt2, 0, 1.0);
+  cvx_z = new mrs_controllers::cvx_wrapper::CvxWrapper(cvx_verbose_, cvx_max_iterations_, Q_z, S_z, dt1, dt2, 0.5, 0.5);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |

@@ -88,11 +88,11 @@ target_link_libraries(So3Controller
 
 # Mpc controller
 
-add_library(MpcControllerCvxgen src/mpc_controller/cvx_wrapper.cpp
-  src/mpc_controller/cvxgen/ldl.c
-  src/mpc_controller/cvxgen/matrix_support.c
-  src/mpc_controller/cvxgen/solver.c
-  src/mpc_controller/cvxgen/util.c
+add_library(MpcControllerCvxgen src/cvx_wrapper/cvx_wrapper.cpp
+  src/cvx_wrapper/cvxgen/ldl.c
+  src/cvx_wrapper/cvxgen/matrix_support.c
+  src/cvx_wrapper/cvxgen/solver.c
+  src/cvx_wrapper/cvxgen/util.c
   )
 
 add_library(MpcController

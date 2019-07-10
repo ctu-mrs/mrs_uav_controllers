@@ -9,7 +9,7 @@
 namespace mrs_controllers
 {
 
-namespace mpc_controller
+namespace cvx_wrapper
 {
 
 class CvxWrapper {
@@ -41,7 +41,7 @@ private:
   int    max_iters;
 };
 
-}  // namespace mpc_controller
+}  // namespace cvx_wrapper
 
 }  // namespace mrs_controllers
 
