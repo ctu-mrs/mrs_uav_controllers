@@ -126,15 +126,25 @@ void CvxWrapper::setInitialState(MatrixXd& x) {
 
 //}
 
-/* loadReference() //{ */
+/* setQ() //{ */
 
-void CvxWrapper::loadReference(MatrixXd& reference) {
+void CvxWrapper::setQ(const std::vector<double> new_Q) {
 
   for (int i = 0; i < horizon_len; i++) {
 
-    paramsController.x_ss[i + 1][0] = reference((3 * i) + 0, 0);
-    paramsController.x_ss[i + 1][1] = reference((3 * i) + 1, 0);
-    paramsController.x_ss[i + 1][2] = reference((3 * i) + 2, 0);
+    this->Q = new_Q;
+  }
+}
+
+//}
+
+/* setS() //{ */
+
+void CvxWrapper::setS(const std::vector<double> new_S) {
+
+  for (int i = 0; i < horizon_len; i++) {
+
+    this->Q_last = new_S;
   }
 }
 

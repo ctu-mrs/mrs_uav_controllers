@@ -127,6 +127,8 @@ private:
   bool cvx_verbose_ = false;
   int  cvx_max_iterations_;
 
+  std::vector<double> Q_z, S_z;
+
 private:
   mrs_lib::Profiler *profiler;
   bool               profiler_enabled_ = false;
@@ -187,7 +189,6 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, mrs_ua
   param_loader.load_param("mpc_parameters/vertical/max_acceleration", max_acceleration_vertical_);
   param_loader.load_param("mpc_parameters/vertical/max_u", max_u_vertical_);
 
-  std::vector<double> Q_z, S_z;
   param_loader.load_param("mpc_parameters/vertical/Q", Q_z);
   param_loader.load_param("mpc_parameters/vertical/S", S_z);
 
@@ -378,15 +379,42 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
   Eigen::MatrixXd mpc_reference_z = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
 
   // prepare the full reference vector
-  for (int i = 0; i < horizon_length_; i++) {
+  if (reference->use_position) {
+    for (int i = 0; i < horizon_length_; i++) {
+      mpc_reference_z((i * n) + 0, 0) = reference->position.z;
+    }
+  }
 
-    mpc_reference_z((i * n) + 0, 0) = reference->position.z;
-    mpc_reference_z((i * n) + 1, 0) = reference->velocity.z;
-    mpc_reference_z((i * n) + 2, 0) = reference->acceleration.z;
+  if (reference->use_velocity) {
+    for (int i = 0; i < horizon_length_; i++) {
+      mpc_reference_z((i * n) + 1, 0) = reference->velocity.z;
+    }
+  }
+
+  if (reference->use_acceleration) {
+    for (int i = 0; i < horizon_length_; i++) {
+      mpc_reference_z((i * n) + 2, 0) = reference->acceleration.z;
+    }
   }
 
   // | ------------------------ optimize ------------------------ |
 
+  // update Q and S based on the reference type
+  std::vector<double> temp_Q = Q_z;
+  std::vector<double> temp_S = S_z;
+
+  if (!reference->use_position) {
+    temp_Q[0] = 0;
+    temp_S[0] = 0;
+  }
+
+  if (!reference->use_velocity) {
+    temp_Q[1] = 0;
+    temp_S[1] = 0;
+  }
+
+  cvx_z->setQ(temp_Q);
+  cvx_z->setS(temp_S);
   cvx_z->setParams();
   cvx_z->setLastInput(cvx_z_u);
   cvx_z->loadReference(mpc_reference_z);

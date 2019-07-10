@@ -23,6 +23,8 @@ public:
   void   setDt(double dt, double dt2);
   int    solveCvx();
   void   getStates(Eigen::MatrixXd &future_traj);
+  void   setQ(const std::vector<double> new_Q);
+  void   setS(const std::vector<double> new_S);
   double getFirstControlInput();
   void   setLastInput(double last_input);
   void   setParams(void);
