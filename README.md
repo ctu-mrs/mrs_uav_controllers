@@ -8,6 +8,13 @@
   * nonlinear attitude and thrust control + Linear MPC for acceleration feedforward
   * pros: Robust control, reliable to measurement noise and reference infeasibilities
   * cons: Slow convergence, only for slow speeds (< 2 m/s), may have large control errors
+* Acceleration controller
+  * based on the MPC controller
+  * nonlinear attitude and thrust control + Linear MPC for acceleration feedforward for vertical control
+    * vertical reference can be desired position or velocity
+  * physics-based desired acceleration for horizontal control (feed-forward from the reference)
+  * pros: Robust control, reliable to measurement noise and reference infeasibilities
+  * cons: Slow convergence, only for slow speeds (< 2 m/s), may have large control errors
 * AttitudeController
   * the attitude part of the SO3, used mainly for gain tuning with a gamepad
 * NSF controller
