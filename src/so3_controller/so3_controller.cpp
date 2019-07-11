@@ -64,6 +64,10 @@ private:
   bool is_initialized = false;
   bool is_active      = false;
 
+private:
+  nav_msgs::Odometry odometry;
+  std::mutex         mutex_odometry;
+
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
@@ -129,6 +133,7 @@ private:
 private:
   Eigen::Vector2d Ib_b;  // body error integral in the body frame
   Eigen::Vector2d Iw_w;  // world error integral in the world_frame
+  std::mutex      mutex_integrals;
 };
 
 So3Controller::So3Controller(void) {
@@ -324,6 +329,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
+  {
+    std::scoped_lock lock(mutex_odometry);
+
+    this->odometry = *odometry;
+  }
+
   if (!is_active) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -466,7 +477,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
   Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
   Eigen::Vector3d position_feedback = -Kp * Ep.array();
   Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
-  Eigen::Vector3d integral_feedback(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
+  Eigen::Vector3d integral_feedback;
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    integral_feedback << Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0;
+  }
 
   Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
 
@@ -611,7 +627,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains, mutex_integrals);
 
     Eigen::Vector3d integration_switch(1, 1, 0);
 
@@ -834,6 +850,37 @@ const mrs_msgs::ControllerStatus::Ptr So3Controller::getStatus() {
 
 void So3Controller::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
 
+  ROS_INFO("[So3Controller]: switching the odometry source");
+
+  // | ------------ calculate the heading difference ------------ |
+  double dyaw;
+  double odom_roll, odom_pitch, odom_yaw;
+  double msg_roll, msg_pitch, msg_yaw;
+
+  {
+    std::scoped_lock lock(mutex_odometry);
+
+    // calculate the euler angles
+    tf::Quaternion quaternion_odometry;
+    quaternionMsgToTF(odometry.pose.pose.orientation, quaternion_odometry);
+    tf::Matrix3x3 m(quaternion_odometry);
+    m.getRPY(odom_roll, odom_pitch, odom_yaw);
+  }
+
+  tf::Quaternion quaternion_msg;
+  quaternionMsgToTF(msg->pose.pose.orientation, quaternion_msg);
+  tf::Matrix3x3 m2(quaternion_msg);
+  m2.getRPY(msg_roll, msg_pitch, msg_yaw);
+
+  dyaw = msg_yaw - odom_yaw;
+
+  // | --------------- rotate the world integrals --------------- |
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    ROS_INFO("[So3Controller]: rotating the world integrals by %.2f rad", dyaw);
+    Iw_w = rotate2d(Iw_w, dyaw);
+  }
 }
 
 //}
@@ -952,6 +999,8 @@ double So3Controller::calculateGainChange(const double current_value, const doub
 /* reset() //{ */
 
 bool So3Controller::reset(void) {
+
+  std::scoped_lock lock(mutex_integrals);
 
   Iw_w = Eigen::Vector2d::Zero(2);
   Ib_b = Eigen::Vector2d::Zero(2);

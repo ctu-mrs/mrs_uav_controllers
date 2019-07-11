@@ -337,6 +337,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
+  if (!is_active) {
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------

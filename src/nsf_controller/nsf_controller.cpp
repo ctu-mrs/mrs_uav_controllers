@@ -61,6 +61,10 @@ private:
   bool is_initialized = false;
   bool is_active      = false;
 
+private:
+  nav_msgs::Odometry odometry;
+  std::mutex         mutex_odometry;
+
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
@@ -119,6 +123,7 @@ private:
 private:
   Eigen::Vector2d Ib_b;  // body error integral in the body frame
   Eigen::Vector2d Iw_w;  // world error integral in the world_frame
+  std::mutex      mutex_integrals;
 };
 
 NsfController::NsfController(void) {
@@ -296,6 +301,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
+  {
+    std::scoped_lock lock(mutex_odometry);
+
+    this->odometry = *odometry;
+  }
+
+  if (!is_active) {
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -404,7 +419,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   p_component = kp.cwiseProduct(Ep);
   v_component = kv.cwiseProduct(Ev);
   a_component = ka.cwiseProduct(feed_forward);
-  i_component << Ib_w + Iw_w, Eigen::VectorXd::Zero(1, 1);
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    i_component << Ib_w + Iw_w, Eigen::VectorXd::Zero(1, 1);
+  }
 
   Eigen::Vector3d feedback_w = (p_component + v_component + a_component + i_component + Eigen::Vector3d(0, 0, hover_thrust))
                                    .cwiseProduct(Eigen::Vector3d(1, 1, 1 / (cos(roll) * cos(pitch))));
@@ -473,7 +492,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains, mutex_integrals);
 
     Eigen::Vector3d integration_switch(1, 1, 0);
 
@@ -604,8 +623,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |            report on the values of the integrals           |
   // --------------------------------------------------------------
 
-  ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-  ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+  }
 
   // --------------------------------------------------------------
   // |                 produce the control output                 |
@@ -665,6 +688,37 @@ const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 
 void NsfController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
 
+  ROS_INFO("[NsfController]: switching the odometry source");
+
+  // | ------------ calculate the heading difference ------------ |
+  double dyaw;
+  double odom_roll, odom_pitch, odom_yaw;
+  double msg_roll, msg_pitch, msg_yaw;
+
+  {
+    std::scoped_lock lock(mutex_odometry);
+
+    // calculate the euler angles
+    tf::Quaternion quaternion_odometry;
+    quaternionMsgToTF(odometry.pose.pose.orientation, quaternion_odometry);
+    tf::Matrix3x3 m(quaternion_odometry);
+    m.getRPY(odom_roll, odom_pitch, odom_yaw);
+  }
+
+  tf::Quaternion quaternion_msg;
+  quaternionMsgToTF(msg->pose.pose.orientation, quaternion_msg);
+  tf::Matrix3x3 m2(quaternion_msg);
+  m2.getRPY(msg_roll, msg_pitch, msg_yaw);
+
+  dyaw = msg_yaw - odom_yaw;
+
+  // | --------------- rotate the world integrals --------------- |
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    ROS_INFO("[NsfController]: rotating the world integrals by %.2f rad", dyaw);
+    Iw_w = rotate2d(Iw_w, dyaw);
+  }
 }
 
 //}
@@ -778,7 +832,10 @@ double NsfController::calculateGainChange(const double current_value, const doub
 
 bool NsfController::reset(void) {
 
+  std::scoped_lock lock(mutex_integrals);
+
   Iw_w = Eigen::Vector2d::Zero(2);
+  Ib_b = Eigen::Vector2d::Zero(2);
 
   return true;
 }

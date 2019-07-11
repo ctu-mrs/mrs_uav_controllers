@@ -278,6 +278,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
+  if (!is_active) {
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------

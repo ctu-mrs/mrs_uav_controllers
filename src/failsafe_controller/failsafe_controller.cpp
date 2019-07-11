@@ -182,6 +182,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
+  if (!is_active) {
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
   // --------------------------------------------------------------
   // |                 calculate the euler angles                 |
   // --------------------------------------------------------------

@@ -380,6 +380,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     this->odometry = *odometry;
   }
 
+  if (!is_active) {
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -961,6 +965,8 @@ const mrs_msgs::ControllerStatus::Ptr MpcController::getStatus() {
 
 void MpcController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
 
+  ROS_INFO("[MpcController]: switching the odometry source");
+
   // | ------------ calculate the heading difference ------------ |
   double dyaw;
   double odom_roll, odom_pitch, odom_yaw;
@@ -974,20 +980,20 @@ void MpcController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg
     quaternionMsgToTF(odometry.pose.pose.orientation, quaternion_odometry);
     tf::Matrix3x3 m(quaternion_odometry);
     m.getRPY(odom_roll, odom_pitch, odom_yaw);
-
-    tf::Quaternion quaternion_msg;
-    quaternionMsgToTF(msg->pose.pose.orientation, quaternion_msg);
-    tf::Matrix3x3 m2(quaternion_msg);
-    m2.getRPY(msg_roll, msg_pitch, msg_yaw);
   }
+
+  tf::Quaternion quaternion_msg;
+  quaternionMsgToTF(msg->pose.pose.orientation, quaternion_msg);
+  tf::Matrix3x3 m2(quaternion_msg);
+  m2.getRPY(msg_roll, msg_pitch, msg_yaw);
 
   dyaw = msg_yaw - odom_yaw;
 
   // | --------------- rotate the world integrals --------------- |
-
   {
     std::scoped_lock lock(mutex_integrals);
 
+    ROS_INFO("[MpcController]: rotating the world integrals by %.2f rad", dyaw);
     Iw_w = rotate2d(Iw_w, dyaw);
   }
 }
@@ -1095,6 +1101,8 @@ double MpcController::calculateGainChange(const double current_value, const doub
 /* reset() //{ */
 
 bool MpcController::reset(void) {
+
+  std::scoped_lock lock(mutex_integrals);
 
   Iw_w = Eigen::Vector2d::Zero(2);
   Ib_b = Eigen::Vector2d::Zero(2);
