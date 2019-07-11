@@ -161,6 +161,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
 void FailsafeController::deactivate(void) {
 
+  is_active           = false;
   first_iteration     = false;
   uav_mass_difference = 0;
 
@@ -297,7 +298,6 @@ const mrs_msgs::ControllerStatus::Ptr FailsafeController::getStatus() {
 /* switchOdometrySource() //{ */
 
 void FailsafeController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
-
 }
 
 //}

@@ -314,6 +314,7 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
 void So3Controller::deactivate(void) {
 
+  is_active           = false;
   first_iteration     = false;
   uav_mass_difference = 0;
 

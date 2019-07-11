@@ -363,6 +363,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
 void MpcController::deactivate(void) {
 
+  is_active           = false;
   first_iteration     = false;
   uav_mass_difference = 0;
 

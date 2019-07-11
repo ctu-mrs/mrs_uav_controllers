@@ -263,6 +263,7 @@ bool AttitudeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
 void AttitudeController::deactivate(void) {
 
+  is_active           = false;
   first_iteration     = false;
   uav_mass_difference = 0;
 
@@ -532,7 +533,6 @@ const mrs_msgs::ControllerStatus::Ptr AttitudeController::getStatus() {
 /* switchOdometrySource() //{ */
 
 void AttitudeController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
-
 }
 
 //}
