@@ -292,12 +292,16 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  drs_desired_gains.kqxy   = kqxy;
-  drs_desired_gains.kqz    = kqz;
-  drs_desired_gains.kwxy   = kwxy;
-  drs_desired_gains.kwz    = kwz;
-  drs_desired_gains.km     = km;
-  drs_desired_gains.km_lim = km_lim;
+  drs_desired_gains.kiwxy     = kiwxy;
+  drs_desired_gains.kibxy     = kibxy;
+  drs_desired_gains.kqxy      = kqxy;
+  drs_desired_gains.kqz       = kqz;
+  drs_desired_gains.kwxy      = kwxy;
+  drs_desired_gains.kwz       = kwz;
+  drs_desired_gains.km        = km;
+  drs_desired_gains.km_lim    = km_lim;
+  drs_desired_gains.kiwxy_lim = kiwxy_lim;
+  drs_desired_gains.kibxy_lim = kibxy_lim;
 
   reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
   reconfigure_server_->updateConfig(drs_desired_gains);
@@ -1032,6 +1036,8 @@ void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
   double gain_coeff                = 1;
   mutex_lateral_gains_after_toggle = false;
 
+  bool bypass_filter = mute_lateral_gains || mutex_lateral_gains_after_toggle;
+
   if (mute_lateral_gains) {
     gain_coeff = mute_coefficitent_;
   }
@@ -1040,12 +1046,16 @@ void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
   {
     std::scoped_lock lock(mutex_gains, mutex_desired_gains);
 
-    kqxy   = calculateGainChange(kqxy, drs_desired_gains.kqxy, false, "kqxy");
-    kqz    = calculateGainChange(kqz, drs_desired_gains.kqz, false, "kqz");
-    kwxy   = calculateGainChange(kwxy, drs_desired_gains.kwxy, false, "kwxy");
-    kwz    = calculateGainChange(kwz, drs_desired_gains.kwz, false, "kwz");
-    km     = calculateGainChange(km, drs_desired_gains.km, false, "km");
-    km_lim = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
+    kqxy      = calculateGainChange(kqxy, drs_desired_gains.kqxy, false, "kqxy");
+    kqz       = calculateGainChange(kqz, drs_desired_gains.kqz, false, "kqz");
+    kwxy      = calculateGainChange(kwxy, drs_desired_gains.kwxy, false, "kwxy");
+    kwz       = calculateGainChange(kwz, drs_desired_gains.kwz, false, "kwz");
+    km        = calculateGainChange(km, drs_desired_gains.km, false, "km");
+    km_lim    = calculateGainChange(km_lim, drs_desired_gains.km_lim, false, "km_lim");
+    kiwxy     = calculateGainChange(kiwxy, drs_desired_gains.kiwxy * gain_coeff, bypass_filter, "kiwxy");
+    kibxy     = calculateGainChange(kibxy, drs_desired_gains.kibxy * gain_coeff, bypass_filter, "kibxy");
+    kiwxy_lim = calculateGainChange(kiwxy_lim, drs_desired_gains.kiwxy_lim, false, "kiwxy_lim");
+    kibxy_lim = calculateGainChange(kibxy_lim, drs_desired_gains.kibxy_lim, false, "kibxy_lim");
   }
 }
 
