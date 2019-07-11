@@ -58,11 +58,17 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
+  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+
   bool reset(void);
 
 private:
   bool is_initialized = false;
   bool is_active      = false;
+
+private:
+  nav_msgs::Odometry odometry;
+  std::mutex         mutex_odometry;
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -159,6 +165,7 @@ private:
 private:
   Eigen::Vector2d Ib_b;  // body error integral in the body frame
   Eigen::Vector2d Iw_w;  // world error integral in the world_frame
+  std::mutex      mutex_integrals;
 };
 
 MpcController::MpcController(void) {
@@ -367,6 +374,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
+  {
+    std::scoped_lock lock(mutex_odometry);
+
+    this->odometry = *odometry;
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -557,7 +570,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   double total_mass = uav_mass_ + uav_mass_difference;
 
   Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
-  Eigen::Vector3d integral_feedback(Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0);
+
+  Eigen::Vector3d integral_feedback;
+
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    integral_feedback << Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0;
+  }
 
   Eigen::Vector3d f = integral_feedback + feed_forward;
 
@@ -752,7 +772,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains, mutex_integrals);
 
     Eigen::Vector3d integration_switch(1, 1, 0);
 
@@ -845,8 +865,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // |            report on the values of the integrals           |
   // --------------------------------------------------------------
 
-  ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f, y %.2f, lim: %.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-  ROS_INFO_THROTTLE(5.0, "[MpcController]:  body error integral: x %.2f, y %.2f, lim: %.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f, y %.2f, lim: %.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[MpcController]:  body error integral: x %.2f, y %.2f, lim: %.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+  }
 
   // --------------------------------------------------------------
   // |                 produce the control output                 |
@@ -928,6 +952,43 @@ const mrs_msgs::ControllerStatus::Ptr MpcController::getStatus() {
   } else {
 
     return mrs_msgs::ControllerStatus::Ptr();
+  }
+}
+
+//}
+
+/* switchOdometrySource() //{ */
+
+void MpcController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
+
+  // | ------------ calculate the heading difference ------------ |
+  double dyaw;
+  double odom_roll, odom_pitch, odom_yaw;
+  double msg_roll, msg_pitch, msg_yaw;
+
+  {
+    std::scoped_lock lock(mutex_odometry);
+
+    // calculate the euler angles
+    tf::Quaternion quaternion_odometry;
+    quaternionMsgToTF(odometry.pose.pose.orientation, quaternion_odometry);
+    tf::Matrix3x3 m(quaternion_odometry);
+    m.getRPY(odom_roll, odom_pitch, odom_yaw);
+
+    tf::Quaternion quaternion_msg;
+    quaternionMsgToTF(msg->pose.pose.orientation, quaternion_msg);
+    tf::Matrix3x3 m2(quaternion_msg);
+    m2.getRPY(msg_roll, msg_pitch, msg_yaw);
+  }
+
+  dyaw = msg_yaw - odom_yaw;
+
+  // | --------------- rotate the world integrals --------------- |
+
+  {
+    std::scoped_lock lock(mutex_integrals);
+
+    Iw_w = rotate2d(Iw_w, dyaw);
   }
 }
 

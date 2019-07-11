@@ -39,6 +39,8 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
+  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+
 private:
   bool is_initialized = false;
   bool is_active      = false;
@@ -284,6 +286,14 @@ const mrs_msgs::ControllerStatus::Ptr FailsafeController::getStatus() {
 
     return mrs_msgs::ControllerStatus::Ptr();
   }
+}
+
+//}
+
+/* switchOdometrySource() //{ */
+
+void FailsafeController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
+
 }
 
 //}

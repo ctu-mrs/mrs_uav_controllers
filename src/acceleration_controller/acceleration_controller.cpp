@@ -56,6 +56,8 @@ public:
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
+  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
   bool reset(void);
@@ -749,6 +751,14 @@ const mrs_msgs::ControllerStatus::Ptr AccelerationController::getStatus() {
 
     return mrs_msgs::ControllerStatus::Ptr();
   }
+}
+
+//}
+
+/* switchOdometrySource() //{ */
+
+void AccelerationController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
+
 }
 
 //}

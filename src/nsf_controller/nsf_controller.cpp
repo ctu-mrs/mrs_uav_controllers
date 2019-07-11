@@ -53,6 +53,8 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
+  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+
   bool reset(void);
 
 private:
@@ -655,6 +657,14 @@ const mrs_msgs::ControllerStatus::Ptr NsfController::getStatus() {
 
     return mrs_msgs::ControllerStatus::Ptr();
   }
+}
+
+//}
+
+/* switchOdometrySource() //{ */
+
+void NsfController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
+
 }
 
 //}
