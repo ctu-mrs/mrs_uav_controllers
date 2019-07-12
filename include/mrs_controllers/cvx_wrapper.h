@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <eigen3/Eigen/Eigen>
+#include <mutex>
 
 /* author: Daniel Hert */
 
@@ -28,6 +29,8 @@ public:
   double getFirstControlInput();
   void   setLastInput(double last_input);
   void   setParams(void);
+  void   lock(void);
+  void   unlock(void);
 
 private:
   std::vector<double> Q;
@@ -41,6 +44,8 @@ private:
   int    vel_q_persistent;
   bool   verbose;
   int    max_iters;
+
+  static std::mutex mutex_main;
 };
 
 }  // namespace cvx_wrapper

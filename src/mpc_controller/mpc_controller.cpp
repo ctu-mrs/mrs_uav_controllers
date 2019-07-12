@@ -19,7 +19,7 @@
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
 
-#include <cvx_wrapper.h>
+#include <mrs_controllers/cvx_wrapper.h>
 
 //}
 
@@ -458,6 +458,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // | ------------------------ optimize ------------------------ |
 
+  cvx_x->lock();
   cvx_x->setQ(Q);
   cvx_x->setS(S);
   cvx_x->setParams();
@@ -467,7 +468,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   cvx_x->setInitialState(initial_x);
   [[maybe_unused]] int iters_x = cvx_x->solveCvx();
   cvx_x_u                      = cvx_x->getFirstControlInput();
+  cvx_x->unlock();
 
+  cvx_y->lock();
   cvx_y->setQ(Q);
   cvx_y->setS(S);
   cvx_y->setParams();
@@ -477,7 +480,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   cvx_y->setInitialState(initial_y);
   [[maybe_unused]] int iters_y = cvx_y->solveCvx();
   cvx_y_u                      = cvx_y->getFirstControlInput();
+  cvx_y->unlock();
 
+  cvx_z->lock();
   cvx_z->setQ(Q_z);
   cvx_z->setS(S_z);
   cvx_z->setParams();
@@ -487,6 +492,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   cvx_z->setInitialState(initial_z);
   [[maybe_unused]] int iters_z = cvx_z->solveCvx();
   cvx_z_u                      = cvx_z->getFirstControlInput();
+  cvx_z->unlock();
 
   // --------------------------------------------------------------
   // |           disble lateral feedback during takeoff           |
@@ -588,7 +594,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     integral_feedback << Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0;
   }
 
-  Eigen::Vector3d f = integral_feedback + feed_forward;
+  Eigen::Vector3d baca_wind(5, 0, 0);
+
+  Eigen::Vector3d f = integral_feedback + feed_forward + baca_wind;
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity

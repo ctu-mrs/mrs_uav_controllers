@@ -19,7 +19,7 @@
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
 
-#include <cvx_wrapper.h>
+#include <mrs_controllers/cvx_wrapper.h>
 
 //}
 

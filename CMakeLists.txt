@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(mrs_controllers)
 
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
@@ -37,20 +34,18 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 ###################################
 
 catkin_package(
+  INCLUDE_DIRS include
   CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager mrs_lib
   DEPENDS Eigen
+  LIBRARIES MpcControllerCvxgen
   )
 
 ###########
 ## Build ##
 ###########
 
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
-# include_directories(include)
 include_directories(
   include
-  include/mpc_controller
   ${catkin_INCLUDE_DIRS}
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
@@ -110,7 +105,6 @@ add_dependencies(MpcController
 
 target_link_libraries(MpcController
   ${catkin_LIBRARIES}
-  MpcControllerCvxgen
   )
 
 # acceleration controller
@@ -127,7 +121,6 @@ add_dependencies(AccelerationController
 
 target_link_libraries(AccelerationController
   ${catkin_LIBRARIES}
-  MpcControllerCvxgen
   )
 
 # Attitude controller

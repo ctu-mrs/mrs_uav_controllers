@@ -1,7 +1,7 @@
 /* author: Daniel Hert */
 
 #include <eigen3/Eigen/Eigen>
-#include <cvx_wrapper.h>
+#include <mrs_controllers/cvx_wrapper.h>
 
 using namespace Eigen;
 
@@ -191,6 +191,24 @@ void CvxWrapper::getStates(MatrixXd& future_traj) {
 double CvxWrapper::getFirstControlInput() {
 
   return *(varsController.u_0);
+}
+
+//}
+
+/* lock() //{ */
+
+void CvxWrapper::lock(void) {
+
+  mutex_main.lock();
+}
+
+//}
+
+/* unlock() //{ */
+
+void CvxWrapper::unlock(void) {
+
+  mutex_main.unlock();
 }
 
 //}
