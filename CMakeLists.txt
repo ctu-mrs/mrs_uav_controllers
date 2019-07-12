@@ -105,6 +105,7 @@ add_dependencies(MpcController
 
 target_link_libraries(MpcController
   ${catkin_LIBRARIES}
+  MpcControllerCvxgen
   )
 
 # acceleration controller
@@ -121,6 +122,7 @@ add_dependencies(AccelerationController
 
 target_link_libraries(AccelerationController
   ${catkin_LIBRARIES}
+  MpcControllerCvxgen
   )
 
 # Attitude controller
