@@ -1,5 +1,5 @@
-#ifndef CVX_WRAPPER
-#define CVX_WRAPPER
+#ifndef CVX_WRAPPER_CONTROLLER
+#define CVX_WRAPPER_CONTROLLER
 
 #include <ros/ros.h>
 #include <eigen3/Eigen/Eigen>

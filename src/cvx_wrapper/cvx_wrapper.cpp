@@ -22,6 +22,8 @@ SettingsController  settingsController;
 
 /* CvxWrapper() //{ */
 
+std::mutex CvxWrapper::mutex_main;
+
 CvxWrapper::CvxWrapper(bool verbose, int max_iters, std::vector<double> Q, std::vector<double> Q_last, double dt1, double dt2, double p1, double p2) {
 
   this->Q         = Q;
@@ -199,7 +201,7 @@ double CvxWrapper::getFirstControlInput() {
 
 void CvxWrapper::lock(void) {
 
-  mutex_main.lock();
+  this->mutex_main.lock();
 }
 
 //}
@@ -208,7 +210,7 @@ void CvxWrapper::lock(void) {
 
 void CvxWrapper::unlock(void) {
 
-  mutex_main.unlock();
+  this->mutex_main.unlock();
 }
 
 //}

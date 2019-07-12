@@ -35,9 +35,9 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 
 catkin_package(
   INCLUDE_DIRS include
+  LIBRARIES MpcControllerCvxgen
   CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager mrs_lib
   DEPENDS Eigen
-  LIBRARIES MpcControllerCvxgen
   )
 
 ###########
@@ -152,4 +152,33 @@ add_dependencies(FailsafeController
 
 target_link_libraries(FailsafeController
   ${catkin_LIBRARIES}
+  )
+
+#############
+## Install ##
+#############
+
+install(TARGETS
+  MpcController
+  So3Controller
+  AccelerationController
+  FailsafeController
+  AttitudeController
+  NsfController
+  MpcControllerCvxgen
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  FILES_MATCHING PATTERN "*.h"
+  PATTERN ".svn" EXCLUDE
+  )
+
+install(FILES
+  plugins.xml
+  DESTINATION
+  ${CATKIN_PACKAGE_SHARE_DESTINATION}
   )
