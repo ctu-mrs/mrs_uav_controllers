@@ -420,6 +420,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
     temp_S[1] = 0;
   }
 
+  cvx_z->lock();
   cvx_z->setQ(temp_Q);
   cvx_z->setS(temp_S);
   cvx_z->setParams();
@@ -429,6 +430,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
   cvx_z->setInitialState(initial_z);
   [[maybe_unused]] int iters_z = cvx_z->solveCvx();
   cvx_z_u                      = cvx_z->getFirstControlInput();
+  cvx_z->unlock();
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
