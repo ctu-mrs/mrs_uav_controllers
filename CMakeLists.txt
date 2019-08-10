@@ -15,11 +15,11 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/nsf_gains.cfg
-  cfg/so3_gains.cfg
-  cfg/attitude_gains.cfg
-  cfg/mpc_gains.cfg
-  cfg/acceleration_gains.cfg
+  cfg/nsf_controller.cfg
+  cfg/so3_controller.cfg
+  cfg/attitude_controller.cfg
+  cfg/mpc_controller.cfg
+  cfg/acceleration_controller.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color")

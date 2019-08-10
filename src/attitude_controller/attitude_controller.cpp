@@ -13,7 +13,7 @@
 #include <mrs_msgs/ControllerStatus.h>
 #include <mrs_uav_manager/Controller.h>
 
-#include <mrs_controllers/attitude_gainsConfig.h>
+#include <mrs_controllers/attitude_controllerConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
@@ -45,7 +45,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
-  void dynamicReconfigureCallback(mrs_controllers::attitude_gainsConfig &config, uint32_t level);
+  void dynamicReconfigureCallback(mrs_controllers::attitude_controllerConfig &config, uint32_t level);
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
@@ -63,12 +63,12 @@ private:
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  boost::recursive_mutex                        config_mutex_;
-  typedef mrs_controllers::attitude_gainsConfig Config;
-  typedef dynamic_reconfigure::Server<Config>   ReconfigureServer;
-  boost::shared_ptr<ReconfigureServer>          reconfigure_server_;
-  void                                          drs_callback(mrs_controllers::attitude_gainsConfig &config, uint32_t level);
-  mrs_controllers::attitude_gainsConfig         drs_desired_gains;
+  boost::recursive_mutex                             config_mutex_;
+  typedef mrs_controllers::attitude_controllerConfig Config;
+  typedef dynamic_reconfigure::Server<Config>        ReconfigureServer;
+  boost::shared_ptr<ReconfigureServer>               reconfigure_server_;
+  void                                               drs_callback(mrs_controllers::attitude_controllerConfig &config, uint32_t level);
+  mrs_controllers::attitude_controllerConfig         drs_desired_gains;
 
 private:
   double                       uav_mass_;
@@ -541,7 +541,7 @@ void AttitudeController::switchOdometrySource([[maybe_unused]] const nav_msgs::O
 
 /* //{ dynamicReconfigureCallback() */
 
-void AttitudeController::dynamicReconfigureCallback(mrs_controllers::attitude_gainsConfig &config, [[maybe_unused]] uint32_t level) {
+void AttitudeController::dynamicReconfigureCallback(mrs_controllers::attitude_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_desired_gains);

@@ -13,7 +13,7 @@
 #include <mrs_msgs/ControllerStatus.h>
 #include <mrs_uav_manager/Controller.h>
 
-#include <mrs_controllers/so3_gainsConfig.h>
+#include <mrs_controllers/so3_controllerConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
@@ -48,7 +48,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
-  void dynamicReconfigureCallback(mrs_controllers::so3_gainsConfig &config, uint32_t level);
+  void dynamicReconfigureCallback(mrs_controllers::so3_controllerConfig &config, uint32_t level);
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
@@ -70,12 +70,12 @@ private:
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  boost::recursive_mutex                      config_mutex_;
-  typedef mrs_controllers::so3_gainsConfig    Config;
-  typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
-  boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-  void                                        drs_callback(mrs_controllers::so3_gainsConfig &config, uint32_t level);
-  mrs_controllers::so3_gainsConfig            drs_params;
+  boost::recursive_mutex                        config_mutex_;
+  typedef mrs_controllers::so3_controllerConfig Config;
+  typedef dynamic_reconfigure::Server<Config>   ReconfigureServer;
+  boost::shared_ptr<ReconfigureServer>          reconfigure_server_;
+  void                                          drs_callback(mrs_controllers::so3_controllerConfig &config, uint32_t level);
+  mrs_controllers::so3_controllerConfig         drs_params;
 
 private:
   double                       uav_mass_;
@@ -890,7 +890,7 @@ void So3Controller::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg
 
 /* //{ dynamicReconfigureCallback() */
 
-void So3Controller::dynamicReconfigureCallback(mrs_controllers::so3_gainsConfig &config, [[maybe_unused]] uint32_t level) {
+void So3Controller::dynamicReconfigureCallback(mrs_controllers::so3_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_drs_params, mutex_output_mode);
