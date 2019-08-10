@@ -27,8 +27,6 @@
 #define Y 1
 #define Z 2
 
-#define PI 3.141592653
-
 #define OUTPUT_ATTITUDE_RATE 1
 #define OUTPUT_ATTITUDE_QUATERNION 2
 
@@ -241,7 +239,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, mrs_ua
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference = 0;
 
@@ -569,8 +567,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   // saturate the angle
   if (tilt_angle_saturation_ > 1e-3 && theta > tilt_angle_saturation_) {
-    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0,
-                      (tilt_angle_saturation_ / PI) * 180.0);
+    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / M_PI) * 180.0,
+                      (tilt_angle_saturation_ / M_PI) * 180.0);
     theta = tilt_angle_saturation_;
   }
 

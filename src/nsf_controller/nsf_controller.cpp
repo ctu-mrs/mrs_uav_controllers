@@ -25,8 +25,6 @@
 #define Y 1
 #define Z 2
 
-#define PI 3.141592653
-
 namespace mrs_controllers
 {
 
@@ -197,7 +195,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
