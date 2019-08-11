@@ -13,7 +13,7 @@
 #include <mrs_msgs/ControllerStatus.h>
 #include <mrs_uav_manager/Controller.h>
 
-#include <mrs_controllers/acceleration_gainsConfig.h>
+#include <mrs_controllers/acceleration_controllerConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
@@ -26,8 +26,6 @@
 #define X 0
 #define Y 1
 #define Z 2
-
-#define PI 3.141592653
 
 #define OUTPUT_ATTITUDE_RATE 1
 #define OUTPUT_ATTITUDE_QUATERNION 2
@@ -52,7 +50,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
-  void dynamicReconfigureCallback(mrs_controllers::acceleration_gainsConfig &config, uint32_t level);
+  void dynamicReconfigureCallback(mrs_controllers::acceleration_controllerConfig &config, uint32_t level);
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
@@ -70,12 +68,12 @@ private:
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  boost::recursive_mutex                            config_mutex_;
-  typedef mrs_controllers::acceleration_gainsConfig Config;
-  typedef dynamic_reconfigure::Server<Config>       ReconfigureServer;
-  boost::shared_ptr<ReconfigureServer>              reconfigure_server_;
-  void                                              drs_callback(mrs_controllers::acceleration_gainsConfig &config, uint32_t level);
-  mrs_controllers::acceleration_gainsConfig         drs_desired_gains;
+  boost::recursive_mutex                                 config_mutex_;
+  typedef mrs_controllers::acceleration_controllerConfig Config;
+  typedef dynamic_reconfigure::Server<Config>            ReconfigureServer;
+  boost::shared_ptr<ReconfigureServer>                   reconfigure_server_;
+  void                                                   drs_callback(mrs_controllers::acceleration_controllerConfig &config, uint32_t level);
+  mrs_controllers::acceleration_controllerConfig         drs_desired_gains;
 
 private:
   double                       uav_mass_;
@@ -241,7 +239,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, mrs_ua
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference = 0;
 
@@ -569,8 +567,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   // saturate the angle
   if (tilt_angle_saturation_ > 1e-3 && theta > tilt_angle_saturation_) {
-    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / PI) * 180.0,
-                      (tilt_angle_saturation_ / PI) * 180.0);
+    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / M_PI) * 180.0,
+                      (tilt_angle_saturation_ / M_PI) * 180.0);
     theta = tilt_angle_saturation_;
   }
 
@@ -775,7 +773,7 @@ void AccelerationController::switchOdometrySource([[maybe_unused]] const nav_msg
 
 /* //{ dynamicReconfigureCallback() */
 
-void AccelerationController::dynamicReconfigureCallback(mrs_controllers::acceleration_gainsConfig &config, [[maybe_unused]] uint32_t level) {
+void AccelerationController::dynamicReconfigureCallback(mrs_controllers::acceleration_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_desired_gains);

@@ -13,7 +13,7 @@
 #include <mrs_msgs/ControllerStatus.h>
 #include <mrs_uav_manager/Controller.h>
 
-#include <mrs_controllers/nsf_gainsConfig.h>
+#include <mrs_controllers/nsf_controllerConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
@@ -24,8 +24,6 @@
 #define X 0
 #define Y 1
 #define Z 2
-
-#define PI 3.141592653
 
 namespace mrs_controllers
 {
@@ -47,7 +45,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus::Ptr     getStatus();
 
-  void dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, uint32_t level);
+  void dynamicReconfigureCallback(mrs_controllers::nsf_controllerConfig &config, uint32_t level);
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
@@ -69,12 +67,12 @@ private:
   // |                     dynamic reconfigure                    |
   // --------------------------------------------------------------
 
-  boost::recursive_mutex                      config_mutex_;
-  typedef mrs_controllers::nsf_gainsConfig    Config;
-  typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
-  boost::shared_ptr<ReconfigureServer>        reconfigure_server_;
-  void                                        drs_callback(mrs_controllers::nsf_gainsConfig &config, uint32_t level);
-  mrs_controllers::nsf_gainsConfig            drs_desired_gains;
+  boost::recursive_mutex                        config_mutex_;
+  typedef mrs_controllers::nsf_controllerConfig Config;
+  typedef dynamic_reconfigure::Server<Config>   ReconfigureServer;
+  boost::shared_ptr<ReconfigureServer>          reconfigure_server_;
+  void                                          drs_callback(mrs_controllers::nsf_controllerConfig &config, uint32_t level);
+  mrs_controllers::nsf_controllerConfig         drs_desired_gains;
 
 private:
   double                       uav_mass_;
@@ -197,7 +195,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   }
 
   // convert to radians
-  max_tilt_angle_ = (max_tilt_angle_ / 180) * PI;
+  max_tilt_angle_ = (max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference = 0;
   Iw_w                = Eigen::Vector2d::Zero(2);
@@ -730,7 +728,7 @@ void NsfController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg
 
 /* //{ dynamicReconfigureCallback() */
 
-void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_gainsConfig &config, [[maybe_unused]] uint32_t level) {
+void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_desired_gains);
