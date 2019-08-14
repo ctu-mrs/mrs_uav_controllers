@@ -23,8 +23,8 @@ mpc_parameters:
     Q: [100, 10, 10] # state error penalization
     S: [100, 10, 10] # last state error penalization
 
-    max_speed: 0.5
-    max_acceleration: 1.0
+    max_speed: 2.0
+    max_acceleration: 1.5
     max_u: 50.0
 
 cvx_parameters:
