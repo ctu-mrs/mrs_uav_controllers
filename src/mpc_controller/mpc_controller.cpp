@@ -881,8 +881,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   {
     std::scoped_lock lock(mutex_integrals);
 
-    ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f, y %.2f, lim: %.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-    ROS_INFO_THROTTLE(5.0, "[MpcController]:  body error integral: x %.2f, y %.2f, lim: %.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", Iw_w[X], Iw_w[Y], kiwxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[MpcController]:  body error integral: x %.2f N, y %.2f N, lim: %.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
   }
 
   // --------------------------------------------------------------
