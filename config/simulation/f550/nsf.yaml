@@ -6,7 +6,7 @@ default_gains:
     ka: 1.0
 
     kib: 0.05
-    kib_lim: 0.15
+    kib_lim: 0.3
 
     kiw: 0.05
     kiw_lim: 0.3

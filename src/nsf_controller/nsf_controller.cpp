@@ -266,6 +266,13 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   } else {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
+
+    Ib_b[0] = asin(cmd->disturbance_bx_b / (g_ * cmd->total_mass));
+    Ib_b[1] = asin(cmd->disturbance_by_b / (g_ * cmd->total_mass));
+
+    Iw_w[0] = asin(cmd->disturbance_wx_w / (g_ * cmd->total_mass));
+    Iw_w[1] = asin(cmd->disturbance_wy_w / (g_ * cmd->total_mass));
+
     ROS_INFO("[NsfController]: activated with a last trackers command.");
   }
 
@@ -380,7 +387,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                recalculate the hover thrust                |
   // --------------------------------------------------------------
 
-  hover_thrust = sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+  double total_mass = uav_mass_ + uav_mass_difference;
+
+  hover_thrust = sqrt(total_mass * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
   // --------------------------------------------------------------
   // |                      update parameters                     |
@@ -395,7 +404,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                     calculate the NSFs                     |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
   // create vectors of gains
   Eigen::Vector3d kp, kv, ka;
@@ -549,7 +558,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
 
     // integrate the body error
     Ib_b += kibxy * Ep_body * dt;
@@ -625,8 +634,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   {
     std::scoped_lock lock(mutex_integrals);
 
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f rad, y %1.2f rad, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[NsfController]:  body error integral: x %1.2f rad, y %1.2f rad, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
   }
 
   // --------------------------------------------------------------
@@ -652,6 +661,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
 
   output_command->mass_difference = uav_mass_difference;
+  output_command->total_mass      = total_mass;
+
+  output_command->disturbance_bx_b = g_ * total_mass * sin(Ib_b[0]);
+  output_command->disturbance_by_b = g_ * total_mass * sin(Ib_b[1]);
+
+  output_command->disturbance_bx_w = g_ * total_mass * sin(Ib_w[0]);
+  output_command->disturbance_by_w = g_ * total_mass * sin(Ib_w[1]);
+
+  output_command->disturbance_wx_w = g_ * total_mass * sin(Iw_w[0]);
+  output_command->disturbance_wy_w = g_ * total_mass * sin(Iw_w[1]);
 
   last_output_command = output_command;
 
@@ -833,8 +852,8 @@ bool NsfController::reset(void) {
 
   std::scoped_lock lock(mutex_integrals);
 
-  Iw_w = Eigen::Vector2d::Zero(2);
-  Ib_b = Eigen::Vector2d::Zero(2);
+  /* Iw_w = Eigen::Vector2d::Zero(2); */
+  /* Ib_b = Eigen::Vector2d::Zero(2); */
 
   return true;
 }
