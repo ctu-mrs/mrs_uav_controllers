@@ -757,8 +757,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
   // |            report on the values of the integrals           |
   // --------------------------------------------------------------
 
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %1.2f, y %1.2f, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %1.2f, y %1.2f, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %1.2f N, y %1.2f N, lim: %1.2f N", Iw_w[X], Iw_w[Y], kiwxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %1.2f N, y %1.2f N, lim: %1.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
 
   // --------------------------------------------------------------
   // |                 produce the control output                 |
