@@ -267,11 +267,11 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
 
-    Ib_b[0] = asin(cmd->disturbance_bx/(g_*cmd->total_mass));
-    Ib_b[1] = asin(cmd->disturbance_by/(g_*cmd->total_mass));
+    Ib_b[0] = asin(cmd->disturbance_bx_b / (g_ * cmd->total_mass));
+    Ib_b[1] = asin(cmd->disturbance_by_b / (g_ * cmd->total_mass));
 
-    Iw_w[0] = asin(cmd->disturbance_wx/(g_*cmd->total_mass));
-    Iw_w[1] = asin(cmd->disturbance_wy/(g_*cmd->total_mass));
+    Iw_w[0] = asin(cmd->disturbance_wx_w / (g_ * cmd->total_mass));
+    Iw_w[1] = asin(cmd->disturbance_wy_w / (g_ * cmd->total_mass));
 
     ROS_INFO("[NsfController]: activated with a last trackers command.");
   }
@@ -404,7 +404,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                     calculate the NSFs                     |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
 
   // create vectors of gains
   Eigen::Vector3d kp, kv, ka;
@@ -558,7 +558,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
 
     // integrate the body error
     Ib_b += kibxy * Ep_body * dt;
@@ -663,11 +663,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   output_command->mass_difference = uav_mass_difference;
   output_command->total_mass      = total_mass;
 
-  output_command->disturbance_bx = g_*total_mass*sin(Ib_b[0]);
-  output_command->disturbance_by = g_*total_mass*sin(Ib_b[1]);
+  output_command->disturbance_bx_b = g_ * total_mass * sin(Ib_b[0]);
+  output_command->disturbance_by_b = g_ * total_mass * sin(Ib_b[1]);
 
-  output_command->disturbance_wx = g_*total_mass*sin(Iw_w[0]);
-  output_command->disturbance_wy = g_*total_mass*sin(Iw_w[1]);
+  output_command->disturbance_bx_w = g_ * total_mass * sin(Ib_w[0]);
+  output_command->disturbance_by_w = g_ * total_mass * sin(Ib_w[1]);
+
+  output_command->disturbance_wx_w = g_ * total_mass * sin(Iw_w[0]);
+  output_command->disturbance_wy_w = g_ * total_mass * sin(Iw_w[1]);
 
   last_output_command = output_command;
 

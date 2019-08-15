@@ -344,11 +344,11 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
 
-    Ib_b[0] = cmd->disturbance_bx;
-    Ib_b[1] = cmd->disturbance_by;
+    Ib_b[0] = cmd->disturbance_bx_b;
+    Ib_b[1] = cmd->disturbance_by_b;
 
-    Iw_w[0] = cmd->disturbance_wx;
-    Iw_w[1] = cmd->disturbance_wy;
+    Iw_w[0] = cmd->disturbance_wx_w;
+    Iw_w[1] = cmd->disturbance_wy_w;
 
     ROS_INFO("[MpcController]: activated with the last tracker's command.");
   }
@@ -948,11 +948,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   output_command->mass_difference = uav_mass_difference;
   output_command->total_mass      = total_mass;
 
-  output_command->disturbance_bx = Ib_b[0];
-  output_command->disturbance_by = Ib_b[1];
+  output_command->disturbance_bx_b = Ib_b[0];
+  output_command->disturbance_by_b = Ib_b[1];
 
-  output_command->disturbance_wx = Iw_w[0];
-  output_command->disturbance_wy = Iw_w[1];
+  output_command->disturbance_bx_w = Ib_w[0];
+  output_command->disturbance_by_w = Ib_w[1];
+
+  output_command->disturbance_wx_w = Iw_w[0];
+  output_command->disturbance_wy_w = Iw_w[1];
 
   last_output_command = output_command;
 
