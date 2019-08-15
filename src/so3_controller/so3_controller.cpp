@@ -294,6 +294,13 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   } else {
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
+
+    Ib_b[0] = cmd->disturbance_bx;
+    Ib_b[1] = cmd->disturbance_by;
+
+    Iw_w[0] = cmd->disturbance_wx;
+    Iw_w[1] = cmd->disturbance_wy;
+
     ROS_INFO("[So3Controller]: activated with a last trackers command, mass difference %.2f kg.", uav_mass_difference);
   }
 
@@ -814,6 +821,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
 
   output_command->thrust          = thrust;
   output_command->mass_difference = uav_mass_difference;
+  output_command->total_mass      = total_mass;
+
+  output_command->disturbance_bx = Ib_b[0];
+  output_command->disturbance_by = Ib_b[1];
+
+  output_command->disturbance_wx = Iw_w[0];
+  output_command->disturbance_wy = Iw_w[1];
 
   last_output_command = output_command;
 
@@ -1001,8 +1015,8 @@ bool So3Controller::reset(void) {
 
   std::scoped_lock lock(mutex_integrals);
 
-  Iw_w = Eigen::Vector2d::Zero(2);
-  Ib_b = Eigen::Vector2d::Zero(2);
+  /* Iw_w = Eigen::Vector2d::Zero(2); */
+  /* Ib_b = Eigen::Vector2d::Zero(2); */
 
   return true;
 }
