@@ -379,7 +379,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   // |                     calculate the NSFs                     |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, yaw);
 
   // create vectors of gains
   Eigen::Vector3d kp, kv, ka;
@@ -529,7 +529,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -yaw);
 
     // integrate the body error
     Ib_b += kibxy * Ep_body * dt;

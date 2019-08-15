@@ -457,7 +457,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, yaw);
 
   double total_mass = uav_mass_ + uav_mass_difference;
 
@@ -663,7 +663,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -yaw);
 
     // integrate the body error
     Ib_b -= kibxy * Ep_body * dt;

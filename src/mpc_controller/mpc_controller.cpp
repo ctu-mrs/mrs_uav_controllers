@@ -543,7 +543,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, -yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, yaw);
 
   Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
 
@@ -689,7 +689,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -yaw);
 
     // integrate the body error
 
