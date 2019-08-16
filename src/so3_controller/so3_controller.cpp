@@ -56,7 +56,7 @@ public:
 
   virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
-  bool reset(void);
+  void resetDisturbanceEstimators(void);
 
 private:
   bool is_initialized = false;
@@ -287,11 +287,15 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+
     activation_control_command_                 = mrs_msgs::AttitudeCommand();
     activation_control_command_.mass_difference = 0;
     uav_mass_difference                         = 0;
+
     ROS_WARN("[So3Controller]: activated without getting the last tracker's command.");
+
   } else {
+
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
 
@@ -302,6 +306,7 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     Iw_w[1] = cmd->disturbance_wy_w;
 
     ROS_INFO("[So3Controller]: activated with a last trackers command, mass difference %.2f kg.", uav_mass_difference);
+
   }
 
   first_iteration = true;
@@ -353,7 +358,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
 
   if (first_iteration) {
 
-    reset();
     last_update = odometry->header.stamp;
 
     first_iteration = false;
@@ -901,6 +905,18 @@ void So3Controller::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg
 
 //}
 
+/* resetDisturbanceEstimators() //{ */
+
+void So3Controller::resetDisturbanceEstimators(void) {
+
+  std::scoped_lock lock(mutex_integrals);
+
+  Iw_w = Eigen::Vector2d::Zero(2);
+  Ib_b = Eigen::Vector2d::Zero(2);
+}
+
+//}
+
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
@@ -1008,20 +1024,6 @@ double So3Controller::calculateGainChange(const double current_value, const doub
   }
 
   return current_value + change;
-}
-
-//}
-
-/* reset() //{ */
-
-bool So3Controller::reset(void) {
-
-  std::scoped_lock lock(mutex_integrals);
-
-  /* Iw_w = Eigen::Vector2d::Zero(2); */
-  /* Ib_b = Eigen::Vector2d::Zero(2); */
-
-  return true;
 }
 
 //}

@@ -53,7 +53,7 @@ public:
 
   virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
-  bool reset(void);
+  void resetDisturbanceEstimators(void);
 
 private:
   bool is_initialized = false;
@@ -113,10 +113,6 @@ private:
 
   double gains_filter_max_change_;  // calculated from change_rate_/timer_rate_;
   double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
-
-private:
-  Eigen::Vector2d Ib_b;  // body error integral in the body frame
-  Eigen::Vector2d Iw_w;  // world error integral in the world_frame
 };
 
 AttitudeController::AttitudeController(void) {
@@ -184,8 +180,6 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_ma
   max_tilt_angle_ = (max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference = 0;
-  Iw_w                = Eigen::Vector2d::Zero(2);
-  Ib_b                = Eigen::Vector2d::Zero(2);
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -237,13 +231,19 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_ma
 bool AttitudeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+
     activation_control_command_ = mrs_msgs::AttitudeCommand();
     uav_mass_difference         = 0;
+
     ROS_WARN("[AttitudeController]: activated without getting the last tracker's command.");
+
   } else {
+
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
+
     ROS_INFO("[AttitudeController]: activated with a last trackers command.");
+
   }
 
   first_iteration = true;
@@ -327,7 +327,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
 
   if (first_iteration) {
 
-    reset();
     last_update = odometry->header.stamp;
 
     first_iteration = false;
@@ -535,6 +534,13 @@ void AttitudeController::switchOdometrySource([[maybe_unused]] const nav_msgs::O
 
 //}
 
+/* resetDisturbanceEstimators() //{ */
+
+void AttitudeController::resetDisturbanceEstimators(void) {
+}
+
+//}
+
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
@@ -632,17 +638,6 @@ double AttitudeController::calculateGainChange(const double current_value, const
   }
 
   return current_value + change;
-}
-
-//}
-
-/* reset() //{ */
-
-bool AttitudeController::reset(void) {
-
-  Iw_w = Eigen::Vector2d::Zero(2);
-
-  return true;
 }
 
 //}

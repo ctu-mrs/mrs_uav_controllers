@@ -41,6 +41,8 @@ public:
 
   virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
+  void resetDisturbanceEstimators(void);
+
 private:
   bool is_initialized = false;
   bool is_active      = false;
@@ -137,15 +139,21 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
   std::scoped_lock lock(mutex_hover_thrust);
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+
     activation_control_command_                 = mrs_msgs::AttitudeCommand();
     activation_control_command_.mass_difference = 0;
     uav_mass_difference                         = 0;
+
     ROS_WARN("[FailsafeController]: activated without getting the last tracker's command.");
+
   } else {
+
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
     hover_thrust = initial_thrust_percentage_ * sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+
     ROS_INFO("[FailsafeController]: activated with uav_mass_difference %1.2f kg.", uav_mass_difference);
+
   }
 
   first_iteration = true;
@@ -298,6 +306,13 @@ const mrs_msgs::ControllerStatus::Ptr FailsafeController::getStatus() {
 /* switchOdometrySource() //{ */
 
 void FailsafeController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
+}
+
+//}
+
+/* resetDisturbanceEstimators() //{ */
+
+void FailsafeController::resetDisturbanceEstimators(void) {
 }
 
 //}
