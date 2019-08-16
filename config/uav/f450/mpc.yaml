@@ -14,17 +14,17 @@ mpc_parameters:
     Q: [500, 100, 100] # state error penalization
     S: [1000, 300, 300] # last state error penalization
 
-    max_speed: 1.5
-    max_acceleration: 1.0
-    max_jerk: 3.0
+    max_speed: 2.0
+    max_acceleration: 1.5
+    max_jerk: 10.0
 
   vertical:
 
     Q: [100, 10, 10] # state error penalization
     S: [100, 10, 10] # last state error penalization
 
-    max_speed: 0.5
-    max_acceleration: 1.0
+    max_speed: 2.0
+    max_acceleration: 1.5
     max_u: 50.0
 
 cvx_parameters:
@@ -34,11 +34,11 @@ cvx_parameters:
 
 integral_gains:
 
-  kiw: 0.1
-  kib: 0.1
+  kiw: 0.05
+  kib: 0.5
 
-  kiw_lim: 10.0
-  kib_lim: 10.0
+  kiw_lim: 5.0
+  kib_lim: 5.0
 
 attitude_vertical_feedback:
 
