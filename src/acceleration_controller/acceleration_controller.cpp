@@ -58,7 +58,7 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
-  bool reset(void);
+  void resetDisturbanceEstimators(void);
 
 private:
   bool is_initialized = false;
@@ -296,13 +296,19 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, mrs_ua
 bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+
     activation_control_command_ = mrs_msgs::AttitudeCommand();
     uav_mass_difference         = 0;
+
     ROS_WARN("[AccelerationController]: activated without getting the last tracker's command.");
+
   } else {
+
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
+
     ROS_INFO("[AccelerationController]: activated with the last tracker's command.");
+
   }
 
   first_iteration = true;
@@ -444,7 +450,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   if (first_iteration) {
 
-    reset();
     last_update = odometry->header.stamp;
 
     first_iteration = false;
@@ -767,6 +772,13 @@ void AccelerationController::switchOdometrySource([[maybe_unused]] const nav_msg
 
 //}
 
+/* resetDisturbanceEstimators() //{ */
+
+void AccelerationController::resetDisturbanceEstimators(void) {
+}
+
+//}
+
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
@@ -861,15 +873,6 @@ double AccelerationController::calculateGainChange(const double current_value, c
   }
 
   return current_value + change;
-}
-
-//}
-
-/* reset() //{ */
-
-bool AccelerationController::reset(void) {
-
-  return true;
 }
 
 //}

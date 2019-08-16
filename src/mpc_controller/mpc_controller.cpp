@@ -58,7 +58,7 @@ public:
 
   virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
-  bool reset(void);
+  void resetDisturbanceEstimators(void);
 
 private:
   bool is_initialized = false;
@@ -337,10 +337,14 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+
     activation_control_command_ = mrs_msgs::AttitudeCommand();
     uav_mass_difference         = 0;
+
     ROS_WARN("[MpcController]: activated without getting the last tracker's command.");
+
   } else {
+
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
 
@@ -351,6 +355,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     Iw_w[1] = cmd->disturbance_wy_w;
 
     ROS_INFO("[MpcController]: activated with the last tracker's command.");
+
   }
 
   first_iteration = true;
@@ -522,7 +527,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   if (first_iteration) {
 
-    reset();
     last_update = odometry->header.stamp;
 
     first_iteration = false;
@@ -889,7 +893,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     std::scoped_lock lock(mutex_integrals);
 
     ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", Iw_w[X], Iw_w[Y], kiwxy_lim);
-    ROS_INFO_THROTTLE(5.0, "[MpcController]:  body error integral: x %.2f N, y %.2f N, lim: %.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[MpcController]: body error integral:  x %.2f N, y %.2f N, lim: %.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
   }
 
   // --------------------------------------------------------------
@@ -1026,6 +1030,18 @@ void MpcController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg
 
 //}
 
+/* resetDisturbanceEstimators() //{ */
+
+void MpcController::resetDisturbanceEstimators(void) {
+
+  std::scoped_lock lock(mutex_integrals);
+
+  Iw_w = Eigen::Vector2d::Zero(2);
+  Ib_b = Eigen::Vector2d::Zero(2);
+}
+
+//}
+
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
@@ -1126,20 +1142,6 @@ double MpcController::calculateGainChange(const double current_value, const doub
   }
 
   return current_value + change;
-}
-
-//}
-
-/* reset() //{ */
-
-bool MpcController::reset(void) {
-
-  std::scoped_lock lock(mutex_integrals);
-
-  /* Iw_w = Eigen::Vector2d::Zero(2); */
-  /* Ib_b = Eigen::Vector2d::Zero(2); */
-
-  return true;
 }
 
 //}

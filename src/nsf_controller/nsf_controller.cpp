@@ -53,7 +53,7 @@ public:
 
   virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
-  bool reset(void);
+  void resetDisturbanceEstimators(void);
 
 private:
   bool is_initialized = false;
@@ -260,10 +260,14 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
 bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+
     activation_control_command_ = mrs_msgs::AttitudeCommand();
     uav_mass_difference         = 0;
+
     ROS_WARN("[NsfController]: activated without getting the last tracker's command.");
+
   } else {
+
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
 
@@ -346,7 +350,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
 
   if (first_iteration) {
 
-    reset();
     last_update = odometry->header.stamp;
 
     first_iteration = false;
@@ -634,8 +637,23 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   {
     std::scoped_lock lock(mutex_integrals);
 
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f rad, y %1.2f rad, lim: %1.2f", Iw_w[X], Iw_w[Y], kiwxy_lim);
-    ROS_INFO_THROTTLE(5.0, "[NsfController]:  body error integral: x %1.2f rad, y %1.2f rad, lim: %1.2f", Ib_b[X], Ib_b[Y], kibxy_lim);
+    // report in the internal representation of the disturbance -> tilt angle
+    double rad_deg = 180.0 / M_PI;
+
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: disturbance in the tilt represenation");
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f deg, y %1.2f deg, lim: %1.2f deg", rad_deg * Iw_w[X], rad_deg * Iw_w[Y],
+                      rad_deg * kiwxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f deg, y %1.2f deg, lim: %1.2f deg", rad_deg * Ib_b[X], rad_deg * Ib_b[Y],
+                      rad_deg * kibxy_lim);
+
+    // report in the more universal representation -> force
+    double hover_force = total_mass * g_;
+
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: disturbance in the force represenation");
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %1.2f N, y %1.2f N, lim: %1.2f N", hover_force * sin(Iw_w[X]), hover_force * sin(Iw_w[Y]),
+                      hover_force * sin(kiwxy_lim));
+    ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %1.2f N, y %1.2f N, lim: %1.2f N", hover_force * sin(Ib_b[X]), hover_force * sin(Ib_b[Y]),
+                      hover_force * sin(kibxy_lim));
   }
 
   // --------------------------------------------------------------
@@ -741,6 +759,18 @@ void NsfController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg
 
 //}
 
+/* resetDisturbanceEstimators() //{ */
+
+void NsfController::resetDisturbanceEstimators(void) {
+
+  std::scoped_lock lock(mutex_integrals);
+
+  Iw_w = Eigen::Vector2d::Zero(2);
+  Ib_b = Eigen::Vector2d::Zero(2);
+}
+
+//}
+
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
@@ -842,20 +872,6 @@ double NsfController::calculateGainChange(const double current_value, const doub
   }
 
   return current_value + change;
-}
-
-//}
-
-/* reset() //{ */
-
-bool NsfController::reset(void) {
-
-  std::scoped_lock lock(mutex_integrals);
-
-  /* Iw_w = Eigen::Vector2d::Zero(2); */
-  /* Ib_b = Eigen::Vector2d::Zero(2); */
-
-  return true;
 }
 
 //}
