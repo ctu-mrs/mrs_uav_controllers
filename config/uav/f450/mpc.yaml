@@ -34,11 +34,11 @@ cvx_parameters:
 
 integral_gains:
 
-  kiw: 0.1
-  kib: 0.1
+  kiw: 0.05
+  kib: 0.5
 
-  kiw_lim: 10.0
-  kib_lim: 10.0
+  kiw_lim: 5.0
+  kib_lim: 5.0
 
 attitude_vertical_feedback:
 
