@@ -307,8 +307,9 @@ bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr 
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
 
-    ROS_INFO("[AccelerationController]: activated with the last tracker's command.");
+    ROS_INFO("[AttitudeController]: setting mass difference from the last AttitudeCmd: %.2f kg", uav_mass_difference);
 
+    ROS_INFO("[AccelerationController]: activated with the last tracker's command.");
   }
 
   first_iteration = true;
