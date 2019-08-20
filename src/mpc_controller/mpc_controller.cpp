@@ -354,10 +354,12 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     Iw_w[0] = cmd->disturbance_wx_w;
     Iw_w[1] = cmd->disturbance_wy_w;
 
-    ROS_INFO("[MpcController]: setting the mass difference and disturbances from the last AttitudeCmd: mass: %.2f kg, Ib_b: %.2f, %.2f N, Iw_w: %.2f, %.2f N", uav_mass_difference, Ib_b[0], Ib_b[1], Iw_w[0], Iw_w[1]);
+    ROS_INFO(
+        "[MpcController]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b: %.2f, %.2f N, Iw_w: %.2f, "
+        "%.2f N",
+        uav_mass_difference, Ib_b[0], Ib_b[1], Iw_w[0], Iw_w[1]);
 
     ROS_INFO("[MpcController]: activated with the last tracker's command.");
-
   }
 
   first_iteration = true;
