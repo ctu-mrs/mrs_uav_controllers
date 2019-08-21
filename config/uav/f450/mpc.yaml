@@ -34,8 +34,8 @@ cvx_parameters:
 
 integral_gains:
 
-  kiw: 1.0
-  kib: 1.0
+  kiw: 0.1
+  kib: 0.1
 
   kiw_lim: 10.0
   kib_lim: 10.0
@@ -51,8 +51,8 @@ attitude_vertical_feedback:
 
     vertical:
       attitude:
-        kq: 10.0
-        kw: 1.0
+        kq: 1.0
+        kw: 0.0
 
     weight_estimator:
       km: 1.0
