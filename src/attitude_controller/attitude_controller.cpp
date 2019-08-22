@@ -36,8 +36,6 @@ namespace attitude_controller
 class AttitudeController : public mrs_uav_manager::Controller {
 
 public:
-  AttitudeController(void);
-
   void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
@@ -114,9 +112,6 @@ private:
   double gains_filter_max_change_;  // calculated from change_rate_/timer_rate_;
   double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
 };
-
-AttitudeController::AttitudeController(void) {
-}
 
 //}
 
@@ -245,7 +240,6 @@ bool AttitudeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
     ROS_INFO("[AttitudeController]: setting mass difference from the last AttitudeCmd: %.2f kg", uav_mass_difference);
 
     ROS_INFO("[AttitudeController]: activated with a last trackers command.");
-
   }
 
   first_iteration = true;

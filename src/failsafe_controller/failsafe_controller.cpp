@@ -30,8 +30,6 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_manager::Controller {
 
 public:
-  FailsafeController(void);
-
   void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
@@ -72,9 +70,6 @@ private:
   mrs_lib::Profiler *profiler;
   bool               profiler_enabled_ = false;
 };
-
-FailsafeController::FailsafeController(void) {
-}
 
 //}
 
@@ -153,7 +148,6 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
     hover_thrust = initial_thrust_percentage_ * sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
     ROS_INFO("[FailsafeController]: activated with uav_mass_difference %1.2f kg.", uav_mass_difference);
-
   }
 
   first_iteration = true;

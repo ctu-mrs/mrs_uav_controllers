@@ -41,8 +41,6 @@ namespace mpc_controller
 class MpcController : public mrs_uav_manager::Controller {
 
 public:
-  MpcController(void);
-
   void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
@@ -165,9 +163,6 @@ private:
   Eigen::Vector2d Iw_w;  // world error integral in the world_frame
   std::mutex      mutex_integrals;
 };
-
-MpcController::MpcController(void) {
-}
 
 //}
 

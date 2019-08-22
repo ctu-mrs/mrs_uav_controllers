@@ -41,8 +41,6 @@ namespace acceleration_controller
 class AccelerationController : public mrs_uav_manager::Controller {
 
 public:
-  AccelerationController(void);
-
   void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
@@ -148,9 +146,6 @@ private:
   int        output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
   std::mutex mutex_output_mode;
 };
-
-AccelerationController::AccelerationController(void) {
-}
 
 //}
 
