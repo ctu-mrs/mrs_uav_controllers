@@ -9,7 +9,6 @@
 
 #include <math.h>
 
-#include <mrs_msgs/ControllerStatus.h>
 #include <mrs_uav_manager/Controller.h>
 
 #include <mrs_lib/Profiler.h>
@@ -35,7 +34,7 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr     getStatus();
+  const mrs_msgs::ControllerStatus          getStatus();
 
   virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
@@ -275,24 +274,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
 
 /* getStatus() //{ */
 
-const mrs_msgs::ControllerStatus::Ptr FailsafeController::getStatus() {
+const mrs_msgs::ControllerStatus FailsafeController::getStatus() {
 
-  if (is_initialized) {
+  mrs_msgs::ControllerStatus controller_status;
 
-    mrs_msgs::ControllerStatus::Ptr controller_status(new mrs_msgs::ControllerStatus);
+  controller_status.active = is_active;
 
-    if (is_active) {
-      controller_status->active = mrs_msgs::ControllerStatus::ACTIVE;
-    } else {
-      controller_status->active = mrs_msgs::ControllerStatus::NONACTIVE;
-    }
-
-    return controller_status;
-
-  } else {
-
-    return mrs_msgs::ControllerStatus::Ptr();
-  }
+  return controller_status;
 }
 
 //}

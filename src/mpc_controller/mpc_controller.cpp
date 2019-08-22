@@ -10,7 +10,6 @@
 
 #include <math.h>
 
-#include <mrs_msgs/ControllerStatus.h>
 #include <mrs_uav_manager/Controller.h>
 
 #include <mrs_controllers/mpc_controllerConfig.h>
@@ -46,7 +45,7 @@ public:
   void deactivate(void);
 
   const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
-  const mrs_msgs::ControllerStatus::Ptr     getStatus();
+  const mrs_msgs::ControllerStatus          getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::mpc_controllerConfig &config, uint32_t level);
 
@@ -969,23 +968,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
 /* //{ getStatus() */
 
-const mrs_msgs::ControllerStatus::Ptr MpcController::getStatus() {
+const mrs_msgs::ControllerStatus MpcController::getStatus() {
 
-  if (is_initialized) {
+  mrs_msgs::ControllerStatus controller_status;
 
-    mrs_msgs::ControllerStatus::Ptr controller_status(new mrs_msgs::ControllerStatus);
+  controller_status.active = is_active;
 
-    if (is_active) {
-      controller_status->active = mrs_msgs::ControllerStatus::ACTIVE;
-    } else {
-      controller_status->active = mrs_msgs::ControllerStatus::NONACTIVE;
-    }
-
-    return controller_status;
-  } else {
-
-    return mrs_msgs::ControllerStatus::Ptr();
-  }
+  return controller_status;
 }
 
 //}
