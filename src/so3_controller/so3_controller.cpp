@@ -38,7 +38,7 @@ namespace so3_controller
 class So3Controller : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
+  void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -139,13 +139,15 @@ private:
 
 /* //{ initialize() */
 
-void So3Controller::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params) {
+void So3Controller::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
 
   ros::NodeHandle nh_(parent_nh, "so3_controller");
 
   ros::Time::waitForValid();
 
   this->motor_params_ = motor_params;
+  this->uav_mass_ = uav_mass;
+  this->g_ = g;
 
   // --------------------------------------------------------------
   // |                       load parameters                      |
@@ -185,10 +187,6 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager
   // integrator limits
   param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim);
   param_loader.load_param("default_gains/horizontal/kib_lim", kibxy_lim);
-
-  // physics
-  param_loader.load_param("uav_mass", uav_mass_);
-  param_loader.load_param("g", g_);
 
   // constraints
   param_loader.load_param("tilt_angle_saturation", tilt_angle_saturation_);
@@ -282,11 +280,9 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    activation_control_command_                 = mrs_msgs::AttitudeCommand();
-    activation_control_command_.mass_difference = 0;
-    uav_mass_difference                         = 0;
-
     ROS_WARN("[So3Controller]: activated without getting the last tracker's command.");
+
+    return false;
 
   } else {
 

@@ -1,0 +1,72 @@
+mpc_model:
+
+  number_of_states: 3
+
+  dt1: 0.01
+  dt2: 0.05
+
+mpc_parameters:
+
+  horizon_length: 26
+
+  horizontal:
+
+    Q: [500, 100, 100] # state error penalization
+    S: [1000, 300, 300] # last state error penalization
+
+    max_speed: 4.0
+    max_acceleration: 2.0
+    max_jerk: 5.0
+
+  vertical:
+
+    Q: [100, 10, 10] # state error penalization
+    S: [100, 10, 10] # last state error penalization
+
+    max_speed: 3.0
+    max_acceleration: 2.0
+    max_u: 50.0
+
+cvx_parameters:
+
+  verbose: false
+  max_iterations: 30
+
+integral_gains:
+
+  kiw: 1.0
+  kib: 1.0
+
+  kiw_lim: 10.0
+  kib_lim: 10.0
+
+attitude_vertical_feedback:
+
+  default_gains:
+
+    horizontal:
+      attitude:
+        kq: 13.0
+        kw: 0.0
+
+    vertical:
+      attitude:
+        kq: 20.0
+        kw: 5.0
+
+    weight_estimator:
+      km: 1.0
+      km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+
+  gains_filter:
+    filter_rate: 20 # [Hz]
+    perc_change_rate: 1.0
+    min_change_rate: 0.1 # perc of the difference
+
+  # saturations and limits
+  tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
+  tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
+  thrust_saturation: 0.85 # [-], range from 0 to 1
+
+# output mode to PixHawk
+output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}

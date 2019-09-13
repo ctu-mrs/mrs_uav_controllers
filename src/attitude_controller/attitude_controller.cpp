@@ -35,7 +35,7 @@ namespace attitude_controller
 class AttitudeController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params);
+  void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -120,13 +120,15 @@ private:
 
 /* //{ initialize() */
 
-void AttitudeController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params) {
+void AttitudeController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
 
   ros::NodeHandle nh_(parent_nh, "attitude_controller");
 
   ros::Time::waitForValid();
 
   this->motor_params_ = motor_params;
+  this->uav_mass_ = uav_mass;
+  this->g_ = g;
 
   // --------------------------------------------------------------
   // |                       load parameters                      |
@@ -152,10 +154,6 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, mrs_uav_ma
   // mass estimator
   param_loader.load_param("default_gains/weight_estimator/km", km);
   param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim);
-
-  // physical
-  param_loader.load_param("uav_mass", uav_mass_);
-  param_loader.load_param("g", g_);
 
   // gain filtering
   param_loader.load_param("gains_filter/filter_rate", gains_filter_timer_rate_);
@@ -226,10 +224,9 @@ bool AttitudeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    activation_control_command_ = mrs_msgs::AttitudeCommand();
-    uav_mass_difference         = 0;
-
     ROS_WARN("[AttitudeController]: activated without getting the last tracker's command.");
+
+    return false;
 
   } else {
 

@@ -1,0 +1,30 @@
+default_gains:
+
+  horizontal:
+    kp: 0.30
+    kv: 0.20
+    ka: 1.0
+
+    kib: 0.05
+    kib_lim: 0.3
+
+    kiw: 0.05
+    kiw_lim: 0.3
+
+  vertical:
+    kp: 0.6
+    kv: 0.2
+    ka: 1.0
+
+  weight_estimator:
+    km: 1.0
+    km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+
+lateral_mute_coefficitent: 0.0
+
+max_tilt_angle: 90.0 # [deg]
+
+gains_filter:
+  filter_rate: 20 # [Hz]
+  perc_change_rate: 1.0
+  min_change_rate: 0.1 # perc of the difference
