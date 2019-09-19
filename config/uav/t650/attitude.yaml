@@ -12,8 +12,8 @@ default_gains:
     ka: 1.0
 
     attitude:
-      kq: 4.0
-      kw: 1.0
+      kq: 1.0
+      kw: 0.1
 
   weight_estimator:
     km: 1.0

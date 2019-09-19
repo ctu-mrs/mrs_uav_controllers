@@ -17,5 +17,5 @@ attitude_vertical_feedback:
 
     vertical:
       attitude:
-        kq: 0.5
+        kq: 1.0
         kw: 0.1
