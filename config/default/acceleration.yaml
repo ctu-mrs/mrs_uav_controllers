@@ -34,7 +34,7 @@ attitude_vertical_feedback:
 
     vertical:
       attitude:
-        kq: 1.0
+        kq: 5.0
         kw: 0.5
 
     weight_estimator:
