@@ -6,6 +6,7 @@
 #include <dynamic_reconfigure/server.h>
 #include <mrs_msgs/AttitudeCommand.h>
 #include <nav_msgs/Odometry.h>
+#include <std_srvs/SetBool.h>
 #include <tf/transform_datatypes.h>
 
 #include <math.h>
@@ -110,6 +111,11 @@ private:
   bool   mutex_lateral_gains_after_toggle = false;
   double mute_coefficitent_;
 
+private:
+  ros::ServiceServer service_set_integral_terms;
+  bool               callbackSetIntegralTerms(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
+  bool               integral_terms_enabled = true;
+
   // --------------------------------------------------------------
   // |                       MPC controller                       |
   // --------------------------------------------------------------
@@ -178,8 +184,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_m
   ros::Time::waitForValid();
 
   this->motor_params_ = motor_params;
-  this->uav_mass_ = uav_mass;
-  this->g_ = g;
+  this->uav_mass_     = uav_mass;
+  this->g_            = g;
 
   // --------------------------------------------------------------
   // |                       load parameters                      |
@@ -297,6 +303,12 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_m
   reconfigure_server_->updateConfig(drs_desired_gains);
   ReconfigureServer::CallbackType f = boost::bind(&MpcController::dynamicReconfigureCallback, this, _1, _2);
   reconfigure_server_->setCallback(f);
+
+  // --------------------------------------------------------------
+  // |                       Service servers                      |
+  // --------------------------------------------------------------
+
+  service_set_integral_terms = nh_.advertiseService("set_integral_terms_in", &MpcController::callbackSetIntegralTerms, this);
 
   // --------------------------------------------------------------
   // |                          profiler                          |
@@ -745,7 +757,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for body integral kicks in");
     }
-    Ib_b -= temp_gain * Ep_body * dt;
+
+    if (integral_terms_enabled) {
+      Ib_b -= temp_gain * Ep_body * dt;
+    }
 
     // saturate the body
     double body_integral_saturated = false;
@@ -803,7 +818,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for world integral kicks in");
     }
-    Iw_w -= temp_gain * Ep.head(2) * dt;
+
+    if (integral_terms_enabled) {
+      Iw_w -= temp_gain * Ep.head(2) * dt;
+    }
 
     // saturate the world
     double world_integral_saturated = false;
@@ -1042,6 +1060,27 @@ void MpcController::dynamicReconfigureCallback(mrs_controllers::mpc_controllerCo
   }
 
   ROS_INFO("[MpcController]: DRS updated gains");
+}
+
+//}
+
+/* //{ callbackSetIntegralTerms() */
+
+bool MpcController::callbackSetIntegralTerms(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res) {
+
+  if (!is_initialized)
+    return false;
+
+  integral_terms_enabled = req.data;
+
+  char message[100];
+
+  sprintf((char *)&message, "Integral terms %s", integral_terms_enabled ? "ENABLED" : "DISABLED");
+  res.message = message;
+  res.success = true;
+  ROS_INFO("[MpcController]: %s", message);
+
+  return true;
 }
 
 //}
