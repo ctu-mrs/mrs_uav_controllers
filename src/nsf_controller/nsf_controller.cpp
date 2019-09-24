@@ -89,6 +89,7 @@ private:
   std::mutex mutex_desired_gains;
 
   double max_tilt_angle_;
+  double thrust_saturation_;
 
   mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
   mrs_msgs::AttitudeCommand           activation_control_command_;
@@ -172,6 +173,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_m
 
   // constraints
   param_loader.load_param("max_tilt_angle", max_tilt_angle_);
+  param_loader.load_param("thrust_saturation", thrust_saturation_);
 
   // gain filtering
   param_loader.load_param("gains_filter/filter_rate", gains_filter_timer_rate_);
@@ -474,12 +476,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   if (!std::isfinite(feedback_w[Z])) {
     feedback_w[Z] = 0;
     ROS_ERROR_THROTTLE(1.0, "[NsfController]: NaN detected in variable \"feedback_w[Z]\", setting it to 0!!!");
-  } else if (feedback_w[Z] > 1.0) {
-    feedback_w[Z] = 1.0;
+  } else if (feedback_w[Z] > thrust_saturation_) {
+    feedback_w[Z] = thrust_saturation_;
     z_saturated   = true;
+    ROS_WARN("[NsfController]: saturating thrust to %.2f", thrust_saturation_);
   } else if (feedback_w[Z] < 0.0) {
     feedback_w[Z] = 0;
     z_saturated   = true;
+    ROS_WARN("[NsfController]: saturating thrust to %.2f", 0.0);
   }
 
   if (x_saturated) {

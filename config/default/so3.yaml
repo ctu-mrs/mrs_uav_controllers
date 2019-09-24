@@ -36,7 +36,7 @@ lateral_mute_coefficitent: 0.0
 # saturations and limits
 tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
 tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
-thrust_saturation: 0.85 # [-], range from 0 to 1
+thrust_saturation: 0.9 # [-], range from 0 to 1
 
 gains_filter:
   filter_rate: 20 # [Hz]

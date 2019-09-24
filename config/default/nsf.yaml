@@ -23,6 +23,7 @@ default_gains:
 lateral_mute_coefficitent: 0.0
 
 max_tilt_angle: 90.0 # [deg]
+thrust_saturation: 0.9 # [-], range from 0 to 1
 
 gains_filter:
   filter_rate: 20 # [Hz]

@@ -719,10 +719,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   if (!std::isfinite(thrust)) {
     thrust = 0;
     ROS_ERROR("[MpcController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
-  } else if (thrust > 0.8) {
-    thrust = 0.8;
+  } else if (thrust > thrust_saturation_) {
+    thrust = thrust_saturation_;
+    ROS_WARN("[MpcController]: saturating thrust to %.2f", thrust_saturation_);
   } else if (thrust < 0.0) {
     thrust = 0.0;
+    ROS_WARN("[MpcController]: saturating thrust to %.2f", 0.0);
   }
 
   Eigen::Vector3d t;

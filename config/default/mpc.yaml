@@ -66,7 +66,7 @@ attitude_vertical_feedback:
   # saturations and limits
   tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
   tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
-  thrust_saturation: 0.85 # [-], range from 0 to 1
+  thrust_saturation: 0.9 # [-], range from 0 to 1
 
 # output mode to PixHawk
 output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}

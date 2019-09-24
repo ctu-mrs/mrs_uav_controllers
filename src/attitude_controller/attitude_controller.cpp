@@ -85,6 +85,7 @@ private:
   std::mutex mutex_desired_gains;
 
   double max_tilt_angle_;
+  double thrust_saturation_;
 
   mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
   mrs_msgs::AttitudeCommand           activation_control_command_;
@@ -159,6 +160,8 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, const mrs_
   param_loader.load_param("gains_filter/filter_rate", gains_filter_timer_rate_);
   param_loader.load_param("gains_filter/perc_change_rate", gains_filter_change_rate_);
   param_loader.load_param("gains_filter/min_change_rate", gains_filter_min_change_rate_);
+
+  param_loader.load_param("thrust_saturation", thrust_saturation_);
 
   gains_filter_max_change_ = gains_filter_change_rate_ / gains_filter_timer_rate_;
   gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
@@ -409,10 +412,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
   if (!std::isfinite(thrust)) {
     thrust = 0;
     ROS_ERROR("[AttitudeController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
-  } else if (thrust > 0.8) {
-    thrust = 0.8;
+  } else if (thrust > thrust_saturation_) {
+    thrust = thrust_saturation_;
+    ROS_WARN("[AttitudeController]: saturating thrust to %.2f", thrust_saturation_);
   } else if (thrust < 0.0) {
     thrust = 0.0;
+    ROS_WARN("[AttitudeController]: saturating thrust to %.2f", 0.0);
   }
 
   Eigen::Vector3d t;
