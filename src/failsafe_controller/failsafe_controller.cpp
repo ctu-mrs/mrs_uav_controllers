@@ -29,7 +29,7 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
+  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -78,9 +78,9 @@ private:
 
 /* initialize() //{ */
 
-void FailsafeController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
+void FailsafeController::initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
 
-  ros::NodeHandle nh_(parent_nh, "failsafe_controller");
+  ros::NodeHandle nh_(parent_nh, name_space);
 
   ros::Time::waitForValid();
 

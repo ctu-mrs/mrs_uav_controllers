@@ -1,0 +1,20 @@
+mpc_parameters:
+
+  horizontal:
+
+    max_speed: 10.0 # hight velocity to allow smooth stopping from high speeds
+    max_acceleration: 2.5 # this should be slightly lareget than the acceleration in the landoff_tracker
+    max_jerk: 10.0
+
+  vertical:
+
+    max_speed: 10.0 # hight velocity to allow smooth stopping from high speeds
+    max_acceleration: 2.5 # this should be slightly lareget than the acceleration in the landoff_tracker
+    max_u: 10.0
+
+attitude_vertical_feedback:
+
+  # saturations and limits
+  tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
+  tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
+  thrust_saturation: 0.9 # [-], range from 0 to 1

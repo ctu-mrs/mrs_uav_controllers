@@ -41,7 +41,8 @@ namespace mpc_controller
 class MpcController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
+  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+                  const double uav_mass, const double g);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -59,8 +60,9 @@ public:
   void resetDisturbanceEstimators(void);
 
 private:
-  bool is_initialized = false;
-  bool is_active      = false;
+  bool        is_initialized = false;
+  bool        is_active      = false;
+  std::string name_;
 
 private:
   nav_msgs::Odometry odometry;
@@ -177,9 +179,12 @@ private:
 
 /* //{ initialize() */
 
-void MpcController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
+void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+                               const double uav_mass, const double g) {
 
-  ros::NodeHandle nh_(parent_nh, "mpc_controller");
+  ros::NodeHandle nh_(parent_nh, name_space);
+
+  this->name_ = name;
 
   ros::Time::waitForValid();
 
@@ -261,11 +266,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_m
   param_loader.load_param("output_mode", output_mode_);
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[MpcController]: output mode has to be {1, 2}!");
+    ROS_ERROR("[%s]: output mode has to be {1, 2}!", this->name_.c_str());
   }
 
   if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[MpcController]: Could not load all parameters!");
+    ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
     ros::shutdown();
   }
 
@@ -325,11 +330,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const mrs_uav_m
   // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[MpcController]: Could not load all parameters!");
+    ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
     ros::shutdown();
   }
 
-  ROS_INFO("[MpcController]: initialized");
+  ROS_INFO("[%s]: initialized", this->name_.c_str());
 
   is_initialized = true;
 }
@@ -342,7 +347,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[MpcController]: activated without getting the last tracker's command.");
+    ROS_WARN("[%s]: activated without getting the last tracker's command.", this->name_.c_str());
 
     return false;
 
@@ -357,17 +362,15 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     Iw_w[0] = cmd->disturbance_wx_w;
     Iw_w[1] = cmd->disturbance_wy_w;
 
-    ROS_INFO(
-        "[MpcController]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b: %.2f, %.2f N, Iw_w: %.2f, "
-        "%.2f N",
-        uav_mass_difference, Ib_b[0], Ib_b[1], Iw_w[0], Iw_w[1]);
+    ROS_INFO("[%s]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b: %.2f, %.2f N, Iw_w: %.2f, %.2f N",
+             this->name_.c_str(), uav_mass_difference, Ib_b[0], Ib_b[1], Iw_w[0], Iw_w[1]);
 
-    ROS_INFO("[MpcController]: activated with the last tracker's command.");
+    ROS_INFO("[%s]: activated with the last tracker's command.", this->name_.c_str());
   }
 
   first_iteration = true;
 
-  ROS_INFO("[MpcController]: activated");
+  ROS_INFO("[%s]: activated", this->name_.c_str());
 
   is_active = true;
 
@@ -384,7 +387,7 @@ void MpcController::deactivate(void) {
   first_iteration     = false;
   uav_mass_difference = 0;
 
-  ROS_INFO("[MpcController]: deactivated");
+  ROS_INFO("[%s]: deactivated", this->name_.c_str());
 }
 
 //}
@@ -548,8 +551,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[MpcController]: last " << last_update << ", current " << odometry->header.stamp);
-    ROS_WARN_THROTTLE(1.0, "[MpcController]: the last odometry message came too close! %f", dt);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[" << this->name_ << "]: last " << last_update << ", current " << odometry->header.stamp);
+    ROS_WARN_THROTTLE(1.0, "[%s]: the last odometry message came too close! %f", this->name_.c_str(), dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
       return last_output_command;
@@ -621,7 +624,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     // if the downwards part of the force is close to counter-act the gravity acceleration
     if (f[2] < (0.15 * total_mass * g_)) {
 
-      ROS_ERROR("[MpcController]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip (iteration #%d).", f[2], i);
+      ROS_ERROR("[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip (iteration #%d).", this->name_.c_str(), f[2], i);
 
       // half the feedbacks
       feed_forward /= 2.0;
@@ -645,21 +648,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // check for the failsafe limit
   if (!std::isfinite(theta)) {
 
-    ROS_ERROR("[MpcController]: NaN detected in variable \"theta\", returning null");
+    ROS_ERROR("[%s]: NaN detected in variable \"theta\", returning null", this->name_.c_str());
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
   if (tilt_angle_failsafe_ > 1e-3 && theta > tilt_angle_failsafe_) {
 
-    ROS_ERROR("[MpcController]: The produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
-              (180.0 / M_PI) * tilt_angle_failsafe_);
-    ROS_INFO("[MpcController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
-    ROS_INFO("[MpcController]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[MpcController]: feed forward: [%.2f, %.2f, %.2f]", feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[MpcController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y, reference->position.z,
-             reference->yaw);
-    ROS_INFO("[MpcController]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", odometry->pose.pose.position.x, odometry->pose.pose.position.y,
+    ROS_ERROR("[%s]: The produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", this->name_.c_str(),
+              (180.0 / M_PI) * theta, (180.0 / M_PI) * tilt_angle_failsafe_);
+    ROS_INFO("[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f[0], f[1], f[2]);
+    ROS_INFO("[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback[0], integral_feedback[1], integral_feedback[2]);
+    ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
+    ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), reference->position.x, reference->position.y,
+             reference->position.z, reference->yaw);
+    ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), odometry->pose.pose.position.x, odometry->pose.pose.position.y,
              odometry->pose.pose.position.z, yaw);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
@@ -667,7 +670,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // saturate the angle
   if (tilt_angle_saturation_ > 1e-3 && theta > tilt_angle_saturation_) {
-    ROS_WARN_THROTTLE(1.0, "[MpcController]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / M_PI) * 180.0,
+    ROS_WARN_THROTTLE(1.0, "[%s]: tilt is being saturated, desired: %f deg, saturated %f deg", this->name_.c_str(), (theta / M_PI) * 180.0,
                       (tilt_angle_saturation_ / M_PI) * 180.0);
     theta = tilt_angle_saturation_;
   }
@@ -712,19 +715,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   if (thrust_force >= 0) {
     thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
   } else {
-    ROS_WARN_THROTTLE(1.0, "[MpcController]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[%s]: Just so you know, the desired thrust force is negative (%f", this->name_.c_str(), thrust_force);
   }
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
     thrust = 0;
-    ROS_ERROR("[MpcController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[%s]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!", this->name_.c_str());
   } else if (thrust > thrust_saturation_) {
     thrust = thrust_saturation_;
-    ROS_WARN("[MpcController]: saturating thrust to %.2f", thrust_saturation_);
+    ROS_WARN("[%s]: saturating thrust to %.2f", this->name_.c_str(), thrust_saturation_);
   } else if (thrust < 0.0) {
     thrust = 0.0;
-    ROS_WARN("[MpcController]: saturating thrust to %.2f", 0.0);
+    ROS_WARN("[%s]: saturating thrust to %.2f", this->name_.c_str(), 0.0);
   }
 
   Eigen::Vector3d t;
@@ -757,7 +760,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     double temp_gain = kibxy;
     if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
       temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for body integral kicks in");
+      ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
     }
 
     if (integral_terms_enabled) {
@@ -768,7 +771,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     double body_integral_saturated = false;
     if (!std::isfinite(Ib_b[0])) {
       Ib_b[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!", this->name_.c_str());
     } else if (Ib_b[0] > kibxy_lim) {
       Ib_b[0]                 = kibxy_lim;
       body_integral_saturated = true;
@@ -778,14 +781,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
 
     if (kibxy_lim > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: MPC's's body pitch integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[%s]: MPC's's body pitch integral is being saturated!", this->name_.c_str());
     }
 
     // saturate the body
     body_integral_saturated = false;
     if (!std::isfinite(Ib_b[1])) {
       Ib_b[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!", this->name_.c_str());
     } else if (Ib_b[1] > kibxy_lim) {
       Ib_b[1]                 = kibxy_lim;
       body_integral_saturated = true;
@@ -795,7 +798,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
 
     if (kibxy_lim > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: MPC's's body roll integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[%s]: MPC's's body roll integral is being saturated!", this->name_.c_str());
     }
   }
 
@@ -818,7 +821,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     double temp_gain = kiwxy;
     if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
       temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for world integral kicks in");
+      ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
     }
 
     if (integral_terms_enabled) {
@@ -829,7 +832,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     double world_integral_saturated = false;
     if (!std::isfinite(Iw_w[0])) {
       Iw_w[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!", this->name_.c_str());
     } else if (Iw_w[0] > kiwxy_lim) {
       Iw_w[0]                  = kiwxy_lim;
       world_integral_saturated = true;
@@ -839,14 +842,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
 
     if (kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: SO3's world X integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[%s]: SO3's world X integral is being saturated!", this->name_.c_str());
     }
 
     // saturate the world
     world_integral_saturated = false;
     if (!std::isfinite(Iw_w[1])) {
       Iw_w[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!", this->name_.c_str());
     } else if (Iw_w[1] > kiwxy_lim) {
       Iw_w[1]                  = kiwxy_lim;
       world_integral_saturated = true;
@@ -856,7 +859,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
 
     if (kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: SO3's world Y integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[%s]: SO3's world Y integral is being saturated!", this->name_.c_str());
     }
   }
 
@@ -876,7 +879,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     if (fabs(odometry->twist.twist.linear.z) > 0.3 &&
         ((Ep[2] < 0 && odometry->twist.twist.linear.z > 0) || (Ep[2] > 0 && odometry->twist.twist.linear.z < 0))) {
       temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[MpcController]: anti-windup for the mass kicks in");
+      ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
     uav_mass_difference -= temp_gain * Ep[2] * dt;
 
@@ -884,7 +887,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference)) {
       uav_mass_difference = 0;
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
+      ROS_WARN_THROTTLE(1.0, "[%s]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!", this->name_.c_str());
     } else if (uav_mass_difference > km_lim) {
       uav_mass_difference = km_lim;
       uav_mass_saturated  = true;
@@ -894,7 +897,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: The uav_mass_difference is being saturated to %0.2f!", uav_mass_difference);
+      ROS_WARN_THROTTLE(1.0, "[%s]: The uav_mass_difference is being saturated to %0.2f!", this->name_.c_str(), uav_mass_difference);
     }
   }
 
@@ -907,8 +910,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   {
     std::scoped_lock lock(mutex_integrals);
 
-    ROS_INFO_THROTTLE(5.0, "[MpcController]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", Iw_w[X], Iw_w[Y], kiwxy_lim);
-    ROS_INFO_THROTTLE(5.0, "[MpcController]: body error integral:  x %.2f N, y %.2f N, lim: %.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[%s]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", this->name_.c_str(), Iw_w[X], Iw_w[Y], kiwxy_lim);
+    ROS_INFO_THROTTLE(5.0, "[%s]: body error integral:  x %.2f N, y %.2f N, lim: %.2f N", this->name_.c_str(), Ib_b[X], Ib_b[Y], kibxy_lim);
   }
 
   // --------------------------------------------------------------
@@ -955,7 +958,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
       output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
 
-      ROS_WARN_THROTTLE(1.0, "[MpcController]: outputting attitude quaternion");
+      ROS_WARN_THROTTLE(1.0, "[%s]: outputting attitude quaternion", this->name_.c_str());
     }
 
     output_command->desired_acceleration.x = f[0] / total_mass;
@@ -1000,7 +1003,7 @@ const mrs_msgs::ControllerStatus MpcController::getStatus() {
 
 void MpcController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
 
-  ROS_INFO("[MpcController]: switching the odometry source");
+  ROS_INFO("[%s]: switching the odometry source", this->name_.c_str());
 
   // | ------------ calculate the heading difference ------------ |
   double dyaw;
@@ -1028,7 +1031,7 @@ void MpcController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg
   {
     std::scoped_lock lock(mutex_integrals);
 
-    ROS_INFO("[MpcController]: rotating the world integrals by %.2f rad", dyaw);
+    ROS_INFO("[%s]: rotating the world integrals by %.2f rad", this->name_.c_str(), dyaw);
     Iw_w = rotate2d(Iw_w, dyaw);
   }
 }
@@ -1061,7 +1064,7 @@ void MpcController::dynamicReconfigureCallback(mrs_controllers::mpc_controllerCo
     drs_desired_gains = config;
   }
 
-  ROS_INFO("[MpcController]: DRS updated gains");
+  ROS_INFO("[%s]: DRS updated gains", this->name_.c_str());
 }
 
 //}
@@ -1080,7 +1083,7 @@ bool MpcController::callbackSetIntegralTerms(std_srvs::SetBool::Request &req, st
   sprintf((char *)&message, "Integral terms %s", integral_terms_enabled ? "ENABLED" : "DISABLED");
   res.message = message;
   res.success = true;
-  ROS_INFO("[MpcController]: %s", message);
+  ROS_INFO("[%s]: %s", this->name_.c_str(), message);
 
   return true;
 }
@@ -1164,7 +1167,7 @@ double MpcController::calculateGainChange(const double current_value, const doub
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[MpcController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[%s]: changing gain \"%s\" from %f to %f", this->name_.c_str(), name.c_str(), current_value, desired_value);
   }
 
   return current_value + change;
