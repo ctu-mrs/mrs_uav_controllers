@@ -100,6 +100,7 @@ private:
   double tilt_angle_saturation_;
   double tilt_angle_failsafe_;
   double thrust_saturation_;
+  double yaw_rate_saturation_;
 
   double max_tilt_angle_;
 
@@ -238,26 +239,32 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   // | ------------- height and attitude controller ------------- |
 
   // attitude gains
-  param_loader.load_param("attitude_vertical_feedback/default_gains/horizontal/attitude/kq", kqxy);
-  param_loader.load_param("attitude_vertical_feedback/default_gains/vertical/attitude/kq", kqz);
+  param_loader.load_param("attitude_feedback/default_gains/horizontal/attitude/kq", kqxy);
+  param_loader.load_param("attitude_feedback/default_gains/vertical/attitude/kq", kqz);
 
   // attitude rate gains
-  param_loader.load_param("attitude_vertical_feedback/default_gains/horizontal/attitude/kw", kwxy);
-  param_loader.load_param("attitude_vertical_feedback/default_gains/vertical/attitude/kw", kwz);
+  param_loader.load_param("attitude_feedback/default_gains/horizontal/attitude/kw", kwxy);
+  param_loader.load_param("attitude_feedback/default_gains/vertical/attitude/kw", kwz);
 
   // mass estimator
-  param_loader.load_param("attitude_vertical_feedback/default_gains/weight_estimator/km", km);
-  param_loader.load_param("attitude_vertical_feedback/default_gains/weight_estimator/km_lim", km_lim);
+  param_loader.load_param("attitude_feedback/default_gains/weight_estimator/km", km);
+  param_loader.load_param("attitude_feedback/default_gains/weight_estimator/km_lim", km_lim);
 
   // constraints
-  param_loader.load_param("attitude_vertical_feedback/tilt_angle_saturation", tilt_angle_saturation_);
-  param_loader.load_param("attitude_vertical_feedback/tilt_angle_failsafe", tilt_angle_failsafe_);
-  param_loader.load_param("attitude_vertical_feedback/thrust_saturation", thrust_saturation_);
+  param_loader.load_param("attitude_feedback/tilt_angle_saturation", tilt_angle_saturation_);
+  param_loader.load_param("attitude_feedback/tilt_angle_failsafe", tilt_angle_failsafe_);
+  param_loader.load_param("attitude_feedback/thrust_saturation", thrust_saturation_);
+  param_loader.load_param("attitude_feedback/yaw_rate_saturation", yaw_rate_saturation_);
+
+  // if yaw_rate_saturation is 0 (or close), set it to something very high, so its inactive
+  if (yaw_rate_saturation_ <= 1e-3) {
+    yaw_rate_saturation_ = 10e6;
+  }
 
   // gain filtering
-  param_loader.load_param("attitude_vertical_feedback/gains_filter/filter_rate", gains_filter_timer_rate_);
-  param_loader.load_param("attitude_vertical_feedback/gains_filter/perc_change_rate", gains_filter_change_rate_);
-  param_loader.load_param("attitude_vertical_feedback/gains_filter/min_change_rate", gains_filter_min_change_rate_);
+  param_loader.load_param("attitude_feedback/gains_filter/filter_rate", gains_filter_timer_rate_);
+  param_loader.load_param("attitude_feedback/gains_filter/perc_change_rate", gains_filter_change_rate_);
+  param_loader.load_param("attitude_feedback/gains_filter/min_change_rate", gains_filter_min_change_rate_);
 
   gains_filter_max_change_ = gains_filter_change_rate_ / gains_filter_timer_rate_;
   gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
@@ -920,6 +927,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
+
+  // | -------------------- saturate yaw rate ------------------- |
+
+  if (!std::isfinite(t[2])) {
+    t[2] = 0;
+    ROS_ERROR("NaN detected in variable \"t[2]\", setting it to 0 and returning!!!");
+  } else if (t[2] > yaw_rate_saturation_) {
+    t[2] = yaw_rate_saturation_;
+  } else if (t[2] < -yaw_rate_saturation_) {
+    t[2] = -yaw_rate_saturation_;
+  }
 
   {
     std::scoped_lock lock(mutex_output_mode);
