@@ -40,7 +40,8 @@ namespace acceleration_controller
 class AccelerationController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
+  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+                  const double uav_mass, const double g);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -154,15 +155,16 @@ private:
 
 /* //{ initialize() */
 
-void AccelerationController::initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
+void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+                                        const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
   ros::Time::waitForValid();
 
   this->motor_params_ = motor_params;
-  this->uav_mass_ = uav_mass;
-  this->g_ = g;
+  this->uav_mass_     = uav_mass;
+  this->g_            = g;
 
   // --------------------------------------------------------------
   // |                       load parameters                      |
@@ -289,7 +291,7 @@ bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr 
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[AccelerationController]: activated without getting the last tracker's command.");
+    ROS_WARN("[AccelerationController]: activated without getting the last controller's command.");
 
     return false;
 
@@ -298,9 +300,11 @@ bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr 
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
 
+    activation_control_command_.controller_enforcing_constraints = false;
+
     ROS_INFO("[AttitudeController]: setting mass difference from the last AttitudeCmd: %.2f kg", uav_mass_difference);
 
-    ROS_INFO("[AccelerationController]: activated with the last tracker's command.");
+    ROS_INFO("[AccelerationController]: activated with the last controller's command.");
   }
 
   first_iteration = true;
@@ -730,6 +734,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
   output_command->mass_difference = uav_mass_difference;
 
   last_output_command = output_command;
+
+  output_command->controller_enforcing_constraints = false;
 
   return output_command;
 }

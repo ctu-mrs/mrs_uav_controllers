@@ -78,7 +78,7 @@ private:
 
 /* initialize() //{ */
 
-void FailsafeController::initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
+void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
@@ -134,7 +134,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[FailsafeController]: activated without getting the last tracker's command.");
+    ROS_WARN("[FailsafeController]: activated without getting the last controller's command.");
 
     return false;
 
@@ -142,6 +142,8 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
+
+    activation_control_command_.controller_enforcing_constraints = false;
 
     hover_thrust = initial_thrust_percentage_ * sqrt((uav_mass_ + uav_mass_difference) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
 
@@ -265,6 +267,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
   output_command->desired_acceleration.z = 0;
 
   last_output_command = output_command;
+
+  output_command->controller_enforcing_constraints = false;
 
   return output_command;
 }

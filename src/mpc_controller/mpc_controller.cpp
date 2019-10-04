@@ -354,7 +354,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[%s]: activated without getting the last tracker's command.", this->name_.c_str());
+    ROS_WARN("[%s]: activated without getting the last controllers's command.", this->name_.c_str());
 
     return false;
 
@@ -362,6 +362,8 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
+
+    activation_control_command_.controller_enforcing_constraints = false;
 
     Ib_b[0] = cmd->disturbance_bx_b;
     Ib_b[1] = cmd->disturbance_by_b;
@@ -372,7 +374,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     ROS_INFO("[%s]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b: %.2f, %.2f N, Iw_w: %.2f, %.2f N",
              this->name_.c_str(), uav_mass_difference, Ib_b[0], Ib_b[1], Iw_w[0], Iw_w[1]);
 
-    ROS_INFO("[%s]: activated with the last tracker's command.", this->name_.c_str());
+    ROS_INFO("[%s]: activated with the last controllers's command.", this->name_.c_str());
   }
 
   first_iteration = true;
@@ -996,6 +998,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   output_command->disturbance_wx_w = Iw_w[0];
   output_command->disturbance_wy_w = Iw_w[1];
+
+  // set the constraints
+  output_command->controller_enforcing_constraints = true;
+
+  output_command->horizontal_speed_constraint      = max_speed_horizontal_;
+  output_command->horizontal_acc_constraint        = max_acceleration_horizontal_;
+
+  output_command->vertical_asc_speed_constraint    = max_speed_vertical_;
+  output_command->vertical_asc_acc_constraint      = max_acceleration_vertical_;
+
+  output_command->vertical_desc_speed_constraint   = max_speed_vertical_;
+  output_command->vertical_desc_acc_constraint     = max_acceleration_vertical_;
 
   last_output_command = output_command;
 

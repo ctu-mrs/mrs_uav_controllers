@@ -35,7 +35,8 @@ namespace nsf_controller
 class NsfController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
+  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+                  const double uav_mass, const double g);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -130,15 +131,16 @@ private:
 
 /* //{ initialize() */
 
-void NsfController::initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
+void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+                               const double uav_mass, const double g) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
   ros::Time::waitForValid();
 
   this->motor_params_ = motor_params;
-  this->uav_mass_ = uav_mass;
-  this->g_ = g;
+  this->uav_mass_     = uav_mass;
+  this->g_            = g;
 
   // --------------------------------------------------------------
   // |                       load parameters                      |
@@ -255,7 +257,7 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[NsfController]: activated without getting the last tracker's command.");
+    ROS_WARN("[NsfController]: activated without getting the last controller's command.");
 
     return false;
 
@@ -263,6 +265,8 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
     activation_control_command_ = *cmd;
     uav_mass_difference         = cmd->mass_difference;
+
+    activation_control_command_.controller_enforcing_constraints = false;
 
     Ib_b[0] = asin(cmd->disturbance_bx_b / (g_ * cmd->total_mass));
     Ib_b[1] = asin(cmd->disturbance_by_b / (g_ * cmd->total_mass));
@@ -275,7 +279,7 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
         "%.2f N",
         uav_mass_difference, cmd->disturbance_bx_b, cmd->disturbance_by_b, cmd->disturbance_wx_w, cmd->disturbance_wx_w);
 
-    ROS_INFO("[NsfController]: activated with a last trackers command.");
+    ROS_INFO("[NsfController]: activated with a last controller's command.");
   }
 
   first_iteration = true;
@@ -691,6 +695,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::
   output_command->disturbance_wy_w = g_ * total_mass * sin(Iw_w[1]);
 
   last_output_command = output_command;
+
+  output_command->controller_enforcing_constraints = false;
 
   return output_command;
 }
