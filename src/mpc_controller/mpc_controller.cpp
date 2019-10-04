@@ -1002,14 +1002,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // set the constraints
   output_command->controller_enforcing_constraints = true;
 
-  output_command->horizontal_speed_constraint      = max_speed_horizontal_;
-  output_command->horizontal_acc_constraint        = max_acceleration_horizontal_;
+  output_command->horizontal_speed_constraint = 0.5 * max_speed_horizontal_;
+  output_command->horizontal_acc_constraint   = 0.5 * max_acceleration_horizontal_;
 
-  output_command->vertical_asc_speed_constraint    = max_speed_vertical_;
-  output_command->vertical_asc_acc_constraint      = max_acceleration_vertical_;
+  output_command->vertical_asc_speed_constraint = 0.5 * max_speed_vertical_;
+  output_command->vertical_asc_acc_constraint   = 0.5 * max_acceleration_vertical_;
 
-  output_command->vertical_desc_speed_constraint   = max_speed_vertical_;
-  output_command->vertical_desc_acc_constraint     = max_acceleration_vertical_;
+  output_command->vertical_desc_speed_constraint = 0.5 * max_speed_vertical_;
+  output_command->vertical_desc_acc_constraint   = 0.5 * max_acceleration_vertical_;
 
   last_output_command = output_command;
 
