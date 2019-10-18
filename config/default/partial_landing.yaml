@@ -1,0 +1,18 @@
+default_gains:
+
+  horizontal:
+    
+    attitude:
+      kq: 5.0
+      kw: 0.0
+
+  vertical:
+
+    attitude:
+      kq: 5.0
+      kw: 0.1
+
+gains_filter:
+  filter_rate: 20 # [Hz]
+  perc_change_rate: 1.0
+  min_change_rate: 0.1 # perc of the difference

@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   dynamic_reconfigure
   mrs_uav_manager
   mrs_lib
+  tf
   )
 
 generate_dynamic_reconfigure_options(
@@ -20,6 +21,7 @@ generate_dynamic_reconfigure_options(
   cfg/attitude_controller.cfg
   cfg/mpc_controller.cfg
   cfg/acceleration_controller.cfg
+  cfg/partial_landing_controller.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color")
@@ -36,7 +38,7 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES MpcControllerCvxgen
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager mrs_lib
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager mrs_lib tf
   DEPENDS Eigen
   )
 
@@ -156,6 +158,21 @@ target_link_libraries(FailsafeController
   ${catkin_LIBRARIES}
   )
 
+# Partial Landing Controller
+
+add_library(PartialLandingController
+  src/partial_landing_controller/partial_landing_controller.cpp
+  )
+
+add_dependencies(PartialLandingController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  )
+
+target_link_libraries(PartialLandingController
+  ${catkin_LIBRARIES}
+  )
+
 #############
 ## Install ##
 #############
@@ -167,6 +184,7 @@ install(TARGETS
   FailsafeController
   AttitudeController
   NsfController
+  PartialLandingController
   MpcControllerCvxgen
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

@@ -33,3 +33,9 @@
     <description>This is AccelerationController.</description>
   </class>
 </library>
+
+<library path="lib/libPartialLandingController">
+  <class name="mrs_controllers/PartialLandingController" type="mrs_controllers::partial_landing_controller::PartialLandingController" base_class_type="mrs_uav_manager::Controller">
+    <description>This is PartialLandingController.</description>
+  </class>
+</library>
