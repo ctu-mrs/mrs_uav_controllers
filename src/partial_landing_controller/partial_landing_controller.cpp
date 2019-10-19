@@ -75,6 +75,10 @@ private:
   double                       g_;
   mrs_uav_manager::MotorParams motor_params_;
 
+  double mass_factor_;
+  double thrust_filter_coeff_;
+  double output_thrust = 0;
+
   // actual gains (used and already filtered)
   double kqxy, kqz;  // attitude gains
   double kwxy, kwz;  // attitude rate gains
@@ -149,6 +153,9 @@ void PartialLandingController::initialize(const ros::NodeHandle &parent_nh, [[ma
   param_loader.load_param("gains_filter/perc_change_rate", gains_filter_change_rate_);
   param_loader.load_param("gains_filter/min_change_rate", gains_filter_min_change_rate_);
 
+  param_loader.load_param("mass_factor", mass_factor_);
+  param_loader.load_param("thrust_filter_coeff", thrust_filter_coeff_);
+
   gains_filter_max_change_ = gains_filter_change_rate_ / gains_filter_timer_rate_;
   gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
 
@@ -217,6 +224,8 @@ bool PartialLandingController::activate(const mrs_msgs::AttitudeCommand::ConstPt
 
     ROS_INFO("[PartialLandingController]: activated with a last controller's command.");
   }
+
+  output_thrust = cmd->thrust;
 
   first_iteration = true;
 
@@ -377,14 +386,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
   // --------------------------------------------------------------
 
   mrs_msgs::AttitudeCommand output_command = activation_control_command_;
-  output_command.header.stamp = ros::Time::now();
+  output_command.header.stamp              = ros::Time::now();
 
   output_command.attitude_rate.x   = t[0];
   output_command.attitude_rate.y   = t[1];
-  output_command.attitude_rate.z   = t[2];
+  output_command.attitude_rate.z   = 0;
   output_command.attitude_rate_set = true;
 
-  Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
+  Eigen::Quaterniond thrust_vec      = Eigen::Quaterniond(Rd);
   output_command.quter_attitude.w    = thrust_vec.w();
   output_command.quter_attitude.x    = thrust_vec.x();
   output_command.quter_attitude.y    = thrust_vec.y();
@@ -395,6 +404,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
   output_command.desired_acceleration.x           = 0;
   output_command.desired_acceleration.y           = 0;
   output_command.desired_acceleration.z           = 0;
+
+  output_thrust = thrust_filter_coeff_ * output_thrust +
+                  (1 - thrust_filter_coeff_) * (sqrt(mass_factor_ * uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b);
+
+  output_command.thrust = output_thrust;
 
   output_command.euler_attitude_set = false;
 
