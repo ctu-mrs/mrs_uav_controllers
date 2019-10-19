@@ -18,4 +18,4 @@ attitude_vertical_feedback:
     vertical:
       attitude:
         kq: 5.0
-        kw: 0.0
+        kw: 0.1

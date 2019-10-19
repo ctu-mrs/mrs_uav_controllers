@@ -13,7 +13,7 @@ attitude_vertical_feedback:
     horizontal:
       attitude:
         kq: 8.0
-        kw: 0.0
+        kw: 0.1
 
     vertical:
       attitude:
