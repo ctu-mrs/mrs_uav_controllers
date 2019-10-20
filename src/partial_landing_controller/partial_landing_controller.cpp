@@ -261,6 +261,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
+  // calculate the euler angles
+  tf::Quaternion quaternion_odometry;
+  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
+  tf::Matrix3x3 m(quaternion_odometry);
+  double        odometry_roll, odometry_pitch, odometry_yaw;
+  m.getRPY(odometry_roll, odometry_pitch, odometry_yaw);
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -277,7 +284,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
   Rp << 0, 0, 0;  // fill the desired position
   Rv << 0, 0, 0;
   Ra << 0, 0, 0;
-  Rw << 0, 0, reference->yaw_dot;
+  Rw << 0, 0, odometry_yaw;
 
   // Op - position in global frame
   // Ov - velocity in global frame
