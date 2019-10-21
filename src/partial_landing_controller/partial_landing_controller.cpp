@@ -354,10 +354,30 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(0, 0, reference->yaw);
+  Eigen::Vector2d Ib_w;
+  Ib_w[0] = activation_control_command_.disturbance_bx_w;
+  Ib_w[1] = activation_control_command_.disturbance_by_w;
 
+  Eigen::Vector2d Iw_w;
+  Iw_w[0] = activation_control_command_.disturbance_wx_w;
+  Iw_w[1] = activation_control_command_.disturbance_wy_w;
+
+  Eigen::Vector3d integral_feedback;
+  integral_feedback << Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0;
+
+  Eigen::Vector3d f = integral_feedback + activation_control_command_.total_mass * Eigen::Vector3d(0, 0, g_);
+
+  Eigen::Vector3d f_norm = f.normalized();
+
+  // | ------------- construct the rotational matrix ------------ |
+
+  tf::Quaternion desired_orientation = tf::createQuaternionFromRPY(0, 0, reference->yaw);
   Rq.coeffs() << desired_orientation.getX(), desired_orientation.getY(), desired_orientation.getZ(), desired_orientation.getW();
-  Rd = Rq.matrix();
+
+  Rd.col(2) = f_norm;
+  Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0));
+  Rd.col(1).normalize();
+  Rd.col(0) = Rd.col(1).cross(Rd.col(2));
 
   // --------------------------------------------------------------
   // |                      orientation error                     |
