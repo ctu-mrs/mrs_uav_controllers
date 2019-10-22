@@ -503,7 +503,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const nav_msgs::
     // if the downwards part of the force is close to counter-act the gravity acceleration
     if (f[2] < (0.15 * total_mass * g_)) {
 
-      ROS_ERROR("[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip (iteration #%d).", f[2], i);
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip", f[2]);
 
       // half the feedbacks
       position_feedback /= 2.0;
