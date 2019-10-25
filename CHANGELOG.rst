@@ -2,6 +2,35 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* beautified the print for mitigating flip
+* fixed application of mass factor
+* fixed kq vertical for most drones to 0.1
+* added partial landing controller
+* added the constraints override feature
+* added yaw rate saturation to MpcController
+* added emergancy controller
+* added service for enabling integral terms into MpcController
+* improved printing and documentation
+* added world conversion of integral feedback to attitude target
+* added disturbances to attitude command
+* fixed the body integrator yaw rotation bug
+* removed unsued drs from mpc controller
+* updated prints of integral terms
+* refactored controllers' dynamic reconfigure
+* added missing mutex for MPC
+* fixed cvxwrapper inclusion in cmakelists
+* updated cvx wrapper
+* fixed deactivation bug in controllers
+* added integrals of MPC controller to DRS
+* added loadReference method in cvx_wrapper
+* added odometry switch routine to SO3, MPC and NSF controllers
+* re-setting Q and S in mpc tracker before every iteration
+* added acceleration controller
+* moved cvx_wrapper from mpc_controller to its own namespace and folder
+* Contributors: Tomas Baca
+
 0.0.2 (2019-07-01)
 ------------------
 * added feedback disablation to mpc controller during takeoff
