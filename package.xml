@@ -2,7 +2,7 @@
 <package format="2">
 
   <name>mrs_controllers</name>
-  <version>0.0.2</version>
+  <version>0.0.3</version>
   <description>The mrs_controllers package</description>
 
   <author email="tomas.baca@fel.cvut.cz">Tomas Baca</author>
