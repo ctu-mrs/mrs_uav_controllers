@@ -40,7 +40,7 @@ public:
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::attitude_controllerConfig &config, uint32_t level);
@@ -49,7 +49,7 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
-  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
   void resetDisturbanceEstimators(void);
 
@@ -272,7 +272,7 @@ void AttitudeController::deactivate(void) {
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
+const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                      const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
@@ -301,16 +301,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
 
   // Op - position in global frame
   // Ov - velocity in global frame
-  Eigen::Vector3d Op(0, 0, odometry->pose.pose.position.z);
-  Eigen::Vector3d Ov(0, 0, odometry->twist.twist.linear.z);
+  Eigen::Vector3d Op(0, 0, uav_state->pose.position.z);
+  Eigen::Vector3d Ov(0, 0, uav_state->velocity.linear.z);
 
   // Oq - UAV attitude quaternion
   Eigen::Quaternion<double> Oq;
-  Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
+  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
   Eigen::Matrix3d R = Oq.toRotationMatrix();
 
   // Ow - UAV angular rate
-  Eigen::Vector3d Ow(odometry->twist.twist.angular.x, odometry->twist.twist.angular.y, odometry->twist.twist.angular.z);
+  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -327,7 +327,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
 
   if (first_iteration) {
 
-    last_update = odometry->header.stamp;
+    last_update = uav_state->header.stamp;
 
     first_iteration = false;
 
@@ -335,13 +335,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const nav_m
 
   } else {
 
-    dt          = (odometry->header.stamp - last_update).toSec();
-    last_update = odometry->header.stamp;
+    dt          = (uav_state->header.stamp - last_update).toSec();
+    last_update = uav_state->header.stamp;
   }
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[AttitudeController]: last " << last_update << ", current " << odometry->header.stamp);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[AttitudeController]: last " << last_update << ", current " << uav_state->header.stamp);
     ROS_WARN_THROTTLE(1.0, "[AttitudeController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -523,7 +523,7 @@ const mrs_msgs::ControllerStatus AttitudeController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void AttitudeController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
+void AttitudeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &msg) {
 }
 
 //}

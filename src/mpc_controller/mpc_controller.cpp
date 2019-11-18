@@ -46,7 +46,7 @@ public:
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::mpc_controllerConfig &config, uint32_t level);
@@ -55,7 +55,7 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
-  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
   void resetDisturbanceEstimators(void);
 
@@ -65,8 +65,8 @@ private:
   std::string name_;
 
 private:
-  nav_msgs::Odometry odometry;
-  std::mutex         mutex_odometry;
+  mrs_msgs::UavState uav_state;
+  std::mutex         mutex_uav_state;
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -403,15 +403,15 @@ void MpcController::deactivate(void) {
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
+const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
   {
-    std::scoped_lock lock(mutex_odometry);
+    std::scoped_lock lock(mutex_uav_state);
 
-    this->odometry = *odometry;
+    this->uav_state = *uav_state;
   }
 
   if (!is_active) {
@@ -437,16 +437,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   // Op - position in global frame
   // Ov - velocity in global frame
-  Eigen::Vector3d Op(odometry->pose.pose.position.x, odometry->pose.pose.position.y, odometry->pose.pose.position.z);
-  Eigen::Vector3d Ov(odometry->twist.twist.linear.x, odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
+  Eigen::Vector3d Op(uav_state->pose.position.x, uav_state->pose.position.y, uav_state->pose.position.z);
+  Eigen::Vector3d Ov(uav_state->velocity.linear.x, uav_state->velocity.linear.y, uav_state->velocity.linear.z);
 
   // Oq - UAV attitude quaternion
   Eigen::Quaternion<double> Oq;
-  Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
+  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
   Eigen::Matrix3d R = Oq.toRotationMatrix();
 
   // Ow - UAV angular rate
-  Eigen::Vector3d Ow(odometry->twist.twist.angular.x, odometry->twist.twist.angular.y, odometry->twist.twist.angular.z);
+  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
 
   // --------------------------------------------------------------
   // |                     MPC lateral control                    |
@@ -455,13 +455,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // | ------------------- initial conditions ------------------- |
 
   Eigen::MatrixXd initial_x = Eigen::MatrixXd::Zero(3, 1);
-  initial_x << odometry->pose.pose.position.x, odometry->twist.twist.linear.x, reference->acceleration.x;
+  initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, reference->acceleration.x;
 
   Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
-  initial_y << odometry->pose.pose.position.y, odometry->twist.twist.linear.y, reference->acceleration.y;
+  initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, reference->acceleration.y;
 
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
-  initial_z << odometry->pose.pose.position.z, odometry->twist.twist.linear.z, reference->acceleration.z;
+  initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, reference->acceleration.z;
 
   // | ---------------------- set reference --------------------- |
 
@@ -546,7 +546,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   if (first_iteration) {
 
-    last_update = odometry->header.stamp;
+    last_update = uav_state->header.stamp;
 
     first_iteration = false;
 
@@ -554,13 +554,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
   } else {
 
-    dt          = (odometry->header.stamp - last_update).toSec();
-    last_update = odometry->header.stamp;
+    dt          = (uav_state->header.stamp - last_update).toSec();
+    last_update = uav_state->header.stamp;
   }
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[" << this->name_ << "]: last " << last_update << ", current " << odometry->header.stamp);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[" << this->name_ << "]: last " << last_update << ", current " << uav_state->header.stamp);
     ROS_WARN_THROTTLE(1.0, "[%s]: the last odometry message came too close! %f", this->name_.c_str(), dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -577,9 +577,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
   // --------------------------------------------------------------
 
   double         yaw, pitch, roll;
-  tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
-  tf::Matrix3x3 m(quaternion_odometry);
+  tf::Quaternion uav_attitude;
+  quaternionMsgToTF(uav_state->pose.orientation, uav_attitude);
+  tf::Matrix3x3 m(uav_attitude);
   m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
@@ -671,8 +671,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
     ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
     ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), reference->position.x, reference->position.y,
              reference->position.z, reference->yaw);
-    ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), odometry->pose.pose.position.x, odometry->pose.pose.position.y,
-             odometry->pose.pose.position.z, yaw);
+    ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
+             uav_state->pose.position.z, yaw);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -767,7 +767,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
     // antiwindup
     double temp_gain = kibxy;
-    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
+    if (sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
     }
@@ -828,7 +828,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
     // antiwindup
     double temp_gain = kiwxy;
-    if (sqrt(pow(odometry->twist.twist.linear.x, 2) + pow(odometry->twist.twist.linear.y, 2)) > 0.3) {
+    if (sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
     }
@@ -885,8 +885,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const nav_msgs::
 
     // antiwindup
     double temp_gain = km;
-    if (fabs(odometry->twist.twist.linear.z) > 0.3 &&
-        ((Ep[2] < 0 && odometry->twist.twist.linear.z > 0) || (Ep[2] > 0 && odometry->twist.twist.linear.z < 0))) {
+    if (fabs(uav_state->velocity.linear.z) > 0.3 && ((Ep[2] < 0 && uav_state->velocity.linear.z > 0) || (Ep[2] > 0 && uav_state->velocity.linear.z < 0))) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
@@ -1033,31 +1032,31 @@ const mrs_msgs::ControllerStatus MpcController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void MpcController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
+void MpcController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg) {
 
   ROS_INFO("[%s]: switching the odometry source", this->name_.c_str());
 
   // | ------------ calculate the heading difference ------------ |
   double dyaw;
-  double odom_roll, odom_pitch, odom_yaw;
-  double msg_roll, msg_pitch, msg_yaw;
+  double uav_roll, uav_pitch, uav_yaw;
+  double new_roll, new_pitch, new_yaw;
 
   {
-    std::scoped_lock lock(mutex_odometry);
+    std::scoped_lock lock(mutex_uav_state);
 
     // calculate the euler angles
-    tf::Quaternion quaternion_odometry;
-    quaternionMsgToTF(odometry.pose.pose.orientation, quaternion_odometry);
-    tf::Matrix3x3 m(quaternion_odometry);
-    m.getRPY(odom_roll, odom_pitch, odom_yaw);
+    tf::Quaternion uav_attitude;
+    quaternionMsgToTF(uav_state.pose.orientation, uav_attitude);
+    tf::Matrix3x3 m(uav_attitude);
+    m.getRPY(uav_roll, uav_pitch, uav_yaw);
   }
 
-  tf::Quaternion quaternion_msg;
-  quaternionMsgToTF(msg->pose.pose.orientation, quaternion_msg);
-  tf::Matrix3x3 m2(quaternion_msg);
-  m2.getRPY(msg_roll, msg_pitch, msg_yaw);
+  tf::Quaternion new_attitude;
+  quaternionMsgToTF(msg->pose.orientation, new_attitude);
+  tf::Matrix3x3 m2(new_attitude);
+  m2.getRPY(new_roll, new_pitch, new_yaw);
 
-  dyaw = msg_yaw - odom_yaw;
+  dyaw = new_yaw - uav_yaw;
 
   // | --------------- rotate the world integrals --------------- |
   {

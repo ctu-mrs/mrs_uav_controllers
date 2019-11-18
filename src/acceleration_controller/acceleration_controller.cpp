@@ -45,14 +45,14 @@ public:
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::acceleration_controllerConfig &config, uint32_t level);
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
-  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
@@ -333,7 +333,7 @@ void AccelerationController::deactivate(void) {
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
+const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                          const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
@@ -361,16 +361,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   // Op - position in global frame
   // Ov - velocity in global frame
-  Eigen::Vector3d Op(odometry->pose.pose.position.x, odometry->pose.pose.position.y, odometry->pose.pose.position.z);
-  Eigen::Vector3d Ov(odometry->twist.twist.linear.x, odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
+  Eigen::Vector3d Op(uav_state->pose.position.x, uav_state->pose.position.y, uav_state->pose.position.z);
+  Eigen::Vector3d Ov(uav_state->velocity.linear.x, uav_state->velocity.linear.y, uav_state->velocity.linear.z);
 
   // Oq - UAV attitude quaternion
   Eigen::Quaternion<double> Oq;
-  Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
+  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
   Eigen::Matrix3d R = Oq.toRotationMatrix();
 
   // Ow - UAV angular rate
-  Eigen::Vector3d Ow(odometry->twist.twist.angular.x, odometry->twist.twist.angular.y, odometry->twist.twist.angular.z);
+  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
 
   // --------------------------------------------------------------
   // |                     MPC lateral control                    |
@@ -379,7 +379,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
   // | ------------------- initial conditions ------------------- |
 
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
-  initial_z << odometry->pose.pose.position.z, odometry->twist.twist.linear.z, reference->acceleration.z;
+  initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, reference->acceleration.z;
 
   // | ---------------------- set reference --------------------- |
 
@@ -446,7 +446,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   if (first_iteration) {
 
-    last_update = odometry->header.stamp;
+    last_update = uav_state->header.stamp;
 
     first_iteration = false;
 
@@ -454,13 +454,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   } else {
 
-    dt          = (odometry->header.stamp - last_update).toSec();
-    last_update = odometry->header.stamp;
+    dt          = (uav_state->header.stamp - last_update).toSec();
+    last_update = uav_state->header.stamp;
   }
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[AccelerationController]: last " << last_update << ", current " << odometry->header.stamp);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[AccelerationController]: last " << last_update << ", current " << uav_state->header.stamp);
     ROS_WARN_THROTTLE(1.0, "[AccelerationController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -478,7 +478,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
   double         yaw, pitch, roll;
   tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
+  quaternionMsgToTF(uav_state->pose.orientation, quaternion_odometry);
   tf::Matrix3x3 m(quaternion_odometry);
   m.getRPY(roll, pitch, yaw);
 
@@ -560,8 +560,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
     ROS_INFO("[AccelerationController]: feed forward: [%.2f, %.2f, %.2f]", feed_forward[0], feed_forward[1], feed_forward[2]);
     ROS_INFO("[AccelerationController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y,
              reference->position.z, reference->yaw);
-    ROS_INFO("[AccelerationController]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", odometry->pose.pose.position.x, odometry->pose.pose.position.y,
-             odometry->pose.pose.position.z, yaw);
+    ROS_INFO("[AccelerationController]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
+             uav_state->pose.position.z, yaw);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -651,8 +651,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const n
 
     // antiwindup
     double temp_gain = km;
-    if (fabs(odometry->twist.twist.linear.z) > 0.3 &&
-        ((Ep[2] < 0 && odometry->twist.twist.linear.z > 0) || (Ep[2] > 0 && odometry->twist.twist.linear.z < 0))) {
+    if (fabs(uav_state->velocity.linear.z) > 0.3 && ((Ep[2] < 0 && uav_state->velocity.linear.z > 0) || (Ep[2] > 0 && uav_state->velocity.linear.z < 0))) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[AccelerationController]: anti-windup for the mass kicks in");
     }
@@ -757,7 +756,7 @@ const mrs_msgs::ControllerStatus AccelerationController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void AccelerationController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
+void AccelerationController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &msg) {
 }
 
 //}

@@ -29,14 +29,15 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g);
+  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+                  const double uav_mass, const double g);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
+  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
   void resetDisturbanceEstimators(void);
 
@@ -78,15 +79,16 @@ private:
 
 /* initialize() //{ */
 
-void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
+void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+                                    const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
   ros::Time::waitForValid();
 
   this->motor_params_ = motor_params;
-  this->uav_mass_ = uav_mass;
-  this->g_ = g;
+  this->uav_mass_     = uav_mass;
+  this->g_            = g;
 
   // --------------------------------------------------------------
   // |                       load parameters                      |
@@ -174,7 +176,7 @@ void FailsafeController::deactivate(void) {
 
 /* update() //{ */
 
-const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_msgs::Odometry::ConstPtr &                        odometry,
+const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const mrs_msgs::UavState::ConstPtr &                        uav_state,
                                                                      [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   // WARNING: this mutex keeps the disarming routine from being called during the same moment, when the update routine is being called
@@ -194,9 +196,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const nav_m
   // --------------------------------------------------------------
 
   double         yaw, pitch, roll;
-  tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
-  tf::Matrix3x3 m(quaternion_odometry);
+  tf::Quaternion uav_atttitude;
+  quaternionMsgToTF(uav_state->pose.orientation, uav_atttitude);
+  tf::Matrix3x3 m(uav_atttitude);
   m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
@@ -290,7 +292,7 @@ const mrs_msgs::ControllerStatus FailsafeController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void FailsafeController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
+void FailsafeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &msg) {
 }
 
 //}
