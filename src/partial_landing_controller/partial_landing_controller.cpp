@@ -40,7 +40,7 @@ public:
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::partial_landing_controllerConfig &config, uint32_t level);
@@ -49,7 +49,7 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
+  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
   void resetDisturbanceEstimators(void);
 
@@ -252,7 +252,7 @@ void PartialLandingController::deactivate(void) {
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
+const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                            const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
@@ -263,7 +263,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
 
   // calculate the euler angles
   tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(uav_state->pose.orientation, quaternion_odometry);
+  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
   tf::Matrix3x3 m(quaternion_odometry);
   double        odometry_roll, odometry_pitch, odometry_yaw;
   m.getRPY(odometry_roll, odometry_pitch, odometry_yaw);
@@ -293,11 +293,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
 
   // Oq - UAV attitude quaternion
   Eigen::Quaternion<double> Oq;
-  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
+  Oq.coeffs() << odometry->pose.pose.orientation.x, odometry->pose.pose.orientation.y, odometry->pose.pose.orientation.z, odometry->pose.pose.orientation.w;
   Eigen::Matrix3d R = Oq.toRotationMatrix();
 
   // Ow - UAV angular rate
-  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
+  Eigen::Vector3d Ow(odometry->twist.twist.angular.x, odometry->twist.twist.angular.y, odometry->twist.twist.angular.z);
 
   // --------------------------------------------------------------
   // |                      calculate the dt                      |
@@ -307,7 +307,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
 
   if (first_iteration) {
 
-    last_update = uav_state->header.stamp;
+    last_update = odometry->header.stamp;
 
     first_iteration = false;
 
@@ -315,13 +315,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
 
   } else {
 
-    dt          = (uav_state->header.stamp - last_update).toSec();
-    last_update = uav_state->header.stamp;
+    dt          = (odometry->header.stamp - last_update).toSec();
+    last_update = odometry->header.stamp;
   }
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[PartialLandingController]: last " << last_update << ", current " << uav_state->header.stamp);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[PartialLandingController]: last " << last_update << ", current " << odometry->header.stamp);
     ROS_WARN_THROTTLE(1.0, "[PartialLandingController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -461,7 +461,7 @@ const mrs_msgs::ControllerStatus PartialLandingController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void PartialLandingController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &msg) {
+void PartialLandingController::switchOdometrySource([[maybe_unused]] const nav_msgs::Odometry::ConstPtr &msg) {
 }
 
 //}

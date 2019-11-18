@@ -40,7 +40,7 @@ public:
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const nav_msgs::Odometry::ConstPtr &odometry, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   void dynamicReconfigureCallback(mrs_controllers::nsf_controllerConfig &config, uint32_t level);
@@ -49,7 +49,7 @@ public:
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
 
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
+  virtual void switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg);
 
   void resetDisturbanceEstimators(void);
 
@@ -58,8 +58,8 @@ private:
   bool is_active      = false;
 
 private:
-  mrs_msgs::UavState uav_state;
-  std::mutex         mutex_uav_state;
+  nav_msgs::Odometry odometry;
+  std::mutex         mutex_odometry;
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -308,15 +308,15 @@ void NsfController::deactivate(void) {
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
+const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const nav_msgs::Odometry::ConstPtr &       odometry,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
   mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
 
   {
-    std::scoped_lock lock(mutex_uav_state);
+    std::scoped_lock lock(mutex_odometry);
 
-    this->uav_state = *uav_state;
+    this->odometry = *odometry;
   }
 
   if (!is_active) {
@@ -334,8 +334,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   // Op - position in global frame
   // Op - velocity in global frame
-  Eigen::Vector3d Op(uav_state->pose.position.x, -uav_state->pose.position.y, uav_state->pose.position.z);
-  Eigen::Vector3d Ov(uav_state->velocity.linear.x, -uav_state->velocity.linear.y, uav_state->velocity.linear.z);
+  Eigen::Vector3d Op(odometry->pose.pose.position.x, -odometry->pose.pose.position.y, odometry->pose.pose.position.z);
+  Eigen::Vector3d Ov(odometry->twist.twist.linear.x, -odometry->twist.twist.linear.y, odometry->twist.twist.linear.z);
 
   // --------------------------------------------------------------
   // |                  calculate control errors                  |
@@ -352,7 +352,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   if (first_iteration) {
 
-    last_update = uav_state->header.stamp;
+    last_update = odometry->header.stamp;
 
     first_iteration = false;
 
@@ -360,13 +360,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   } else {
 
-    dt          = (uav_state->header.stamp - last_update).toSec();
-    last_update = uav_state->header.stamp;
+    dt          = (odometry->header.stamp - last_update).toSec();
+    last_update = odometry->header.stamp;
   }
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[NsfController]: last " << last_update << ", current " << uav_state->header.stamp);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[NsfController]: last " << last_update << ", current " << odometry->header.stamp);
     ROS_WARN_THROTTLE(1.0, "[NsfController]: the last odometry message came too close! %f", dt);
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -384,7 +384,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   double         yaw, pitch, roll;
   tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(uav_state->pose.orientation, quaternion_odometry);
+  quaternionMsgToTF(odometry->pose.pose.orientation, quaternion_odometry);
   tf::Matrix3x3 m(quaternion_odometry);
   m.getRPY(roll, pitch, yaw);
 
@@ -718,31 +718,31 @@ const mrs_msgs::ControllerStatus NsfController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void NsfController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg) {
+void NsfController::switchOdometrySource(const nav_msgs::Odometry::ConstPtr &msg) {
 
   ROS_INFO("[NsfController]: switching the odometry source");
 
   // | ------------ calculate the heading difference ------------ |
   double dyaw;
-  double uav_roll, uav_pitch, uav_yaw;
-  double new_roll, new_pitch, new_yaw;
+  double odom_roll, odom_pitch, odom_yaw;
+  double msg_roll, msg_pitch, msg_yaw;
 
   {
-    std::scoped_lock lock(mutex_uav_state);
+    std::scoped_lock lock(mutex_odometry);
 
     // calculate the euler angles
-    tf::Quaternion uav_attitude;
-    quaternionMsgToTF(uav_state.pose.orientation, uav_attitude);
-    tf::Matrix3x3 m(uav_attitude);
-    m.getRPY(uav_roll, uav_pitch, uav_yaw);
+    tf::Quaternion quaternion_odometry;
+    quaternionMsgToTF(odometry.pose.pose.orientation, quaternion_odometry);
+    tf::Matrix3x3 m(quaternion_odometry);
+    m.getRPY(odom_roll, odom_pitch, odom_yaw);
   }
 
   tf::Quaternion quaternion_msg;
-  quaternionMsgToTF(msg->pose.orientation, quaternion_msg);
+  quaternionMsgToTF(msg->pose.pose.orientation, quaternion_msg);
   tf::Matrix3x3 m2(quaternion_msg);
-  m2.getRPY(new_roll, new_pitch, new_yaw);
+  m2.getRPY(msg_roll, msg_pitch, msg_yaw);
 
-  dyaw = new_yaw - uav_yaw;
+  dyaw = msg_yaw - odom_yaw;
 
   // | --------------- rotate the world integrals --------------- |
   {
