@@ -383,9 +383,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   double         yaw, pitch, roll;
-  tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(uav_state->pose.orientation, quaternion_odometry);
-  tf::Matrix3x3 m(quaternion_odometry);
+  tf::Quaternion uav_attitude;
+  quaternionMsgToTF(uav_state->pose.orientation, uav_attitude);
+  tf::Matrix3x3 m(uav_attitude);
   m.getRPY(roll, pitch, yaw);
 
   // --------------------------------------------------------------
@@ -672,7 +672,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   output_command->euler_attitude.x   = feedback_b[1];
   output_command->euler_attitude.y   = feedback_b[0];
-  output_command->euler_attitude.z   = reference->yaw;
+  output_command->euler_attitude.z   = reference->yaw; // TODO this will not work with custom heading estimator
   output_command->euler_attitude_set = true;
 
   output_command->quater_attitude_set = false;
