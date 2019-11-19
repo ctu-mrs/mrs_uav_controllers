@@ -388,11 +388,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // |                 calculate the euler angles                 |
   // --------------------------------------------------------------
 
-  double         yaw, pitch, roll;
+  double         uav_yaw, uav_pitch, uav_roll;
   tf::Quaternion uav_attitude;
   quaternionMsgToTF(uav_state->pose.orientation, uav_attitude);
   tf::Matrix3x3 m(uav_attitude);
-  m.getRPY(roll, pitch, yaw);
+  m.getRPY(uav_roll, uav_pitch, uav_yaw);
 
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
@@ -422,10 +422,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     } else {
       Rv[2] = 0;
     }
-
-    if (reference->use_euler_attitude) {
-      Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
-    }
   }
 
   if (reference->use_velocity_horizontal) {
@@ -448,9 +444,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Ra << 0, 0, 0;
   }
 
+  if (reference->use_yaw) {
+    Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
+  } else {
+    Rq.coeffs() << 0, 0, sin(uav_yaw / 2.0), cos(uav_yaw / 2.0);
+  }
+
   if (reference->use_attitude_rate) {
     Rw << reference->attitude_rate.x, reference->attitude_rate.y, reference->attitude_rate.z;
-  } else if (reference->use_euler_attitude) {
+  } else if (reference->use_yaw_dot) {
     Rw << 0, 0, reference->yaw_dot;
   }
 
@@ -514,9 +516,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     if (reference->use_acceleration) {
       Ka << kaxy, kaxy, kaz;
+    } else {
+      Ka << 0, 0, 0;
     }
 
     Kq << kqxy, kqxy, kqz;
+
+    if (!reference->use_yaw) {
+      Kq[2] = 0;
+    }
+
     Kw << kwxy, kwxy, kwz;
   }
 
@@ -527,7 +536,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, uav_yaw);
 
   double total_mass = uav_mass_ + uav_mass_difference;
 
@@ -593,7 +602,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     ROS_INFO("[So3Controller]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y, reference->position.z,
              reference->yaw);
     ROS_INFO("[So3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
-             uav_state->pose.position.z, yaw);
+             uav_state->pose.position.z, uav_yaw);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -689,7 +698,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Eigen::Vector3d integration_switch(1, 1, 0);
 
     // integrate the world error
-    Iw_w -= kiwxy * Ep.head(2) * dt;
+    if (reference->use_position_horizontal) {
+      Iw_w -= kiwxy * Ep.head(2) * dt;
+    }
 
     // saturate the world
     double world_integral_saturated = false;
@@ -738,10 +749,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -uav_yaw);
 
     // integrate the body error
-    Ib_b -= kibxy * Ep_body * dt;
+    if (reference->use_position_horizontal) {
+      Ib_b -= kibxy * Ep_body * dt;
+    }
 
     // saturate the body
     double body_integral_saturated = false;
@@ -789,7 +802,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   {
     std::scoped_lock lock(mutex_gains);
 
-    uav_mass_difference -= km * Ep[2] * dt;
+    if (reference->use_position_vertical) {
+      uav_mass_difference -= km * Ep[2] * dt;
+    }
 
     // saturate the mass estimator
     bool uav_mass_saturated = false;

@@ -604,11 +604,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // |          caculate the current oritentation angles          |
   // --------------------------------------------------------------
 
-  double         yaw, pitch, roll;
+  double         uav_yaw, uav_pitch, uav_roll;
   tf::Quaternion uav_attitude;
   quaternionMsgToTF(uav_state->pose.orientation, uav_attitude);
   tf::Matrix3x3 m(uav_attitude);
-  m.getRPY(roll, pitch, yaw);
+  m.getRPY(uav_roll, uav_pitch, uav_yaw);
 
   // --------------------------------------------------------------
   // |                            gains                           |
@@ -621,6 +621,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     std::scoped_lock lock(mutex_gains);
 
     Kq << kqxy, kqxy, kqz;
+
+    if (!reference->use_yaw) {
+      Kq[2] = 0;
+    }
+
     Kw << kwxy, kwxy, kwz;
   }
 
@@ -634,9 +639,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // |                 desired orientation matrix                 |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b, uav_yaw);
 
-  Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
+  if (reference->use_acceleration) {
+    Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
+  } else {
+    Ra << cvx_x_u, cvx_y_u, cvx_z_u;
+  }
 
   double total_mass = uav_mass_ + uav_mass_difference;
 
@@ -700,7 +709,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), reference->position.x, reference->position.y,
              reference->position.z, reference->yaw);
     ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
-             uav_state->pose.position.z, yaw);
+             uav_state->pose.position.z, uav_yaw);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -719,7 +728,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | ---------------------- yaw reference --------------------- |
 
-  Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
+  if (reference->use_yaw) {
+    Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
+  } else {
+    Rq.coeffs() << 0, 0, sin(uav_yaw / 2.0), cos(uav_yaw / 2.0);
+  }
 
   // | ------------- construct the rotational matrix ------------ |
 
@@ -789,7 +802,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     std::scoped_lock lock(mutex_gains);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -yaw);
+    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -uav_yaw);
 
     // integrate the body error
 
@@ -800,8 +813,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
     }
 
-    if (integral_terms_enabled) {
-      Ib_b -= temp_gain * Ep_body * dt;
+    if (reference->use_position_horizontal) {
+      if (integral_terms_enabled) {
+        Ib_b -= temp_gain * Ep_body * dt;
+      }
     }
 
     // saturate the body
@@ -861,8 +876,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
     }
 
-    if (integral_terms_enabled) {
-      Iw_w -= temp_gain * Ep.head(2) * dt;
+    if (reference->use_position_horizontal) {
+      if (integral_terms_enabled) {
+        Iw_w -= temp_gain * Ep.head(2) * dt;
+      }
     }
 
     // saturate the world
@@ -917,7 +934,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
-    uav_mass_difference -= temp_gain * Ep[2] * dt;
+
+    if (reference->use_position_vertical) {
+      uav_mass_difference -= temp_gain * Ep[2] * dt;
+    }
 
     // saturate the mass estimator
     bool uav_mass_saturated = false;
