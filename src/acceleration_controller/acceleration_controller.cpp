@@ -386,13 +386,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   Eigen::MatrixXd mpc_reference_z = Eigen::MatrixXd::Zero(horizon_length_ * n, 1);
 
   // prepare the full reference vector
-  if (reference->use_position) {
+  if (reference->use_position_vertical) {
     for (int i = 0; i < horizon_length_; i++) {
       mpc_reference_z((i * n) + 0, 0) = reference->position.z;
     }
   }
 
-  if (reference->use_velocity) {
+  if (reference->use_velocity_vertical) {
     for (int i = 0; i < horizon_length_; i++) {
       mpc_reference_z((i * n) + 1, 0) = reference->velocity.z;
     }
@@ -410,12 +410,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   std::vector<double> temp_Q = Q_z;
   std::vector<double> temp_S = S_z;
 
-  if (!reference->use_position) {
+  if (!reference->use_position_vertical) {
     temp_Q[0] = 0;
     temp_S[0] = 0;
   }
 
-  if (!reference->use_velocity) {
+  if (!reference->use_velocity_vertical) {
     temp_Q[1] = 0;
     temp_S[1] = 0;
   }

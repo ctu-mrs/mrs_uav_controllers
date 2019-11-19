@@ -407,19 +407,39 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   Eigen::Matrix3d Rd;
 
-  if (reference->use_position) {
+  if (reference->use_position_vertical || reference->use_position_horizontal) {
 
-    Rp << reference->position.x, reference->position.y, reference->position.z;  // fill the desired position
+    if (reference->use_position_horizontal) {
+      Rp[0] = reference->position.x;
+      Rp[1] = reference->position.y;
+    } else {
+      Rv[0] = 0;
+      Rv[1] = 0;
+    }
+
+    if (reference->use_position_vertical) {
+      Rp[2] = reference->position.z;
+    } else {
+      Rv[2] = 0;
+    }
 
     if (reference->use_euler_attitude) {
       Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
     }
   }
 
-  if (reference->use_velocity) {
-    Rv << reference->velocity.x, reference->velocity.y, reference->velocity.z;
+  if (reference->use_velocity_horizontal) {
+    Rv[0] = reference->velocity.x;
+    Rv[1] = reference->velocity.y;
   } else {
-    Rv << 0, 0, 0;
+    Rv[0] = 0;
+    Rv[1] = 0;
+  }
+
+  if (reference->use_velocity_vertical) {
+    Rv[2] = reference->velocity.z;
+  } else {
+    Rv[2] = 0;
   }
 
   if (reference->use_acceleration) {
@@ -464,9 +484,38 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   {
     std::scoped_lock lock(mutex_gains);
 
-    Kp << kpxy, kpxy, kpz;
-    Kv << kvxy, kvxy, kvz;
-    Ka << kaxy, kaxy, kaz;
+    if (reference->use_position_horizontal) {
+      Kp[0] = kpxy;
+      Kp[1] = kpxy;
+    } else {
+      Kp[0] = 0;
+      Kp[1] = 0;
+    }
+
+    if (reference->use_position_vertical) {
+      Kp[2] = kpz;
+    } else {
+      Kp[2] = 0;
+    }
+
+    if (reference->use_velocity_horizontal) {
+      Kv[0] = kvxy;
+      Kv[1] = kvxy;
+    } else {
+      Kv[0] = 0;
+      Kv[1] = 0;
+    }
+
+    if (reference->use_velocity_vertical) {
+      Kv[2] = kvz;
+    } else {
+      Kv[2] = 0;
+    }
+
+    if (reference->use_acceleration) {
+      Ka << kaxy, kaxy, kaz;
+    }
+
     Kq << kqxy, kqxy, kqz;
     Kw << kwxy, kwxy, kwz;
   }

@@ -485,11 +485,39 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     mpc_reference_z((i * n) + 2, 0) = reference->acceleration.z;
   }
 
+  // | ------------------ set the penalizations ----------------- |
+
+  std::vector<double> temp_Q_horizontal = Q;
+  std::vector<double> temp_Q_vertical   = Q_z;
+
+  std::vector<double> temp_S_horizontal = S;
+  std::vector<double> temp_S_vertical   = S_z;
+
+  if (!reference->use_position_horizontal) {
+    temp_Q_horizontal[0] = 0;
+    temp_S_horizontal[0] = 0;
+  }
+
+  if (!reference->use_velocity_horizontal) {
+    temp_Q_horizontal[1] = 0;
+    temp_S_horizontal[1] = 0;
+  }
+
+  if (!reference->use_position_vertical) {
+    temp_Q_vertical[0] = 0;
+    temp_S_vertical[0] = 0;
+  }
+
+  if (!reference->use_velocity_vertical) {
+    temp_Q_vertical[1] = 0;
+    temp_S_vertical[1] = 0;
+  }
+
   // | ------------------------ optimize ------------------------ |
 
   cvx_x->lock();
-  cvx_x->setQ(Q);
-  cvx_x->setS(S);
+  cvx_x->setQ(temp_Q_horizontal);
+  cvx_x->setS(temp_S_horizontal);
   cvx_x->setParams();
   cvx_x->setLastInput(cvx_x_u);
   cvx_x->loadReference(mpc_reference_x);
@@ -500,8 +528,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   cvx_x->unlock();
 
   cvx_y->lock();
-  cvx_y->setQ(Q);
-  cvx_y->setS(S);
+  cvx_y->setQ(temp_Q_horizontal);
+  cvx_y->setS(temp_S_horizontal);
   cvx_y->setParams();
   cvx_y->setLastInput(cvx_y_u);
   cvx_y->loadReference(mpc_reference_y);
@@ -512,8 +540,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   cvx_y->unlock();
 
   cvx_z->lock();
-  cvx_z->setQ(Q_z);
-  cvx_z->setS(S_z);
+  cvx_z->setQ(temp_Q_vertical);
+  cvx_z->setS(temp_S_vertical);
   cvx_z->setParams();
   cvx_z->setLastInput(cvx_z_u);
   cvx_z->loadReference(mpc_reference_z);
