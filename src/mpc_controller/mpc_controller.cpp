@@ -565,6 +565,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   Eigen::Vector3d Ep = Op - Rp;
+  Eigen::Vector3d Ev = Ov - Rv;
 
   // --------------------------------------------------------------
   // |                      calculate the dt                      |
@@ -803,6 +804,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     // rotate the control errors to the body
     Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -uav_yaw);
+    Eigen::Vector2d Ev_body = rotate2d(Ev.head(2), -uav_yaw);
 
     // integrate the body error
 
@@ -813,9 +815,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
     }
 
-    if (reference->use_position_horizontal) {
-      if (integral_terms_enabled) {
+    if (integral_terms_enabled) {
+      if (reference->use_position_horizontal) {
         Ib_b -= temp_gain * Ep_body * dt;
+      } else if (reference->use_velocity_horizontal) {
+        Ib_b -= temp_gain * Ev_body * dt;
       }
     }
 
@@ -876,9 +880,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
     }
 
-    if (reference->use_position_horizontal) {
-      if (integral_terms_enabled) {
+    if (integral_terms_enabled) {
+      if (reference->use_position_horizontal) {
         Iw_w -= temp_gain * Ep.head(2) * dt;
+      } else if (reference->use_velocity_horizontal) {
+        Iw_w -= temp_gain * Ev.head(2) * dt;
       }
     }
 

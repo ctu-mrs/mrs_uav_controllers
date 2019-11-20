@@ -700,6 +700,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     // integrate the world error
     if (reference->use_position_horizontal) {
       Iw_w -= kiwxy * Ep.head(2) * dt;
+    } else if (reference->use_velocity_horizontal) {
+      Iw_w -= kiwxy * Ev.head(2) * dt;
     }
 
     // saturate the world
@@ -750,10 +752,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     // rotate the control errors to the body
     Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -uav_yaw);
+    Eigen::Vector2d Ev_body = rotate2d(Ev.head(2), -uav_yaw);
 
     // integrate the body error
     if (reference->use_position_horizontal) {
       Ib_b -= kibxy * Ep_body * dt;
+    } else if (reference->use_velocity_horizontal) {
+      Ib_b -= kibxy * Ev_body * dt;
     }
 
     // saturate the body
