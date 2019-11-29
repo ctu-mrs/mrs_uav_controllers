@@ -987,7 +987,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   if (!std::isfinite(t[2])) {
     t[2] = 0;
-    ROS_ERROR("NaN detected in variable \"t[2]\", setting it to 0 and returning!!!");
+    ROS_ERROR("[MpcController]: NaN detected in variable \"t[2]\", setting it to 0 and returning!!!");
   } else if (t[2] > yaw_rate_saturation_) {
     t[2] = yaw_rate_saturation_;
   } else if (t[2] < -yaw_rate_saturation_) {

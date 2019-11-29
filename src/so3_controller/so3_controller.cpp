@@ -661,7 +661,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   if (!std::isfinite(thrust)) {
 
     thrust = 0;
-    ROS_ERROR("NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[So3Controller]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
 
   } else if (thrust > thrust_saturation_) {
 

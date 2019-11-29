@@ -131,8 +131,8 @@ private:
 
 /* //{ initialize() */
 
-void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
-                               const double uav_mass, const double g) {
+void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+                               const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
@@ -672,7 +672,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   output_command->euler_attitude.x   = feedback_b[1];
   output_command->euler_attitude.y   = feedback_b[0];
-  output_command->euler_attitude.z   = reference->yaw; // TODO this will not work with custom heading estimator
+  output_command->euler_attitude.z   = reference->yaw;  // TODO this will not work with custom heading estimator
   output_command->euler_attitude_set = true;
 
   output_command->quater_attitude_set = false;
