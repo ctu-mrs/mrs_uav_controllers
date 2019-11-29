@@ -1,14 +1,14 @@
 default_gains:
 
   horizontal:
-    kp: 0.30
-    kv: 0.20
+    kp: 0.4
+    kv: 0.3
     ka: 1.0
 
-    kib: 0.05
+    kib: 0.005
     kib_lim: 0.3
 
-    kiw: 0.05
+    kiw: 0.005
     kiw_lim: 0.3
 
   vertical:
