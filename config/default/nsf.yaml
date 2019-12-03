@@ -1,5 +1,6 @@
 default_gains:
 
+  # influences pitching and rolling
   horizontal:
     kp: 0.4
     kv: 0.3
@@ -11,6 +12,7 @@ default_gains:
     kiw: 0.005
     kiw_lim: 0.3
 
+  # influences yawing
   vertical:
     kp: 0.6
     kv: 0.2

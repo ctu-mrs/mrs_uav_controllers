@@ -1,11 +1,13 @@
 default_gains:
 
+  # influences pitching and rolling
   horizontal:
     
     attitude:
       kq: 6.0
       kw: 0.0
 
+  # influences yawing
   vertical:
     kp: 15.0
     kv: 6.0

@@ -3,6 +3,7 @@ default_gains:
   # Gains in this file SHOULD NOT BE CHANGED, since they are not used most of the times.
   # Gains which are actually used are in the MavManager package under the GainManager configs
 
+  # influences pitching and rolling
   horizontal:
     kp: 3.0
     kv: 2.0
@@ -18,6 +19,7 @@ default_gains:
     kiw: 0.1
     kiw_lim: 10.0
 
+  # influences yawing
   vertical:
     kp: 15.0
     kv: 8.0

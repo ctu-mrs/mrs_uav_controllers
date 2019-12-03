@@ -10,11 +10,13 @@ attitude_vertical_feedback:
 
   default_gains:
 
+    # influences pitching and rolling
     horizontal:
       attitude:
         kq: 8.0
         kw: 0.1
 
+    # influences yawing
     vertical:
       attitude:
         kq: 5.0
