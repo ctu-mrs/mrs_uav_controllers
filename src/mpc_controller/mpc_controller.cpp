@@ -148,8 +148,8 @@ private:
   int  cvx_max_iterations_;
 
 private:
-  mrs_lib::Profiler *profiler;
-  bool               profiler_enabled_ = false;
+  mrs_lib::Profiler profiler;
+  bool              profiler_enabled_ = false;
 
 private:
   ros::Timer timer_gain_filter;
@@ -326,7 +326,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler = new mrs_lib::Profiler(nh_, "MpcController", profiler_enabled_);
+  profiler = mrs_lib::Profiler(nh_, "MpcController", profiler_enabled_);
 
   // --------------------------------------------------------------
   // |                           timers                           |
@@ -406,7 +406,7 @@ void MpcController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
   {
     std::scoped_lock lock(mutex_uav_state);
@@ -1183,7 +1183,7 @@ bool MpcController::callbackSetIntegralTerms(std_srvs::SetBool::Request &req, st
 
 void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
   double gain_coeff                = 1;
   mutex_lateral_gains_after_toggle = false;

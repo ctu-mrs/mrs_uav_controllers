@@ -103,8 +103,8 @@ private:
   double mute_coefficitent_;
 
 private:
-  mrs_lib::Profiler *profiler;
-  bool               profiler_enabled_ = false;
+  mrs_lib::Profiler profiler;
+  bool              profiler_enabled_ = false;
 
 private:
   ros::Timer timer_gain_filter;
@@ -229,7 +229,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler = new mrs_lib::Profiler(nh_, "NsfController", profiler_enabled_);
+  profiler = mrs_lib::Profiler(nh_, "NsfController", profiler_enabled_);
 
   // --------------------------------------------------------------
   // |                           timers                           |
@@ -311,7 +311,7 @@ void NsfController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
   {
     std::scoped_lock lock(mutex_uav_state);
@@ -794,7 +794,7 @@ void NsfController::dynamicReconfigureCallback(mrs_controllers::nsf_controllerCo
 
 void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
   double gain_coeff                = 1;
   bool   bypass_filter             = mute_lateral_gains || mutex_lateral_gains_after_toggle;

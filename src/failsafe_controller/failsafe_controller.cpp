@@ -67,8 +67,8 @@ private:
   bool      first_iteration = true;
 
 private:
-  mrs_lib::Profiler *profiler;
-  bool               profiler_enabled_ = false;
+  mrs_lib::Profiler profiler;
+  bool              profiler_enabled_ = false;
 };
 
 //}
@@ -112,7 +112,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler = new mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
+  profiler = mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -185,7 +185,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const mrs_m
   // is getting deactivated
   std::scoped_lock lock(mutex_hover_thrust);
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
   if (!is_active) {
     return mrs_msgs::AttitudeCommand::ConstPtr();

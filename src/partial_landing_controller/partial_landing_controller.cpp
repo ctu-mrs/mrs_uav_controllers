@@ -98,8 +98,8 @@ private:
   double mute_coefficitent_;
 
 private:
-  mrs_lib::Profiler *profiler;
-  bool               profiler_enabled_ = false;
+  mrs_lib::Profiler profiler;
+  bool              profiler_enabled_ = false;
 
 private:
   ros::Timer timer_gain_filter;
@@ -182,7 +182,7 @@ void PartialLandingController::initialize(const ros::NodeHandle &parent_nh, [[ma
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler = new mrs_lib::Profiler(nh_, "PartialLandingController", profiler_enabled_);
+  profiler = mrs_lib::Profiler(nh_, "PartialLandingController", profiler_enabled_);
 
   // --------------------------------------------------------------
   // |                           timers                           |
@@ -255,7 +255,7 @@ void PartialLandingController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                            const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
   if (!is_active) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
@@ -500,7 +500,7 @@ void PartialLandingController::dynamicReconfigureCallback(mrs_controllers::parti
 
 void PartialLandingController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
   double gain_coeff                = 1;
   mutex_lateral_gains_after_toggle = false;

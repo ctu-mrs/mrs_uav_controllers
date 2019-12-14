@@ -128,8 +128,8 @@ private:
   std::vector<double> Q_z, S_z;
 
 private:
-  mrs_lib::Profiler *profiler;
-  bool               profiler_enabled_ = false;
+  mrs_lib::Profiler profiler;
+  bool              profiler_enabled_ = false;
 
 private:
   ros::Timer timer_gain_filter;
@@ -263,7 +263,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
   // |                          profiler                          |
   // --------------------------------------------------------------
 
-  profiler = new mrs_lib::Profiler(nh_, "AccelerationController", profiler_enabled_);
+  profiler = mrs_lib::Profiler(nh_, "AccelerationController", profiler_enabled_);
 
   // --------------------------------------------------------------
   // |                           timers                           |
@@ -336,7 +336,7 @@ void AccelerationController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                          const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("update");
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
   if (!is_active) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
@@ -795,7 +795,7 @@ void AccelerationController::dynamicReconfigureCallback(mrs_controllers::acceler
 
 void AccelerationController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler->createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
   double gain_coeff                = 1;
   mutex_lateral_gains_after_toggle = false;
