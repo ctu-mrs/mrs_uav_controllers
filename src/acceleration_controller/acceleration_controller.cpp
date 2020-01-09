@@ -696,10 +696,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
       output_command->attitude_rate_set = true;
 
       Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
-      output_command->quter_attitude.w    = thrust_vec.w();
-      output_command->quter_attitude.x    = thrust_vec.x();
-      output_command->quter_attitude.y    = thrust_vec.y();
-      output_command->quter_attitude.z    = thrust_vec.z();
+      output_command->quater_attitude.w   = thrust_vec.w();
+      output_command->quater_attitude.x   = thrust_vec.x();
+      output_command->quater_attitude.y   = thrust_vec.y();
+      output_command->quater_attitude.z   = thrust_vec.z();
       output_command->quater_attitude_set = true;
 
       output_command->euler_attitude_set = false;
@@ -710,10 +710,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
       // output the desired attitude
       Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
-      output_command->quter_attitude.w    = thrust_vec.w();
-      output_command->quter_attitude.x    = thrust_vec.x();
-      output_command->quter_attitude.y    = thrust_vec.y();
-      output_command->quter_attitude.z    = thrust_vec.z();
+      output_command->quater_attitude.w   = thrust_vec.w();
+      output_command->quater_attitude.x   = thrust_vec.x();
+      output_command->quater_attitude.y   = thrust_vec.y();
+      output_command->quater_attitude.z   = thrust_vec.z();
       output_command->quater_attitude_set = true;
 
       output_command->euler_attitude_set = false;
