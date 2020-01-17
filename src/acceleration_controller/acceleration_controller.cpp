@@ -720,9 +720,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   output_command->thrust          = thrust;
   output_command->mass_difference = uav_mass_difference;
 
-  last_output_command = output_command;
-
   output_command->controller_enforcing_constraints = false;
+
+  output_command->controller = "AccelerationController";
+
+  last_output_command = output_command;
 
   return output_command;
 }

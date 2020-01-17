@@ -694,9 +694,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   output_command->disturbance_wx_w = g_ * total_mass * sin(Iw_w[0]);
   output_command->disturbance_wy_w = g_ * total_mass * sin(Iw_w[1]);
 
-  last_output_command = output_command;
-
   output_command->controller_enforcing_constraints = false;
+
+  output_command->controller = "NsfController";
+
+  last_output_command = output_command;
 
   return output_command;
 }

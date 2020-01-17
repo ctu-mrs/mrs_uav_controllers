@@ -441,6 +441,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr PartialLandingController::update(const
 
   output_command.mode_mask = output_command.MODE_ATTITUDE_RATE;
 
+  output_command.controller = "PartialLandingController";
+
   return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(output_command));
 }
 

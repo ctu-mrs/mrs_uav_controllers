@@ -30,6 +30,8 @@
 #define OUTPUT_ATTITUDE_RATE 1
 #define OUTPUT_ATTITUDE_QUATERNION 2
 
+#define STRING_EQUAL 0
+
 namespace mrs_controllers
 {
 
@@ -170,6 +172,16 @@ private:
   Eigen::Vector2d Ib_b;  // body error integral in the body frame
   Eigen::Vector2d Iw_w;  // world error integral in the world_frame
   std::mutex      mutex_integrals;
+
+private:
+  bool   _rampup_enabled_ = false;
+  double _rampup_duration_;
+
+  bool      rampup_active_ = false;
+  double    rampup_speed_;
+  double    rampup_thrust_;
+  ros::Time rampup_start_time;
+  ros::Time rampup_last_time_;
 };
 
 //}
@@ -226,6 +238,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
 
   param_loader.load_param("cvx_parameters/verbose", cvx_verbose_);
   param_loader.load_param("cvx_parameters/max_iterations", cvx_max_iterations_);
+
+  // | ------------------------- rampup ------------------------- |
+
+  param_loader.load_param("rampup/enabled", _rampup_enabled_);
+  param_loader.load_param("rampup/duration", _rampup_duration_);
 
   // | --------------------- integral gains --------------------- |
 
@@ -375,6 +392,17 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
              this->name_.c_str(), uav_mass_difference, Ib_b[0], Ib_b[1], Iw_w[0], Iw_w[1]);
 
     ROS_INFO("[%s]: activated with the last controllers's command.", this->name_.c_str());
+  }
+
+  if (cmd->controller.compare("none") == STRING_EQUAL) {
+
+    double hover_thrust = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+
+    rampup_active_    = true;
+    rampup_start_time = ros::Time::now();
+    rampup_last_time_ = ros::Time::now();
+    rampup_thrust_    = cmd->thrust;
+    rampup_speed_     = (hover_thrust - cmd->thrust) / _rampup_duration_;
   }
 
   first_iteration = true;
@@ -749,7 +777,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Ew = R.transpose() * (Ow - Rw);
 
   double thrust_force = f.dot(R.col(2));
-  double thrust = 0;
+  double thrust       = 0;
 
   if (thrust_force >= 0) {
     thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
@@ -772,7 +800,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     thrust = 0.0;
     ROS_WARN_THROTTLE(1.0, "[%s]: saturating thrust to %.2f", this->name_.c_str(), 0.0);
-
   }
 
   Eigen::Vector3d t;
@@ -804,7 +831,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     // antiwindup
     double temp_gain = kibxy;
-    if (sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
+    if (rampup_active_ || sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
     }
@@ -869,7 +896,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     // antiwindup
     double temp_gain = kiwxy;
-    if (sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
+    if (rampup_active_ || sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
     }
@@ -930,7 +957,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     // antiwindup
     double temp_gain = km;
-    if (fabs(uav_state->velocity.linear.z) > 0.3 && ((Ep[2] < 0 && uav_state->velocity.linear.z > 0) || (Ep[2] > 0 && uav_state->velocity.linear.z < 0))) {
+    if (rampup_active_ ||
+        (fabs(uav_state->velocity.linear.z) > 0.3 && ((Ep[2] < 0 && uav_state->velocity.linear.z > 0) || (Ep[2] > 0 && uav_state->velocity.linear.z < 0)))) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
@@ -1033,7 +1061,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     output_command->desired_acceleration.z = f[2] / total_mass;
   }
 
-  output_command->thrust          = thrust;
+  if (rampup_active_) {
+
+    rampup_thrust_ += rampup_speed_ * dt;
+
+    rampup_last_time_ = ros::Time::now();
+
+    output_command->thrust = rampup_thrust_;
+
+    ROS_INFO_THROTTLE(0.1, "[%s]: ramping up thrust, %.2f", this->name_.c_str(), output_command->thrust);
+
+    // deactivate the rampup when the times up
+    if (fabs((ros::Time::now() - rampup_start_time).toSec()) > _rampup_duration_) {
+      rampup_active_ = false;
+    }
+
+  } else {
+    output_command->thrust = thrust;
+  }
+
   output_command->mass_difference = uav_mass_difference;
   output_command->total_mass      = total_mass;
 
@@ -1057,6 +1103,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   output_command->vertical_desc_speed_constraint = 0.5 * max_speed_vertical_;
   output_command->vertical_desc_acc_constraint   = 0.5 * max_acceleration_vertical_;
+
+  output_command->controller = this->name_;
 
   last_output_command = output_command;
 

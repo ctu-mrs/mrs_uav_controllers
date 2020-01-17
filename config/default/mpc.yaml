@@ -40,6 +40,10 @@ integral_gains:
   kiw_lim: 10.0
   kib_lim: 10.0
 
+rampup:
+  enabled: true
+  duration: 1.0 # [s]
+
 attitude_feedback:
 
   default_gains:

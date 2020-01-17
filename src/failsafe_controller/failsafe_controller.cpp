@@ -268,9 +268,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update(const mrs_m
   output_command->desired_acceleration.y = 0;
   output_command->desired_acceleration.z = 0;
 
-  last_output_command = output_command;
-
   output_command->controller_enforcing_constraints = false;
+
+  output_command->controller = "FailsafeController";
+
+  last_output_command = output_command;
 
   return output_command;
 }

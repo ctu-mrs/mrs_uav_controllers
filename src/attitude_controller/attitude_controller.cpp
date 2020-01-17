@@ -503,6 +503,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
 
   output_command->controller_enforcing_constraints = false;
 
+  output_command->controller = "AttitudeController";
+
   return output_command;
 }
 
