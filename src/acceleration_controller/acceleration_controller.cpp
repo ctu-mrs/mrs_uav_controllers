@@ -521,7 +521,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
     ROS_WARN_THROTTLE(1.0, "[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip", f[2]);
 
-    f[2] = 0;
+    f << 0, 0, 1;
   }
 
   // | ------------------ limit the tilt angle ------------------ |
