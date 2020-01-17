@@ -665,23 +665,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
 
-  // "safe while true"
-  for (int i = 0; i < 20; i++) {
+  // if the downwards part of the force is close to counter-act the gravity acceleration
+  if (f[2] < 0) {
 
-    // if the downwards part of the force is close to counter-act the gravity acceleration
-    if (f[2] < (0.15 * total_mass * g_)) {
+    ROS_WARN_THROTTLE(1.0, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip", this->name_.c_str(), f[2]);
 
-      ROS_WARN_THROTTLE(1.0, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip", this->name_.c_str(), f[2]);
-
-      // half the feedbacks
-      feed_forward /= 2.0;
-
-      // recalculate the desired force vector
-      f = integral_feedback + feed_forward;
-    } else {
-
-      break;
-    }
+    f[2] = 0;
   }
 
   // | ------------------ limit the tilt angle ------------------ |
@@ -760,25 +749,30 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Ew = R.transpose() * (Ow - Rw);
 
   double thrust_force = f.dot(R.col(2));
-  /* double thrust_force = Ft; */
   double thrust = 0;
 
   if (thrust_force >= 0) {
     thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
   } else {
-    ROS_WARN_THROTTLE(1.0, "[%s]: Just so you know, the desired thrust force is negative (%f", this->name_.c_str(), thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[%s]: Just so you know, the desired thrust force is negative (%.2f)", this->name_.c_str(), thrust_force);
   }
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
+
     thrust = 0;
     ROS_ERROR("[%s]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!", this->name_.c_str());
+
   } else if (thrust > thrust_saturation_) {
+
     thrust = thrust_saturation_;
-    ROS_WARN("[%s]: saturating thrust to %.2f", this->name_.c_str(), thrust_saturation_);
+    ROS_WARN_THROTTLE(1.0, "[%s]: saturating thrust to %.2f", this->name_.c_str(), thrust_saturation_);
+
   } else if (thrust < 0.0) {
+
     thrust = 0.0;
-    ROS_WARN("[%s]: saturating thrust to %.2f", this->name_.c_str(), 0.0);
+    ROS_WARN_THROTTLE(1.0, "[%s]: saturating thrust to %.2f", this->name_.c_str(), 0.0);
+
   }
 
   Eigen::Vector3d t;
