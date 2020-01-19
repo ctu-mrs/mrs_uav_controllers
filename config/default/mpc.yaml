@@ -42,7 +42,7 @@ integral_gains:
 
 rampup:
   enabled: true
-  duration: 1.0 # [s]
+  duration: 0.5 # [s]
 
 attitude_feedback:
 
