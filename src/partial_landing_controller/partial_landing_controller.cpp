@@ -70,7 +70,6 @@ private:
 
 private:
   double                       uav_mass_;
-  double                       uav_mass_difference;
   double                       uav_total_mass;
   double                       g_;
   mrs_uav_manager::MotorParams motor_params_;
@@ -220,7 +219,7 @@ bool PartialLandingController::activate(const mrs_msgs::AttitudeCommand::ConstPt
 
     activation_control_command_.controller_enforcing_constraints = false;
 
-    ROS_INFO("[PartialLandingController]: setting mass difference from the last AttitudeCmd: %.2f kg", uav_mass_difference);
+    ROS_INFO("[PartialLandingController]: setting mass difference from the last AttitudeCmd: %.2f kg", activation_control_command_.mass_difference);
 
     ROS_INFO("[PartialLandingController]: activated with a last controller's command.");
   }
