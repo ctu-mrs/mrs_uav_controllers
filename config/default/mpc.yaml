@@ -41,8 +41,9 @@ integral_gains:
   kib_lim: 10.0
 
 rampup:
+
   enabled: true
-  duration: 0.5 # [s]
+  speed: 1.0 # [1/s]
 
 attitude_feedback:
 

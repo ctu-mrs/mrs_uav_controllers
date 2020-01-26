@@ -130,6 +130,17 @@ private:
   Eigen::Vector2d Ib_b;  // body error integral in the body frame
   Eigen::Vector2d Iw_w;  // world error integral in the world_frame
   std::mutex      mutex_integrals;
+
+private:
+  bool   _rampup_enabled_ = false;
+  double _rampup_speed_;
+
+  bool      rampup_active_ = false;
+  double    rampup_thrust_;
+  int       rampup_direction_;
+  double    rampup_duration_;
+  ros::Time rampup_start_time;
+  ros::Time rampup_last_time_;
 };
 
 //}
@@ -168,6 +179,11 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   param_loader.load_param("default_gains/horizontal/kib", kibxy);
 
   param_loader.load_param("lateral_mute_coefficitent", mute_coefficitent_);
+
+  // | ------------------------- rampup ------------------------- |
+
+  param_loader.load_param("rampup/enabled", _rampup_enabled_);
+  param_loader.load_param("rampup/speed", _rampup_speed_);
 
   // height gains
   param_loader.load_param("default_gains/vertical/kp", kpz);
@@ -307,6 +323,28 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     ROS_INFO("[So3Controller]: activated with a last controller's command, mass difference %.2f kg.", uav_mass_difference);
   }
 
+  // rampup check
+  if (_rampup_enabled_) {
+
+    double hover_thrust      = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    double thrust_difference = hover_thrust - cmd->thrust;
+
+    if (thrust_difference > 0) {
+      rampup_direction_ = 1;
+    } else {
+      rampup_direction_ = -1;
+    }
+
+    ROS_INFO("[So3Controller]: activating rampup with initial thrust %.2f", cmd->thrust);
+
+    rampup_active_    = true;
+    rampup_start_time = ros::Time::now();
+    rampup_last_time_ = ros::Time::now();
+    rampup_thrust_    = cmd->thrust;
+
+    rampup_duration_ = fabs(thrust_difference) / _rampup_speed_;
+  }
+
   first_iteration = true;
 
   ROS_INFO("[So3Controller]: activated");
@@ -314,7 +352,7 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   is_active = true;
 
   return true;
-}
+}  // namespace so3_controller
 
 //}
 
@@ -796,7 +834,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   {
     std::scoped_lock lock(mutex_gains);
 
-    if (reference->use_position_vertical) {
+    if (reference->use_position_vertical && !rampup_active_) {
       uav_mass_difference -= km * Ep[2] * dt;
     }
 
@@ -879,7 +917,27 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     output_command->desired_acceleration.z = f[2] / total_mass;
   }
 
-  output_command->thrust          = thrust;
+  if (rampup_active_) {
+
+    rampup_thrust_ += double(rampup_direction_) * _rampup_speed_ * dt;
+
+    rampup_last_time_ = ros::Time::now();
+
+    output_command->thrust = rampup_thrust_;
+
+    ROS_INFO_THROTTLE(0.1, "[So3Controller]: ramping up thrust, %.2f", output_command->thrust);
+
+    // deactivate the rampup when the times up
+    if (fabs((ros::Time::now() - rampup_start_time).toSec()) > rampup_duration_) {
+
+      rampup_active_ = false;
+      ROS_INFO("[So3Controller]: finishing rampup");
+    }
+
+  } else {
+    output_command->thrust = thrust;
+  }
+
   output_command->mass_difference = uav_mass_difference;
   output_command->total_mass      = total_mass;
 

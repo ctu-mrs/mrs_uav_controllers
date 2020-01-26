@@ -40,6 +40,11 @@ tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
 tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
 thrust_saturation: 0.9 # [-], range from 0 to 1
 
+rampup:
+
+  enabled: true
+  speed: 1.0 # [1/s]
+
 gains_filter:
   filter_rate: 20 # [Hz]
   perc_change_rate: 1.0

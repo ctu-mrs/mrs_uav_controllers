@@ -175,11 +175,12 @@ private:
 
 private:
   bool   _rampup_enabled_ = false;
-  double _rampup_duration_;
+  double _rampup_speed_;
 
   bool      rampup_active_ = false;
-  double    rampup_speed_;
   double    rampup_thrust_;
+  int       rampup_direction_;
+  double    rampup_duration_;
   ros::Time rampup_start_time;
   ros::Time rampup_last_time_;
 };
@@ -242,7 +243,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   // | ------------------------- rampup ------------------------- |
 
   param_loader.load_param("rampup/enabled", _rampup_enabled_);
-  param_loader.load_param("rampup/duration", _rampup_duration_);
+  param_loader.load_param("rampup/speed", _rampup_speed_);
 
   // | --------------------- integral gains --------------------- |
 
@@ -394,15 +395,26 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     ROS_INFO("[%s]: activated with the last controllers's command.", this->name_.c_str());
   }
 
-  if (cmd->controller.compare("none") == STRING_EQUAL) {
+  // rampup check
+  if (_rampup_enabled_) {
 
-    double hover_thrust = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    double hover_thrust      = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    double thrust_difference = hover_thrust - cmd->thrust;
+
+    if (thrust_difference > 0) {
+      rampup_direction_ = 1;
+    } else {
+      rampup_direction_ = -1;
+    }
+
+    ROS_INFO("[MpcController]: activating rampup with initial thrust %.2f", cmd->thrust);
 
     rampup_active_    = true;
     rampup_start_time = ros::Time::now();
     rampup_last_time_ = ros::Time::now();
     rampup_thrust_    = cmd->thrust;
-    rampup_speed_     = (hover_thrust - cmd->thrust) / _rampup_duration_;
+
+    rampup_duration_ = fabs(thrust_difference) / _rampup_speed_;
   }
 
   first_iteration = true;
@@ -1063,7 +1075,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   if (rampup_active_) {
 
-    rampup_thrust_ += rampup_speed_ * dt;
+    rampup_thrust_ += double(rampup_direction_) * _rampup_speed_ * dt;
 
     rampup_last_time_ = ros::Time::now();
 
@@ -1072,8 +1084,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     ROS_INFO_THROTTLE(0.1, "[%s]: ramping up thrust, %.2f", this->name_.c_str(), output_command->thrust);
 
     // deactivate the rampup when the times up
-    if (fabs((ros::Time::now() - rampup_start_time).toSec()) > _rampup_duration_) {
+    if (fabs((ros::Time::now() - rampup_start_time).toSec()) > rampup_duration_) {
+
       rampup_active_ = false;
+      ROS_INFO("[MpcController]: finishing rampup");
     }
 
   } else {
