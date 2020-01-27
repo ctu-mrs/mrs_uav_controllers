@@ -331,8 +331,10 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
     if (thrust_difference > 0) {
       rampup_direction_ = 1;
-    } else {
+    } else if (thrust_difference < 0) {
       rampup_direction_ = -1;
+    } else {
+      rampup_direction_ = 0;
     }
 
     ROS_INFO("[So3Controller]: activating rampup with initial thrust %.2f", cmd->thrust);
@@ -919,19 +921,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   if (rampup_active_) {
 
-    rampup_thrust_ += double(rampup_direction_) * _rampup_speed_ * dt;
-
-    rampup_last_time_ = ros::Time::now();
-
-    output_command->thrust = rampup_thrust_;
-
-    ROS_INFO_THROTTLE(0.1, "[So3Controller]: ramping up thrust, %.2f", output_command->thrust);
-
     // deactivate the rampup when the times up
     if (fabs((ros::Time::now() - rampup_start_time).toSec()) > rampup_duration_) {
 
-      rampup_active_ = false;
-      ROS_INFO("[So3Controller]: finishing rampup");
+      rampup_active_         = false;
+      output_command->thrust = thrust;
+
+      ROS_INFO("[So3Controller]: rampup finished");
+
+    } else {
+
+      double rampup_dt = (ros::Time::now() - rampup_last_time_).toSec();
+
+      rampup_thrust_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
+
+      rampup_last_time_ = ros::Time::now();
+
+      output_command->thrust = rampup_thrust_;
+
+      ROS_INFO_THROTTLE(0.1, "[So3Controller]: ramping up thrust, %.2f", output_command->thrust);
     }
 
   } else {
