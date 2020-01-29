@@ -631,8 +631,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[" << this->name_ << "]: last " << last_update << ", current " << uav_state->header.stamp);
-    ROS_WARN_THROTTLE(1.0, "[%s]: the last odometry message came too close! %f", this->name_.c_str(), dt);
+    ROS_DEBUG("[%s]: the last odometry message came too close! %f", this->name_.c_str(), dt);
+
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
       return last_output_command;

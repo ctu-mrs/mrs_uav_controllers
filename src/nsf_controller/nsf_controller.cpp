@@ -366,8 +366,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_WARN_STREAM_THROTTLE(1.0, "[NsfController]: last " << last_update << ", current " << uav_state->header.stamp);
-    ROS_WARN_THROTTLE(1.0, "[NsfController]: the last odometry message came too close! %f", dt);
+    ROS_DEBUG("[NsfController]: the last odometry message came too close! %f", dt);
+
     if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
 
       return last_output_command;
