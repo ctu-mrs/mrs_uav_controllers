@@ -1,12 +1,12 @@
 integral_gains:
 
-  kiw: 0.1
-  kib: 0.1
+  kiw: 0.5
+  kib: 0.5
 
   kiw_lim: 10.0
   kib_lim: 10.0
 
-attitude_vertical_feedback:
+attitude_feedback:
 
   default_gains:
 
