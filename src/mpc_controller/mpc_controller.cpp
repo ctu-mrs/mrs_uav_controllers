@@ -1102,6 +1102,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     output_command->thrust = thrust;
   }
 
+  output_command->ramping_up = rampup_active_;
+
   output_command->mass_difference = uav_mass_difference;
   output_command->total_mass      = total_mass;
 
