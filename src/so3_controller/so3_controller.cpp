@@ -326,7 +326,7 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   // rampup check
   if (_rampup_enabled_) {
 
-    double hover_thrust      = sqrt(uav_mass_ * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    double hover_thrust      = sqrt(cmd->total_mass * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
     double thrust_difference = hover_thrust - cmd->thrust;
 
     if (thrust_difference > 0) {
