@@ -787,12 +787,7 @@ void AccelerationController::timerGainsFilter(const ros::TimerEvent &event) {
 
   mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
 
-  double gain_coeff                = 1;
   mutex_lateral_gains_after_toggle = false;
-
-  if (mute_lateral_gains) {
-    gain_coeff = mute_coefficitent_;
-  }
 
   // calculate the difference
   {

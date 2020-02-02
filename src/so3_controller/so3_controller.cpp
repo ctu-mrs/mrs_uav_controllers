@@ -439,10 +439,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   // Rp - position reference in global frame
-  // Rp - velocity reference in global frame
+  // Rv - velocity reference in global frame
   // Ra - velocity reference in global frame
   // Rw - angular velocity reference
-  Eigen::Vector3d           Rp, Rv, Ra, Rw;
+
+  Eigen::Vector3d Rp = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Ra = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Rw = Eigen::Vector3d::Zero(3);
+
   Eigen::Quaternion<double> Rq;
 
   Eigen::Matrix3d Rd;
@@ -513,15 +518,29 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // |                  calculate control errors                  |
   // --------------------------------------------------------------
 
-  Eigen::Vector3d Ep = Op - Rp;
-  Eigen::Vector3d Ev = Ov - Rv;
+  // position control error
+  Eigen::Vector3d Ep = Eigen::Vector3d::Zero(3);
+
+  if (reference->use_position_horizontal || reference->use_position_vertical) {
+    Ep = Op - Rp;
+  }
+
+  // velocity control error
+  Eigen::Vector3d Ev = Eigen::Vector3d::Zero(3);
+
+  if (reference->use_velocity_horizontal || reference->use_velocity_vertical) {
+    Ev = Ov - Rv;
+  }
 
   // --------------------------------------------------------------
   // |                            gains                           |
   // --------------------------------------------------------------
-  //
-  Eigen::Vector3d Ka;
-  Eigen::Array3d  Kp, Kv, Kq, Kw;
+
+  Eigen::Vector3d Ka = Eigen::Vector3d::Zero(3);
+  Eigen::Array3d  Kp = Eigen::Array3d::Zero(3);
+  Eigen::Array3d  Kv = Eigen::Array3d::Zero(3);
+  Eigen::Array3d  Kq = Eigen::Array3d::Zero(3);
+  Eigen::Array3d  Kw = Eigen::Array3d::Zero(3);
 
   {
     std::scoped_lock lock(mutex_gains);
