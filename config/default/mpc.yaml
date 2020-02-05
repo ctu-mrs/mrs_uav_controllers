@@ -43,7 +43,7 @@ integral_gains:
 rampup:
 
   enabled: true
-  speed: 0.5 # [1/s]
+  speed: 0.75 # [1/s]
 
 attitude_feedback:
 
