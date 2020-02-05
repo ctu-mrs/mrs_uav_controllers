@@ -497,13 +497,32 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // | ------------------- initial conditions ------------------- |
 
   Eigen::MatrixXd initial_x = Eigen::MatrixXd::Zero(3, 1);
-  initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, reference->acceleration.x;
-
   Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
-  initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, reference->acceleration.y;
-
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
-  initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, reference->acceleration.z;
+
+  if (fabs(uav_state->velocity.linear.x) < max_speed_horizontal_) {
+    initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, reference->acceleration.x;
+  } else {
+    initial_x << uav_state->pose.position.x, reference->velocity.x, reference->acceleration.x;
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceedds constraints (%.2f > %.2f m), using reference for initial condition",
+                       fabs(uav_state->velocity.linear.x), max_speed_horizontal_);
+  }
+
+  if (fabs(uav_state->velocity.linear.x) < max_speed_horizontal_) {
+    initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, reference->acceleration.y;
+  } else {
+    initial_y << uav_state->pose.position.y, reference->velocity.y, reference->acceleration.y;
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceedds constraints (%.2f > %.2f m), using reference for initial condition",
+                       fabs(uav_state->velocity.linear.y), max_speed_horizontal_);
+  }
+
+  if (fabs(uav_state->velocity.linear.z) < max_speed_vertical_) {
+    initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, reference->acceleration.z;
+  } else {
+    initial_z << uav_state->pose.position.z, reference->velocity.z, reference->acceleration.z;
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceedds constraints (%.2f > %.2f m), using reference for initial condition",
+                       fabs(uav_state->velocity.linear.z), max_speed_vertical_);
+  }
 
   // | ---------------------- set reference --------------------- |
 
