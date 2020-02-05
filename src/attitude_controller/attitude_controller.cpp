@@ -498,6 +498,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   output_command->thrust = thrust;
 
   output_command->mass_difference = uav_mass_difference;
+  output_command->total_mass      = total_mass;
 
   last_output_command = output_command;
 
