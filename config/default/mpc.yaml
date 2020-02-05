@@ -71,7 +71,7 @@ attitude_feedback:
     min_change_rate: 0.1 # perc of the difference
 
   # saturations and limits
-  tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
+  tilt_angle_saturation: 30.0 # [deg], disabled when 0.0
   tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
   thrust_saturation: 0.9 # [-], range from 0 to 1
   yaw_rate_saturation: 1.0 # [rad/s], disabled when 0.0
