@@ -785,7 +785,7 @@ void AccelerationController::dynamicReconfigureCallback(mrs_controllers::acceler
 
 void AccelerationController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.01, event);
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.05, event);
 
   mutex_lateral_gains_after_toggle = false;
 
