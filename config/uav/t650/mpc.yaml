@@ -1,3 +1,8 @@
+rampup:
+
+  enabled: true
+  speed: 0.5 # [1/s]
+
 integral_gains:
 
   kiw: 0.5
