@@ -36,7 +36,7 @@ class AttitudeController : public mrs_uav_manager::Controller {
 
 public:
   void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
-                  const double uav_mass, const double g);
+                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -56,6 +56,8 @@ public:
 private:
   bool is_initialized = false;
   bool is_active      = false;
+
+  std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -123,9 +125,12 @@ private:
 /* //{ initialize() */
 
 void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
-                                    const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g) {
+                                    const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
+                                    std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
+
+  common_handlers_ = common_handlers;
 
   ros::Time::waitForValid();
 

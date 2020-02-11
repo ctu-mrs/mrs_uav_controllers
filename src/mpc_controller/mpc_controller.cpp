@@ -18,6 +18,7 @@
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
+#include <mrs_lib/mutex.h>
 
 #include <mrs_controllers/cvx_wrapper.h>
 
@@ -44,7 +45,7 @@ class MpcController : public mrs_uav_manager::Controller {
 
 public:
   void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
-                  const double uav_mass, const double g);
+                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
   void deactivate(void);
 
@@ -62,13 +63,14 @@ public:
   void resetDisturbanceEstimators(void);
 
 private:
-  bool        is_initialized = false;
-  bool        is_active      = false;
-  std::string name_;
+  bool                                               is_initialized = false;
+  bool                                               is_active      = false;
+  std::string                                        name_;
+  std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
 private:
-  mrs_msgs::UavState uav_state;
-  std::mutex         mutex_uav_state;
+  mrs_msgs::UavState uav_state_;
+  std::mutex         mutex_uav_state_;
 
   // --------------------------------------------------------------
   // |                     dynamic reconfigure                    |
@@ -171,7 +173,7 @@ private:
 private:
   Eigen::Vector2d Ib_b;  // body error integral in the body frame
   Eigen::Vector2d Iw_w;  // world error integral in the world_frame
-  std::mutex      mutex_integrals;
+  std::mutex      mutex_integrals_;
 
 private:
   bool   _rampup_enabled_ = false;
@@ -194,9 +196,11 @@ private:
 /* //{ initialize() */
 
 void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
-                               const double uav_mass, const double g) {
+                               const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
+
+  common_handlers_ = common_handlers;
 
   this->name_ = name;
 
@@ -451,9 +455,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
   {
-    std::scoped_lock lock(mutex_uav_state);
+    std::scoped_lock lock(mutex_uav_state_);
 
-    this->uav_state = *uav_state;
+    uav_state_ = *uav_state;
   }
 
   if (!is_active) {
@@ -716,7 +720,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Eigen::Vector3d integral_feedback;
 
   {
-    std::scoped_lock lock(mutex_integrals);
+    std::scoped_lock lock(mutex_integrals_);
 
     integral_feedback << Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0;
   }
@@ -921,7 +925,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains, mutex_integrals);
+    std::scoped_lock lock(mutex_gains, mutex_integrals_);
 
     Eigen::Vector3d integration_switch(1, 1, 0);
 
@@ -1025,7 +1029,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_integrals);
+    std::scoped_lock lock(mutex_integrals_);
 
     ROS_INFO_THROTTLE(5.0, "[%s]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", this->name_.c_str(), Iw_w[X], Iw_w[Y], kiwxy_lim);
     ROS_INFO_THROTTLE(5.0, "[%s]: body error integral:  x %.2f N, y %.2f N, lim: %.2f N", this->name_.c_str(), Ib_b[X], Ib_b[Y], kibxy_lim);
@@ -1175,34 +1179,35 @@ void MpcController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg
 
   ROS_INFO("[%s]: switching the odometry source", this->name_.c_str());
 
-  // | ------------ calculate the heading difference ------------ |
-  double dyaw;
-  double uav_roll, uav_pitch, uav_yaw;
-  double new_roll, new_pitch, new_yaw;
+  auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
 
-  {
-    std::scoped_lock lock(mutex_uav_state);
+  // | ----- transform world disturabances to the new frame ----- |
 
-    // calculate the euler angles
-    tf::Quaternion uav_attitude;
-    quaternionMsgToTF(uav_state.pose.orientation, uav_attitude);
-    tf::Matrix3x3 m(uav_attitude);
-    m.getRPY(uav_roll, uav_pitch, uav_yaw);
-  }
+  geometry_msgs::Vector3Stamped world_integrals;
 
-  tf::Quaternion new_attitude;
-  quaternionMsgToTF(msg->pose.orientation, new_attitude);
-  tf::Matrix3x3 m2(new_attitude);
-  m2.getRPY(new_roll, new_pitch, new_yaw);
+  world_integrals.header.stamp    = ros::Time::now();
+  world_integrals.header.frame_id = uav_state.header.frame_id;
 
-  dyaw = new_yaw - uav_yaw;
+  world_integrals.vector.x = Iw_w[0];
+  world_integrals.vector.y = Iw_w[1];
+  world_integrals.vector.z = 0;
 
-  // | --------------- rotate the world integrals --------------- |
-  {
-    std::scoped_lock lock(mutex_integrals);
+  auto res = common_handlers_->transformer->transformSingle(msg->header.frame_id, world_integrals);
 
-    ROS_INFO("[%s]: rotating the world integrals by %.2f rad", this->name_.c_str(), dyaw);
-    Iw_w = rotate2d(Iw_w, dyaw);
+  if (res) {
+
+    std::scoped_lock lock(mutex_integrals_);
+
+    Iw_w[0] = res.value().vector.x;
+    Iw_w[1] = res.value().vector.y;
+  } else {
+
+    ROS_ERROR_THROTTLE(1.0, "[%s]: could not transform world integral to the new frame", this->name_.c_str());
+
+    std::scoped_lock lock(mutex_integrals_);
+
+    Iw_w[0] = 0;
+    Iw_w[1] = 0;
   }
 }
 
@@ -1212,7 +1217,7 @@ void MpcController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg
 
 void MpcController::resetDisturbanceEstimators(void) {
 
-  std::scoped_lock lock(mutex_integrals);
+  std::scoped_lock lock(mutex_integrals_);
 
   Iw_w = Eigen::Vector2d::Zero(2);
   Ib_b = Eigen::Vector2d::Zero(2);
