@@ -54,8 +54,8 @@ public:
   void resetDisturbanceEstimators(void);
 
 private:
-  bool is_initialized = false;
-  bool is_active      = false;
+  bool                                               is_initialized = false;
+  bool                                               is_active      = false;
   std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
   // --------------------------------------------------------------
