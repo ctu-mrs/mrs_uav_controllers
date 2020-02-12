@@ -19,6 +19,8 @@
 #include <mrs_lib/Utils.h>
 #include <mrs_lib/mutex.h>
 
+#include <geometry_msgs/Vector3Stamped.h>
+
 //}
 
 #define X 0
@@ -899,9 +901,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // |              compensated desired acceleration              |
   // --------------------------------------------------------------
 
-  double desired_x_accel;
-  double desired_y_accel;
-  double desired_z_accel;
+  double desired_x_accel = 0;
+  double desired_y_accel = 0;
+  double desired_z_accel = 0;
 
   {
     Eigen::Quaterniond des_quater = Eigen::Quaterniond(Rd);
@@ -911,12 +913,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     Eigen::Vector3d thrust_vector = thrust_force * uav_z_in_world;
 
-    /* double world_pitch = atan2(uav_z_in_world[0], uav_z_in_world[2]); */
-    /* double world_roll  = atan2(uav_z_in_world[1], uav_z_in_world[2]); */
+    double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w[0] / total_mass) - (Ib_w[0] / total_mass);
+    double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w[1] / total_mass) - (Ib_w[1] / total_mass);
+    double world_accel_z = reference->acceleration.z;
 
-    desired_x_accel = (thrust_vector[0] / total_mass) - (Iw_w[0] / total_mass) - (Ib_w[0] / total_mass);
-    desired_y_accel = (thrust_vector[1] / total_mass) - (Iw_w[1] / total_mass) - (Ib_w[1] / total_mass);
-    desired_z_accel = reference->acceleration.z;
+    geometry_msgs::Vector3Stamped world_accel;
+    world_accel.header.stamp    = ros::Time::now();
+    world_accel.header.frame_id = uav_state->header.frame_id;
+    world_accel.vector.x        = world_accel_x;
+    world_accel.vector.y        = world_accel_y;
+    world_accel.vector.y        = world_accel_z;
+
+    auto res = common_handlers_->transformer->transformSingle("fcu", world_accel);
+
+    if (res) {
+
+      desired_x_accel = res.value().vector.x;
+      desired_y_accel = res.value().vector.y;
+      desired_z_accel = res.value().vector.z;
+    }
   }
 
   // | --------------- fill the resulting command --------------- |
