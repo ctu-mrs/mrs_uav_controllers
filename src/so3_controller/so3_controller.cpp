@@ -934,7 +934,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     world_accel.header.frame_id = uav_state->header.frame_id;
     world_accel.vector.x        = world_accel_x;
     world_accel.vector.y        = world_accel_y;
-    world_accel.vector.y        = world_accel_z;
+    world_accel.vector.z        = world_accel_z;
 
     auto res = common_handlers_->transformer->transformSingle("fcu", world_accel);
 
