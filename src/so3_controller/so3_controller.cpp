@@ -699,13 +699,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   /* output */
   double thrust_force = f.dot(R.col(2));
 
-  // alternative form of getting the thrust force
-  /* double thrust_force = f.dot(R.col(2)) * R.col(2).dot(Rd.col(2)); */
-
   double thrust = 0;
 
   if (thrust_force >= 0) {
-    thrust = sqrt((thrust_force / 10.0) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    thrust = sqrt(thrust_force) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
   } else {
     ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%.2f)", thrust_force);
   }
@@ -888,8 +885,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // |            report on the values of the integrals           |
   // --------------------------------------------------------------
 
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %1.2f N, y %1.2f N, lim: %1.2f N", Iw_w[X], Iw_w[Y], kiwxy_lim);
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %1.2f N, y %1.2f N, lim: %1.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %0.2f N, y %0.2f N, lim: %0.2f N", Iw_w[X], Iw_w[Y], kiwxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %0.2f N, y %0.2f N, lim: %0.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
 
   // --------------------------------------------------------------
   // |                 produce the control output                 |
@@ -897,6 +894,32 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
+
+  // --------------------------------------------------------------
+  // |              compensated desired acceleration              |
+  // --------------------------------------------------------------
+
+  double desired_x_accel;
+  double desired_y_accel;
+  double desired_z_accel;
+
+  {
+    Eigen::Quaterniond des_quater = Eigen::Quaterniond(Rd);
+
+    // rotate the drone's z axis
+    Eigen::Vector3d uav_z_in_world = des_quater * Eigen::Vector3d(0, 0, 1);
+
+    Eigen::Vector3d thrust_vector = thrust_force * uav_z_in_world;
+
+    /* double world_pitch = atan2(uav_z_in_world[0], uav_z_in_world[2]); */
+    /* double world_roll  = atan2(uav_z_in_world[1], uav_z_in_world[2]); */
+
+    desired_x_accel = (thrust_vector[0] / total_mass) - (Iw_w[0] / total_mass) - (Ib_w[0] / total_mass);
+    desired_y_accel = (thrust_vector[1] / total_mass) - (Iw_w[1] / total_mass) - (Ib_w[1] / total_mass);
+    desired_z_accel = reference->acceleration.z;
+  }
+
+  // | --------------- fill the resulting command --------------- |
 
   {
     std::scoped_lock lock(mutex_output_mode);
@@ -938,9 +961,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion");
     }
 
-    output_command->desired_acceleration.x = f[0] / total_mass;
-    output_command->desired_acceleration.y = f[1] / total_mass;
-    output_command->desired_acceleration.z = f[2] / total_mass;
+    output_command->desired_acceleration.x = desired_x_accel;
+    output_command->desired_acceleration.y = desired_y_accel;
+    output_command->desired_acceleration.z = desired_z_accel;
   }
 
   if (rampup_active_) {
