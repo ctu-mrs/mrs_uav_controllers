@@ -1,3 +1,5 @@
+#define VERSION "0.0.3.0"
+
 /* includes //{ */
 
 #include <ros/ros.h>
@@ -59,8 +61,11 @@ public:
   void resetDisturbanceEstimators(void);
 
 private:
+  std::string _version_;
+
   bool is_initialized = false;
   bool is_active      = false;
+
   std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
   // --------------------------------------------------------------
@@ -176,6 +181,14 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
 
   mrs_lib::ParamLoader param_loader(nh_, "AccelerationController");
 
+  param_loader.load_param("version", _version_);
+
+  if (_version_ != VERSION) {
+
+    ROS_ERROR("[AccelerationController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
+    ros::shutdown();
+  }
+
   param_loader.load_param("enable_profiler", profiler_enabled_);
 
   // | --------------------- mpc controller --------------------- |
@@ -282,7 +295,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
     ros::shutdown();
   }
 
-  ROS_INFO("[AccelerationController]: initialized");
+  ROS_INFO("[AccelerationController]: initialized, version %s", VERSION);
 
   is_initialized = true;
 }

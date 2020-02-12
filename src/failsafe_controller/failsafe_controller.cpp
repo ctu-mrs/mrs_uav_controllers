@@ -1,3 +1,5 @@
+#define VERSION "0.0.3.0"
+
 /* includes //{ */
 
 #include <ros/ros.h>
@@ -42,8 +44,11 @@ public:
   void resetDisturbanceEstimators(void);
 
 private:
+  std::string _version_;
+
   bool is_initialized_ = false;
   bool is_active_      = false;
+
   std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
   double uav_mass_;
@@ -100,6 +105,14 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
 
+  param_loader.load_param("version", _version_);
+
+  if (_version_ != VERSION) {
+
+    ROS_ERROR("[FailsafeController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
+    ros::shutdown();
+  }
+
   param_loader.load_param("thrust_decrease_rate", _thrust_decrease_rate_);
   param_loader.load_param("enable_profiler", profiler_enabled_);
   param_loader.load_param("initial_thrust_percentage", _initial_thrust_percentage_);
@@ -125,7 +138,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
     ros::shutdown();
   }
 
-  ROS_INFO("[FailsafeController]: initialized");
+  ROS_INFO("[FailsafeController]: initialized, version %s", VERSION);
 
   is_initialized_ = true;
 }

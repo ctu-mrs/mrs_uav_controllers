@@ -1,3 +1,5 @@
+#define VERSION "0.0.3.0"
+
 /* includes //{ */
 
 #include <ros/ros.h>
@@ -54,8 +56,11 @@ public:
   void resetDisturbanceEstimators(void);
 
 private:
-  bool                                               is_initialized = false;
-  bool                                               is_active      = false;
+  std::string _version_;
+
+  bool is_initialized = false;
+  bool is_active      = false;
+
   std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
   // --------------------------------------------------------------
@@ -141,6 +146,14 @@ void PartialLandingController::initialize(const ros::NodeHandle &parent_nh, [[ma
 
   mrs_lib::ParamLoader param_loader(nh_, "PartialLandingController");
 
+  param_loader.load_param("version", _version_);
+
+  if (_version_ != VERSION) {
+
+    ROS_ERROR("[PartialLandingController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
+    ros::shutdown();
+  }
+
   param_loader.load_param("enable_profiler", profiler_enabled_);
 
   // attitude gains
@@ -200,7 +213,7 @@ void PartialLandingController::initialize(const ros::NodeHandle &parent_nh, [[ma
     ros::shutdown();
   }
 
-  ROS_INFO("[PartialLandingController]: initialized");
+  ROS_INFO("[PartialLandingController]: initialized, version %s", VERSION);
 
   is_initialized = true;
 }

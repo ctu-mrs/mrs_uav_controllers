@@ -1,3 +1,5 @@
+version: "0.0.3.0"
+
 default_gains:
 
   # Gains in this file SHOULD NOT BE CHANGED, since they are not used most of the times.
