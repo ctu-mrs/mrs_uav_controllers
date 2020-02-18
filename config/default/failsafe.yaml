@@ -1,4 +1,4 @@
-version: "0.0.3.0"
+version: "0.0.4.0"
 
 thrust_decrease_rate: 0.02 # [1/s]
 
