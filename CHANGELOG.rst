@@ -2,6 +2,40 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* update darpa green motors params
+* fixed fcu acceleration output
+* added version checks
+* removed the Baca thrust constant
+* acceleration published in fcu
+* updated accel publishers
+* refactored odometry switch with transformer
+* increased timeout for profiler routine
+* decreased mpc integral gains
+* added mpc initial condition validation
+* decreased mpc and emergency max tilt to 30 deg
+* updated t650 attiude controller's gains
+* updated atttitude controller's outputs
+* added rampup into attitude command
+* refactoring uninitialized variables
+* added verbosity to rampup
+* fixed mass initialization in rampup
+* fixed wrong mpc gains for hardware
+* Add f450 motor params for grey/green darpa t-motors
+* updated failsafe activation
+* PartialLanding: fixed prints in activate()
+* increased t650 mpc integral gains
+* set emergency controller's integral gains to 0
+* updated the flip mitigation
+* added rampup to mpc and so3
+* updated the flip mitigation
+* updated nsf gains
+* added the option for speed controller integrals to so3 and mpc
+* updated controller's interface
+* updated to new attitude cmd flags
+* Contributors: Tomas Baca
+
 0.0.3 (2019-10-25)
 ------------------
 * beautified the print for mitigating flip
