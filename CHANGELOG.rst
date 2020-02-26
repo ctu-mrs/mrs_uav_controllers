@@ -2,8 +2,8 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.0.5 (2020-02-26)
+------------------
 * allowed emergency ctrl to have non-zero integrals
 * Contributors: Tomas Baca
 
