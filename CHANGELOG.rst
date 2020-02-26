@@ -2,6 +2,11 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* allowed emergency ctrl to have non-zero integrals
+* Contributors: Tomas Baca
+
 0.0.4 (2020-02-18)
 ------------------
 * update darpa green motors params
