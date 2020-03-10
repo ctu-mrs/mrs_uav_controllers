@@ -909,9 +909,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  // --------------------------------------------------------------
-  // |              compensated desired acceleration              |
-  // --------------------------------------------------------------
+  // | ------------ compensated desired acceleration ------------ |
 
   double desired_x_accel = 0;
   double desired_y_accel = 0;
@@ -985,7 +983,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
       output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
 
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion");
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion (this is not normal)");
     }
 
     output_command->desired_acceleration.x = desired_x_accel;
