@@ -32,7 +32,7 @@ Changelog for package mrs_controllers
 * PartialLanding: fixed prints in activate()
 * increased t650 mpc integral gains
 * set emergency controller's integral gains to 0
-* updated the flip mitigation
+* updated flip mitigation
 * added rampup to mpc and so3
 * updated the flip mitigation
 * updated nsf gains

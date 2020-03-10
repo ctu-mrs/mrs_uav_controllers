@@ -749,7 +749,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // if the downwards part of the force is close to counter-act the gravity acceleration
   if (f[2] < 0) {
 
-    ROS_WARN_THROTTLE(1.0, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip", this->name_.c_str(), f[2]);
+    ROS_WARN_THROTTLE(1.0, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", this->name_.c_str(), f[2]);
 
     f << 0, 0, 1;
   }
@@ -758,7 +758,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   Eigen::Vector3d f_norm = f.normalized();
 
-  // calculate the force in the spherical coordinates
+  // calculate the force in spherical coordinates
   double theta = acos(f_norm[2]);
   double phi   = atan2(f_norm[1], f_norm[0]);
 
