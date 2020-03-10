@@ -51,8 +51,6 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  void dynamicReconfigureCallback(mrs_controllers::so3_controllerConfig &config, uint32_t level);
-
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
   Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
@@ -64,83 +62,101 @@ public:
 private:
   std::string _version_;
 
-  bool is_initialized = false;
-  bool is_active      = false;
+  bool is_initialized_ = false;
+  bool is_active_      = false;
 
   std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
-private:
+  // | ------------------------ uav state ----------------------- |
+
   mrs_msgs::UavState uav_state_;
   std::mutex         mutex_uav_state_;
 
-  // --------------------------------------------------------------
-  // |                     dynamic reconfigure                    |
-  // --------------------------------------------------------------
+  // | --------------- dynamic reconfigure server --------------- |
 
-  boost::recursive_mutex                        config_mutex_;
-  typedef mrs_controllers::so3_controllerConfig Config;
-  typedef dynamic_reconfigure::Server<Config>   ReconfigureServer;
-  boost::shared_ptr<ReconfigureServer>          reconfigure_server_;
-  void                                          drs_callback(mrs_controllers::so3_controllerConfig &config, uint32_t level);
-  mrs_controllers::so3_controllerConfig         drs_params;
+  boost::recursive_mutex                           mutex_drs_;
+  typedef mrs_controllers::so3_controllerConfig    DrsConfig_t;
+  typedef dynamic_reconfigure::Server<DrsConfig_t> Drs_t;
+  boost::shared_ptr<Drs_t>                         drs_;
+  void                                             callbackDrs(mrs_controllers::so3_controllerConfig &config, uint32_t level);
+  DrsConfig_t                                      drs_gains_;
 
-private:
-  double                       uav_mass_;
-  double                       uav_mass_difference;
-  double                       g_;
-  mrs_uav_manager::MotorParams motor_params_;
+  // | ---------- thrust generation and mass estimation --------- |
 
-  // actual gains (used and already filtered)
-  double kpxy, kiwxy, kibxy, kvxy, kaxy;
-  double kpz, kvz, kaz;
-  double kiwxy_lim, kibxy_lim;
-  double km, km_lim;
-  double kqxy, kqz;  // attitude gains
-  double kwxy, kwz;  // attitude rate gains
+  double                       _uav_mass_;
+  double                       uav_mass_difference_;
+  double                       _g_;
+  mrs_uav_manager::MotorParams _motor_params_;
 
-  // desired gains (set by DRS)
-  std::mutex mutex_gains;
-  std::mutex mutex_drs_params;
+  // gains that are used and already filtered
+  double kpxy_;       // position xy gain
+  double kvxy_;       // velocity xy gain
+  double kaxy_;       // acceleration xy gain (feed forward, =1)
+  double kiwxy_;      // world xy integral gain
+  double kibxy_;      // body xy integral gain
+  double kiwxy_lim_;  // world xy integral limit
+  double kibxy_lim_;  // body xy integral limit
+  double kpz_;        // position z gain
+  double kvz_;        // velocity z gain
+  double kaz_;        // acceleration z gain (feed forward, =1)
+  double km_;         // mass estimator gain
+  double km_lim_;     // mass estimator limit
+  double kqxy_;       // pitch/roll attitude gain
+  double kqz_;        // yaw attitude gain
+  double kwxy_;       // pitch/roll attitude rate gain
+  double kwz_;        // yaw attitude rate gain
 
-  double tilt_angle_saturation_;
-  double tilt_angle_failsafe_;
-  double thrust_saturation_;
+  std::mutex mutex_gains_;       // locks the gains the are used and filtered
+  std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
-  mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
-  mrs_msgs::AttitudeCommand           activation_control_command_;
+  // | ----------------------- gain muting ---------------------- |
 
-  ros::Time last_update;
-  bool      first_iteration = true;
+  bool   mute_lateral_gains_               = false;
+  bool   mutex_lateral_gains_after_toggle_ = false;
+  double _mute_coefficitent_;
 
-  bool   mute_lateral_gains               = false;
-  bool   mutex_lateral_gains_after_toggle = false;
-  double mute_coefficitent_;
+  // | --------------------- gain filtering --------------------- |
 
-private:
-  mrs_lib::Profiler profiler;
-  bool              profiler_enabled_ = false;
-
-private:
-  ros::Timer timer_gain_filter;
+  ros::Timer timer_gain_filter_;
   void       timerGainsFilter(const ros::TimerEvent &event);
 
-  int    gains_filter_timer_rate_;
-  double gains_filter_change_rate_;
-  double gains_filter_min_change_rate_;
+  double _gains_filter_timer_rate_;
+  double _gains_filter_change_rate_;
+  double _gains_filter_min_change_rate_;
 
-  double gains_filter_max_change_;  // calculated from change_rate_/timer_rate_;
-  double gains_filter_min_change_;  // calculated from change_rate_/timer_rate_;
+  double _gains_filter_max_change_;  // calculated from change_rate/timer_rate;
+  double _gains_filter_min_change_;  // calculated from change_rate/timer_rate;
 
-private:
+  // | ------------ controller limits and saturations ----------- |
+
+  double _tilt_angle_saturation_;
+  double _tilt_angle_failsafe_;
+  double _thrust_saturation_;
+
+  // | ------------------ activation and output ----------------- |
+
+  mrs_msgs::AttitudeCommand::ConstPtr last_attitude_cmd_;
+  mrs_msgs::AttitudeCommand           activation_attitude_cmd_;
+
+  ros::Time last_update_time_;
+  bool      first_iteration_ = true;
+
   int        output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
-  std::mutex mutex_output_mode;
+  std::mutex mutex_output_mode_;
 
-private:
-  Eigen::Vector2d Ib_b;  // body error integral in the body frame
-  Eigen::Vector2d Iw_w;  // world error integral in the world_frame
+  // | ------------------------ profiler_ ------------------------ |
+
+  mrs_lib::Profiler profiler_;
+  bool              _profiler_enabled_ = false;
+
+  // | ------------------------ integrals ----------------------- |
+
+  Eigen::Vector2d Ib_b_;  // body error integral in the body frame
+  Eigen::Vector2d Iw_w_;  // world error integral in the world_frame
   std::mutex      mutex_integrals_;
 
-private:
+  // | ------------------------- rampup ------------------------- |
+
   bool   _rampup_enabled_ = false;
   double _rampup_speed_;
 
@@ -148,7 +164,7 @@ private:
   double    rampup_thrust_;
   int       rampup_direction_;
   double    rampup_duration_;
-  ros::Time rampup_start_time;
+  ros::Time rampup_start_time_;
   ros::Time rampup_last_time_;
 };
 
@@ -167,16 +183,13 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
+  _motor_params_   = motor_params;
+  _uav_mass_       = uav_mass;
+  _g_              = g;
 
   ros::Time::waitForValid();
 
-  this->motor_params_ = motor_params;
-  this->uav_mass_     = uav_mass;
-  this->g_            = g;
-
-  // --------------------------------------------------------------
-  // |                       load parameters                      |
-  // --------------------------------------------------------------
+  // | ------------------- loading parameters ------------------- |
 
   mrs_lib::ParamLoader param_loader(nh_, "So3Controller");
 
@@ -188,17 +201,17 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
     ros::shutdown();
   }
 
-  param_loader.load_param("enable_profiler", profiler_enabled_);
+  param_loader.load_param("enable_profiler", _profiler_enabled_);
 
   // lateral gains
-  param_loader.load_param("default_gains/horizontal/kp", kpxy);
-  param_loader.load_param("default_gains/horizontal/kv", kvxy);
-  param_loader.load_param("default_gains/horizontal/ka", kaxy);
+  param_loader.load_param("default_gains/horizontal/kp", kpxy_);
+  param_loader.load_param("default_gains/horizontal/kv", kvxy_);
+  param_loader.load_param("default_gains/horizontal/ka", kaxy_);
 
-  param_loader.load_param("default_gains/horizontal/kiw", kiwxy);
-  param_loader.load_param("default_gains/horizontal/kib", kibxy);
+  param_loader.load_param("default_gains/horizontal/kiw", kiwxy_);
+  param_loader.load_param("default_gains/horizontal/kib", kibxy_);
 
-  param_loader.load_param("lateral_mute_coefficitent", mute_coefficitent_);
+  param_loader.load_param("lateral_mute_coefficitent", _mute_coefficitent_);
 
   // | ------------------------- rampup ------------------------- |
 
@@ -206,108 +219,100 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   param_loader.load_param("rampup/speed", _rampup_speed_);
 
   // height gains
-  param_loader.load_param("default_gains/vertical/kp", kpz);
-  param_loader.load_param("default_gains/vertical/kv", kvz);
-  param_loader.load_param("default_gains/vertical/ka", kaz);
+  param_loader.load_param("default_gains/vertical/kp", kpz_);
+  param_loader.load_param("default_gains/vertical/kv", kvz_);
+  param_loader.load_param("default_gains/vertical/ka", kaz_);
 
   // attitude gains
-  param_loader.load_param("default_gains/horizontal/attitude/kq", kqxy);
-  param_loader.load_param("default_gains/vertical/attitude/kq", kqz);
+  param_loader.load_param("default_gains/horizontal/attitude/kq", kqxy_);
+  param_loader.load_param("default_gains/vertical/attitude/kq", kqz_);
 
   // attitude rate gains
-  param_loader.load_param("default_gains/horizontal/attitude/kw", kwxy);
-  param_loader.load_param("default_gains/vertical/attitude/kw", kwz);
+  param_loader.load_param("default_gains/horizontal/attitude/kw", kwxy_);
+  param_loader.load_param("default_gains/vertical/attitude/kw", kwz_);
 
   // mass estimator
-  param_loader.load_param("default_gains/weight_estimator/km", km);
-  param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim);
+  param_loader.load_param("default_gains/weight_estimator/km", km_);
+  param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim_);
 
   // integrator limits
-  param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim);
-  param_loader.load_param("default_gains/horizontal/kib_lim", kibxy_lim);
+  param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim_);
+  param_loader.load_param("default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.load_param("tilt_angle_saturation", tilt_angle_saturation_);
-  param_loader.load_param("tilt_angle_failsafe", tilt_angle_failsafe_);
-  param_loader.load_param("thrust_saturation", thrust_saturation_);
+  param_loader.load_param("tilt_angle_saturation", _tilt_angle_saturation_);
+  param_loader.load_param("tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.load_param("thrust_saturation", _thrust_saturation_);
 
   // gain filtering
-  param_loader.load_param("gains_filter/filter_rate", gains_filter_timer_rate_);
-  param_loader.load_param("gains_filter/perc_change_rate", gains_filter_change_rate_);
-  param_loader.load_param("gains_filter/min_change_rate", gains_filter_min_change_rate_);
-
-  gains_filter_max_change_ = gains_filter_change_rate_ / gains_filter_timer_rate_;
-  gains_filter_min_change_ = gains_filter_min_change_rate_ / gains_filter_timer_rate_;
+  param_loader.load_param("gains_filter/filter_rate", _gains_filter_timer_rate_);
+  param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.load_param("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // output mode
   param_loader.load_param("output_mode", output_mode_);
+
+  if (!param_loader.loaded_successfully()) {
+    ROS_ERROR("[So3Controller]: could not load all parameters!");
+    ros::shutdown();
+  }
+
+  // | ---------------- prepare stuff from params --------------- |
+
+  _gains_filter_max_change_ = _gains_filter_change_rate_ / _gains_filter_timer_rate_;
+  _gains_filter_min_change_ = _gains_filter_min_change_rate_ / _gains_filter_timer_rate_;
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[So3Controller]: output mode has to be {1, 2}!");
   }
 
-  if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[So3Controller]: Could not load all parameters!");
-    ros::shutdown();
-  }
-
   // convert to radians
-  tilt_angle_saturation_ = (tilt_angle_saturation_ / 180) * M_PI;
-  tilt_angle_failsafe_   = (tilt_angle_failsafe_ / 180) * M_PI;
+  _tilt_angle_saturation_ = (_tilt_angle_saturation_ / 180.0) * M_PI;
+  _tilt_angle_failsafe_   = (_tilt_angle_failsafe_ / 180.0) * M_PI;
 
-  uav_mass_difference = 0;
-  Iw_w                = Eigen::Vector2d::Zero(2);
-  Ib_b                = Eigen::Vector2d::Zero(2);
+  // initialize the integrals
+  uav_mass_difference_ = 0;
+  Iw_w_                = Eigen::Vector2d::Zero(2);
+  Ib_b_                = Eigen::Vector2d::Zero(2);
 
-  // --------------------------------------------------------------
-  // |                     dynamic reconfigure                    |
-  // --------------------------------------------------------------
+  // | --------------- dynamic reconfigure server --------------- |
 
-  drs_params.kpxy        = kpxy;
-  drs_params.kvxy        = kvxy;
-  drs_params.kaxy        = kaxy;
-  drs_params.kiwxy       = kiwxy;
-  drs_params.kibxy       = kibxy;
-  drs_params.kpz         = kpz;
-  drs_params.kvz         = kvz;
-  drs_params.kaz         = kaz;
-  drs_params.kqxy        = kqxy;
-  drs_params.kqz         = kqz;
-  drs_params.kwxy        = kwxy;
-  drs_params.kwz         = kwz;
-  drs_params.kiwxy_lim   = kiwxy_lim;
-  drs_params.kibxy_lim   = kibxy_lim;
-  drs_params.km          = km;
-  drs_params.km_lim      = km_lim;
-  drs_params.output_mode = output_mode_;
+  drs_gains_.kpxy        = kpxy_;
+  drs_gains_.kvxy        = kvxy_;
+  drs_gains_.kaxy        = kaxy_;
+  drs_gains_.kiwxy       = kiwxy_;
+  drs_gains_.kibxy       = kibxy_;
+  drs_gains_.kpz         = kpz_;
+  drs_gains_.kvz         = kvz_;
+  drs_gains_.kaz         = kaz_;
+  drs_gains_.kqxy        = kqxy_;
+  drs_gains_.kqz         = kqz_;
+  drs_gains_.kwxy        = kwxy_;
+  drs_gains_.kwz         = kwz_;
+  drs_gains_.kiwxy_lim   = kiwxy_lim_;
+  drs_gains_.kibxy_lim   = kibxy_lim_;
+  drs_gains_.km          = km_;
+  drs_gains_.km_lim      = km_lim_;
+  drs_gains_.output_mode = output_mode_;
 
-  reconfigure_server_.reset(new ReconfigureServer(config_mutex_, nh_));
-  reconfigure_server_->updateConfig(drs_params);
-  ReconfigureServer::CallbackType f = boost::bind(&So3Controller::dynamicReconfigureCallback, this, _1, _2);
-  reconfigure_server_->setCallback(f);
+  drs_.reset(new Drs_t(mutex_drs_, nh_));
+  drs_->updateConfig(drs_gains_);
+  Drs_t::CallbackType f = boost::bind(&So3Controller::callbackDrs, this, _1, _2);
+  drs_->setCallback(f);
 
-  // --------------------------------------------------------------
-  // |                          profiler                          |
-  // --------------------------------------------------------------
+  // | ------------------------ profiler ------------------------ |
 
-  profiler = mrs_lib::Profiler(nh_, "So3Controller", profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(nh_, "So3Controller", _profiler_enabled_);
 
-  // --------------------------------------------------------------
-  // |                           timers                           |
-  // --------------------------------------------------------------
+  // | ------------------------- timers ------------------------- |
 
-  timer_gain_filter = nh_.createTimer(ros::Rate(gains_filter_timer_rate_), &So3Controller::timerGainsFilter, this);
+  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &So3Controller::timerGainsFilter, this);
 
   // | ----------------------- finish init ---------------------- |
 
-  if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[So3Controller]: Could not load all parameters!");
-    ros::shutdown();
-  }
-
   ROS_INFO("[So3Controller]: initialized, version %s", VERSION);
 
-  is_initialized = true;
+  is_initialized_ = true;
 }
 
 //}
@@ -318,35 +323,35 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[So3Controller]: activated without getting the last controller's command.");
+    ROS_WARN("[So3Controller]: activated without getting the last controller's command");
 
     return false;
 
   } else {
 
-    activation_control_command_ = *cmd;
-    uav_mass_difference         = cmd->mass_difference;
+    activation_attitude_cmd_ = *cmd;
+    uav_mass_difference_     = cmd->mass_difference;
 
-    activation_control_command_.controller_enforcing_constraints = false;
+    activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    Ib_b[0] = cmd->disturbance_bx_b;
-    Ib_b[1] = cmd->disturbance_by_b;
+    Ib_b_[0] = cmd->disturbance_bx_b;
+    Ib_b_[1] = cmd->disturbance_by_b;
 
-    Iw_w[0] = cmd->disturbance_wx_w;
-    Iw_w[1] = cmd->disturbance_wy_w;
+    Iw_w_[0] = cmd->disturbance_wx_w;
+    Iw_w_[1] = cmd->disturbance_wy_w;
 
     ROS_INFO(
-        "[So3Controller]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b: %.2f, %.2f N, Iw_w: %.2f, "
+        "[So3Controller]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: %.2f, "
         "%.2f N",
-        uav_mass_difference, Ib_b[0], Ib_b[1], Iw_w[0], Iw_w[1]);
+        uav_mass_difference_, Ib_b_[0], Ib_b_[1], Iw_w_[0], Iw_w_[1]);
 
-    ROS_INFO("[So3Controller]: activated with a last controller's command, mass difference %.2f kg.", uav_mass_difference);
+    ROS_INFO("[So3Controller]: activated with a last controller's command, mass difference %.2f kg", uav_mass_difference_);
   }
 
   // rampup check
   if (_rampup_enabled_) {
 
-    double hover_thrust      = sqrt(cmd->total_mass * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    double hover_thrust      = sqrt(cmd->total_mass * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
     double thrust_difference = hover_thrust - cmd->thrust;
 
     if (thrust_difference > 0) {
@@ -359,22 +364,22 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
     ROS_INFO("[So3Controller]: activating rampup with initial thrust: %.4f, target: %.4f", cmd->thrust, hover_thrust);
 
-    rampup_active_    = true;
-    rampup_start_time = ros::Time::now();
-    rampup_last_time_ = ros::Time::now();
-    rampup_thrust_    = cmd->thrust;
+    rampup_active_     = true;
+    rampup_start_time_ = ros::Time::now();
+    rampup_last_time_  = ros::Time::now();
+    rampup_thrust_     = cmd->thrust;
 
     rampup_duration_ = fabs(thrust_difference) / _rampup_speed_;
   }
 
-  first_iteration = true;
+  first_iteration_ = true;
 
   ROS_INFO("[So3Controller]: activated");
 
-  is_active = true;
+  is_active_ = true;
 
   return true;
-}  // namespace so3_controller
+}
 
 //}
 
@@ -382,9 +387,9 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
 void So3Controller::deactivate(void) {
 
-  is_active           = false;
-  first_iteration     = false;
-  uav_mass_difference = 0;
+  is_active_           = false;
+  first_iteration_     = false;
+  uav_mass_difference_ = 0;
 
   ROS_INFO("[So3Controller]: deactivated");
 }
@@ -396,7 +401,7 @@ void So3Controller::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &reference) {
 
-  mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
+  mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
 
   {
     std::scoped_lock lock(mutex_uav_state_);
@@ -404,49 +409,45 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     uav_state_ = *uav_state;
   }
 
-  if (!is_active) {
+  if (!is_active_) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  // --------------------------------------------------------------
-  // |                      calculate the dt                      |
-  // --------------------------------------------------------------
+  // | -------------------- calculate the dt -------------------- |
 
   double dt;
 
-  if (first_iteration) {
+  if (first_iteration_) {
 
-    last_update = uav_state->header.stamp;
+    last_update_time_ = uav_state->header.stamp;
 
-    first_iteration = false;
+    first_iteration_ = false;
 
     ROS_INFO("[So3Controller]: first iteration");
 
-    return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
+    return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
 
   } else {
 
-    dt          = (uav_state->header.stamp - last_update).toSec();
-    last_update = uav_state->header.stamp;
+    dt                = (uav_state->header.stamp - last_update_time_).toSec();
+    last_update_time_ = uav_state->header.stamp;
   }
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_DEBUG("[So3Controller]: the last odometry message came too close! %f", dt);
+    ROS_DEBUG("[So3Controller]: the last odometry message came too close (%.2f s)!", dt);
 
-    if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
+    if (last_attitude_cmd_ != mrs_msgs::AttitudeCommand::Ptr()) {
 
-      return last_output_command;
+      return last_attitude_cmd_;
 
     } else {
 
-      return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
+      return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
     }
   }
 
-  // --------------------------------------------------------------
-  // |                 calculate the euler angles                 |
-  // --------------------------------------------------------------
+  // | --------------- calculate the Euler angles --------------- |
 
   double         uav_yaw, uav_pitch, uav_roll;
   tf::Quaternion uav_attitude;
@@ -534,9 +535,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
 
-  // --------------------------------------------------------------
-  // |                  calculate control errors                  |
-  // --------------------------------------------------------------
+  // | -------------- calculate the control errors -------------- |
 
   // position control error
   Eigen::Vector3d Ep = Eigen::Vector3d::Zero(3);
@@ -552,9 +551,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Ev = Ov - Rv;
   }
 
-  // --------------------------------------------------------------
-  // |                            gains                           |
-  // --------------------------------------------------------------
+  // | --------------------- load the gains --------------------- |
 
   Eigen::Vector3d Ka = Eigen::Vector3d::Zero(3);
   Eigen::Array3d  Kp = Eigen::Array3d::Zero(3);
@@ -563,70 +560,68 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   Eigen::Array3d  Kw = Eigen::Array3d::Zero(3);
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains_);
 
     if (reference->use_position_horizontal) {
-      Kp[0] = kpxy;
-      Kp[1] = kpxy;
+      Kp[0] = kpxy_;
+      Kp[1] = kpxy_;
     } else {
       Kp[0] = 0;
       Kp[1] = 0;
     }
 
     if (reference->use_position_vertical) {
-      Kp[2] = kpz;
+      Kp[2] = kpz_;
     } else {
       Kp[2] = 0;
     }
 
     if (reference->use_velocity_horizontal) {
-      Kv[0] = kvxy;
-      Kv[1] = kvxy;
+      Kv[0] = kvxy_;
+      Kv[1] = kvxy_;
     } else {
       Kv[0] = 0;
       Kv[1] = 0;
     }
 
     if (reference->use_velocity_vertical) {
-      Kv[2] = kvz;
+      Kv[2] = kvz_;
     } else {
       Kv[2] = 0;
     }
 
     if (reference->use_acceleration) {
-      Ka << kaxy, kaxy, kaz;
+      Ka << kaxy_, kaxy_, kaz_;
     } else {
       Ka << 0, 0, 0;
     }
 
-    Kq << kqxy, kqxy, kqz;
+    Kq << kqxy_, kqxy_, kqz_;
 
     if (!reference->use_yaw) {
       Kq[2] = 0;
     }
 
-    Kw << kwxy, kwxy, kwz;
+    Kw << kwxy_, kwxy_, kwz_;
   }
 
-  Kp = Kp * (uav_mass_ + uav_mass_difference);
-  Kv = Kv * (uav_mass_ + uav_mass_difference);
+  Kp = Kp * (_uav_mass_ + uav_mass_difference_);
+  Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
-  // --------------------------------------------------------------
-  // |                 desired orientation matrix                 |
-  // --------------------------------------------------------------
+  // | --------------- desired orientation matrix --------------- |
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b, uav_yaw);
+  Eigen::Vector2d Ib_w = rotate2d(Ib_b_, uav_yaw);
 
-  double total_mass = uav_mass_ + uav_mass_difference;
+  double total_mass = _uav_mass_ + uav_mass_difference_;
 
-  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, g_) + Ra);
+  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra);
   Eigen::Vector3d position_feedback = -Kp * Ep.array();
   Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
   Eigen::Vector3d integral_feedback;
   {
     std::scoped_lock lock(mutex_integrals_);
 
-    integral_feedback << Ib_w[0] + Iw_w[0], Ib_w[1] + Iw_w[1], 0;
+    integral_feedback << Ib_w[0] + Iw_w_[0], Ib_w[1] + Iw_w_[1], 0;
   }
 
   Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
@@ -637,7 +632,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // if the downwards part of the force is close to counter-act the gravity acceleration
   if (f[2] < 0) {
 
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating the flip", f[2]);
+    ROS_WARN_THROTTLE(1.0, "[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
 
     f << 0, 0, 1;
   }
@@ -646,22 +641,22 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   Eigen::Vector3d f_norm = f.normalized();
 
-  // calculate the force in the spherical coordinates
+  // calculate the force in spherical coordinates
   double theta = acos(f_norm[2]);
   double phi   = atan2(f_norm[1], f_norm[0]);
 
   // check for the failsafe limit
   if (!std::isfinite(theta)) {
 
-    ROS_ERROR("[So3Controller]: NaN detected in variable \"theta\", returning null");
+    ROS_ERROR("[So3Controller]: NaN detected in variable 'theta', returning null");
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (tilt_angle_failsafe_ > 1e-3 && theta > tilt_angle_failsafe_) {
+  if (_tilt_angle_failsafe_ > 1e-3 && theta > _tilt_angle_failsafe_) {
 
-    ROS_ERROR("[So3Controller]: The produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
-              (180.0 / M_PI) * tilt_angle_failsafe_);
+    ROS_ERROR("[So3Controller]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
+              (180.0 / M_PI) * _tilt_angle_failsafe_);
     ROS_INFO("[So3Controller]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
     ROS_INFO("[So3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
     ROS_INFO("[So3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
@@ -675,10 +670,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   }
 
   // saturate the angle
-  if (tilt_angle_saturation_ > 1e-3 && theta > tilt_angle_saturation_) {
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %f deg, saturated %f deg", (theta / M_PI) * 180.0,
-                      (tilt_angle_saturation_ / M_PI) * 180.0);
-    theta = tilt_angle_saturation_;
+  if (_tilt_angle_saturation_ > 1e-3 && theta > _tilt_angle_saturation_) {
+    ROS_WARN_THROTTLE(1.0, "[So3Controller]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
+                      (_tilt_angle_saturation_ / M_PI) * 180.0);
+    theta = _tilt_angle_saturation_;
   }
 
   // reconstruct the vector
@@ -716,21 +711,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   double thrust = 0;
 
   if (thrust_force >= 0) {
-    thrust = sqrt(thrust_force) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    thrust = sqrt(thrust_force) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
   } else {
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: Just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[So3Controller]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
   }
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
 
     thrust = 0;
-    ROS_ERROR("[So3Controller]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[So3Controller]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
 
-  } else if (thrust > thrust_saturation_) {
+  } else if (thrust > _thrust_saturation_) {
 
-    thrust = thrust_saturation_;
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to %.2f", thrust_saturation_);
+    thrust = _thrust_saturation_;
+    ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to %.2f", _thrust_saturation_);
 
   } else if (thrust < 0.0) {
 
@@ -745,10 +740,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // |                      update parameters                     |
   // --------------------------------------------------------------
 
-  if (mute_lateral_gains && !reference->disable_position_gains) {
-    mutex_lateral_gains_after_toggle = true;
+  if (mute_lateral_gains_ && !reference->disable_position_gains) {
+    mutex_lateral_gains_after_toggle_ = true;
   }
-  mute_lateral_gains = reference->disable_position_gains;
+  mute_lateral_gains_ = reference->disable_position_gains;
 
   /* world error integrator //{ */
 
@@ -757,48 +752,48 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains, mutex_integrals_);
+    std::scoped_lock lock(mutex_gains_, mutex_integrals_);
 
     Eigen::Vector3d integration_switch(1, 1, 0);
 
     // integrate the world error
     if (reference->use_position_horizontal) {
-      Iw_w -= kiwxy * Ep.head(2) * dt;
+      Iw_w_ -= kiwxy_ * Ep.head(2) * dt;
     } else if (reference->use_velocity_horizontal) {
-      Iw_w -= kiwxy * Ev.head(2) * dt;
+      Iw_w_ -= kiwxy_ * Ev.head(2) * dt;
     }
 
-    // saturate the world
+    // saturate the world X
     double world_integral_saturated = false;
-    if (!std::isfinite(Iw_w[0])) {
-      Iw_w[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Iw_w[0]\", setting it to 0!!!");
-    } else if (Iw_w[0] > kiwxy_lim) {
-      Iw_w[0]                  = kiwxy_lim;
+    if (!std::isfinite(Iw_w_[0])) {
+      Iw_w_[0] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
+    } else if (Iw_w_[0] > kiwxy_lim_) {
+      Iw_w_[0]                 = kiwxy_lim_;
       world_integral_saturated = true;
-    } else if (Iw_w[0] < -kiwxy_lim) {
-      Iw_w[0]                  = -kiwxy_lim;
+    } else if (Iw_w_[0] < -kiwxy_lim_) {
+      Iw_w_[0]                 = -kiwxy_lim_;
       world_integral_saturated = true;
     }
 
-    if (kiwxy_lim >= 0 && world_integral_saturated) {
+    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's world X integral is being saturated!");
     }
 
-    // saturate the world
+    // saturate the world Y
     world_integral_saturated = false;
-    if (!std::isfinite(Iw_w[1])) {
-      Iw_w[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Iw_w[1]\", setting it to 0!!!");
-    } else if (Iw_w[1] > kiwxy_lim) {
-      Iw_w[1]                  = kiwxy_lim;
+    if (!std::isfinite(Iw_w_[1])) {
+      Iw_w_[1] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!");
+    } else if (Iw_w_[1] > kiwxy_lim_) {
+      Iw_w_[1]                 = kiwxy_lim_;
       world_integral_saturated = true;
-    } else if (Iw_w[1] < -kiwxy_lim) {
-      Iw_w[1]                  = -kiwxy_lim;
+    } else if (Iw_w_[1] < -kiwxy_lim_) {
+      Iw_w_[1]                 = -kiwxy_lim_;
       world_integral_saturated = true;
     }
 
-    if (kiwxy_lim >= 0 && world_integral_saturated) {
+    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's world Y integral is being saturated!");
     }
   }
@@ -812,7 +807,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains_);
 
     // rotate the control errors to the body
     Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -uav_yaw);
@@ -820,42 +815,42 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     // integrate the body error
     if (reference->use_position_horizontal) {
-      Ib_b -= kibxy * Ep_body * dt;
+      Ib_b_ -= kibxy_ * Ep_body * dt;
     } else if (reference->use_velocity_horizontal) {
-      Ib_b -= kibxy * Ev_body * dt;
+      Ib_b_ -= kibxy_ * Ev_body * dt;
     }
 
     // saturate the body
     double body_integral_saturated = false;
-    if (!std::isfinite(Ib_b[0])) {
-      Ib_b[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Ib_b[0]\", setting it to 0!!!");
-    } else if (Ib_b[0] > kibxy_lim) {
-      Ib_b[0]                 = kibxy_lim;
+    if (!std::isfinite(Ib_b_[0])) {
+      Ib_b_[0] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
+    } else if (Ib_b_[0] > kibxy_lim_) {
+      Ib_b_[0]                = kibxy_lim_;
       body_integral_saturated = true;
-    } else if (Ib_b[0] < -kibxy_lim) {
-      Ib_b[0]                 = -kibxy_lim;
+    } else if (Ib_b_[0] < -kibxy_lim_) {
+      Ib_b_[0]                = -kibxy_lim_;
       body_integral_saturated = true;
     }
 
-    if (kibxy_lim > 0 && body_integral_saturated) {
+    if (kibxy_lim_ > 0 && body_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's body pitch integral is being saturated!");
     }
 
     // saturate the body
     body_integral_saturated = false;
-    if (!std::isfinite(Ib_b[1])) {
-      Ib_b[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"Ib_b[1]\", setting it to 0!!!");
-    } else if (Ib_b[1] > kibxy_lim) {
-      Ib_b[1]                 = kibxy_lim;
+    if (!std::isfinite(Ib_b_[1])) {
+      Ib_b_[1] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!");
+    } else if (Ib_b_[1] > kibxy_lim_) {
+      Ib_b_[1]                = kibxy_lim_;
       body_integral_saturated = true;
-    } else if (Ib_b[1] < -kibxy_lim) {
-      Ib_b[1]                 = -kibxy_lim;
+    } else if (Ib_b_[1] < -kibxy_lim_) {
+      Ib_b_[1]                = -kibxy_lim_;
       body_integral_saturated = true;
     }
 
-    if (kibxy_lim > 0 && body_integral_saturated) {
+    if (kibxy_lim_ > 0 && body_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[So3Controller]: SO3's body roll integral is being saturated!");
     }
   }
@@ -869,38 +864,36 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains_);
 
     if (reference->use_position_vertical && !rampup_active_) {
-      uav_mass_difference -= km * Ep[2] * dt;
+      uav_mass_difference_ -= km_ * Ep[2] * dt;
     }
 
     // saturate the mass estimator
     bool uav_mass_saturated = false;
-    if (!std::isfinite(uav_mass_difference)) {
-      uav_mass_difference = 0;
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: NaN detected in variable \"uav_mass_difference\", setting it to 0 and returning!!!");
-    } else if (uav_mass_difference > km_lim) {
-      uav_mass_difference = km_lim;
-      uav_mass_saturated  = true;
-    } else if (uav_mass_difference < -km_lim) {
-      uav_mass_difference = -km_lim;
-      uav_mass_saturated  = true;
+    if (!std::isfinite(uav_mass_difference_)) {
+      uav_mass_difference_ = 0;
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
+    } else if (uav_mass_difference_ > km_lim_) {
+      uav_mass_difference_ = km_lim_;
+      uav_mass_saturated   = true;
+    } else if (uav_mass_difference_ < -km_lim_) {
+      uav_mass_difference_ = -km_lim_;
+      uav_mass_saturated   = true;
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3Controller]: The uav_mass_difference is being saturated to %1.3f!", uav_mass_difference);
+      ROS_WARN_THROTTLE(1.0, "[So3Controller]: The UAV mass difference is being saturated to %.2f!", uav_mass_difference_);
     }
   }
 
   //}
 
-  // --------------------------------------------------------------
-  // |            report on the values of the integrals           |
-  // --------------------------------------------------------------
+  // | ----------- report the values of the integrals ----------- |
 
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %0.2f N, y %0.2f N, lim: %0.2f N", Iw_w[X], Iw_w[Y], kiwxy_lim);
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %0.2f N, y %0.2f N, lim: %0.2f N", Ib_b[X], Ib_b[Y], kibxy_lim);
+  ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", Iw_w_[X], Iw_w_[Y], kiwxy_lim_);
+  ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %.2f N, y %.2f N, lim: %.2f N", Ib_b_[X], Ib_b_[Y], kibxy_lim_);
 
   // --------------------------------------------------------------
   // |                 produce the control output                 |
@@ -923,8 +916,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     Eigen::Vector3d thrust_vector = thrust_force * uav_z_in_world;
 
-    double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w[0] / total_mass) - (Ib_w[0] / total_mass);
-    double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w[1] / total_mass) - (Ib_w[1] / total_mass);
+    double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
+    double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
     double world_accel_z = reference->acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;
@@ -947,7 +940,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // | --------------- fill the resulting command --------------- |
 
   {
-    std::scoped_lock lock(mutex_output_mode);
+    std::scoped_lock lock(mutex_output_mode_);
 
     if (output_mode_ == OUTPUT_ATTITUDE_RATE) {
 
@@ -994,7 +987,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   if (rampup_active_) {
 
     // deactivate the rampup when the times up
-    if (fabs((ros::Time::now() - rampup_start_time).toSec()) >= rampup_duration_) {
+    if (fabs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
 
       rampup_active_         = false;
       output_command->thrust = thrust;
@@ -1020,23 +1013,23 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   output_command->ramping_up = rampup_active_;
 
-  output_command->mass_difference = uav_mass_difference;
+  output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = total_mass;
 
-  output_command->disturbance_bx_b = Ib_b[0];
-  output_command->disturbance_by_b = Ib_b[1];
+  output_command->disturbance_bx_b = Ib_b_[0];
+  output_command->disturbance_by_b = Ib_b_[1];
 
   output_command->disturbance_bx_w = Ib_w[0];
   output_command->disturbance_by_w = Ib_w[1];
 
-  output_command->disturbance_wx_w = Iw_w[0];
-  output_command->disturbance_wy_w = Iw_w[1];
+  output_command->disturbance_wx_w = Iw_w_[0];
+  output_command->disturbance_wy_w = Iw_w_[1];
 
   output_command->controller_enforcing_constraints = false;
 
   output_command->controller = "So3Controller";
 
-  last_output_command = output_command;
+  last_attitude_cmd_ = output_command;
 
   return output_command;
 }
@@ -1049,7 +1042,7 @@ const mrs_msgs::ControllerStatus So3Controller::getStatus() {
 
   mrs_msgs::ControllerStatus controller_status;
 
-  controller_status.active = is_active;
+  controller_status.active = is_active_;
 
   return controller_status;
 }
@@ -1071,8 +1064,8 @@ void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg
   world_integrals.header.stamp    = ros::Time::now();
   world_integrals.header.frame_id = uav_state.header.frame_id;
 
-  world_integrals.vector.x = Iw_w[0];
-  world_integrals.vector.y = Iw_w[1];
+  world_integrals.vector.x = Iw_w_[0];
+  world_integrals.vector.y = Iw_w_[1];
   world_integrals.vector.z = 0;
 
   auto res = common_handlers_->transformer->transformSingle(msg->header.frame_id, world_integrals);
@@ -1081,16 +1074,16 @@ void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg
 
     std::scoped_lock lock(mutex_integrals_);
 
-    Iw_w[0] = res.value().vector.x;
-    Iw_w[1] = res.value().vector.y;
+    Iw_w_[0] = res.value().vector.x;
+    Iw_w_[1] = res.value().vector.y;
   } else {
 
     ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform world integral to the new frame");
 
     std::scoped_lock lock(mutex_integrals_);
 
-    Iw_w[0] = 0;
-    Iw_w[1] = 0;
+    Iw_w_[0] = 0;
+    Iw_w_[1] = 0;
   }
 }
 
@@ -1102,8 +1095,8 @@ void So3Controller::resetDisturbanceEstimators(void) {
 
   std::scoped_lock lock(mutex_integrals_);
 
-  Iw_w = Eigen::Vector2d::Zero(2);
-  Ib_b = Eigen::Vector2d::Zero(2);
+  Iw_w_ = Eigen::Vector2d::Zero(2);
+  Ib_b_ = Eigen::Vector2d::Zero(2);
 }
 
 //}
@@ -1112,14 +1105,14 @@ void So3Controller::resetDisturbanceEstimators(void) {
 // |                          callbacks                         |
 // --------------------------------------------------------------
 
-/* //{ dynamicReconfigureCallback() */
+/* //{ callbackDrs() */
 
-void So3Controller::dynamicReconfigureCallback(mrs_controllers::so3_controllerConfig &config, [[maybe_unused]] uint32_t level) {
+void So3Controller::callbackDrs(mrs_controllers::so3_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
-    std::scoped_lock lock(mutex_drs_params, mutex_output_mode);
+    std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
 
-    drs_params = config;
+    drs_gains_ = config;
 
     output_mode_ = config.output_mode;
   }
@@ -1137,36 +1130,36 @@ void So3Controller::dynamicReconfigureCallback(mrs_controllers::so3_controllerCo
 
 void So3Controller::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", gains_filter_timer_rate_, 0.05, event);
+  mrs_lib::Routine profiler_routine = profiler_.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
 
-  double gain_coeff                = 1;
-  bool   bypass_filter             = mute_lateral_gains || mutex_lateral_gains_after_toggle;
-  mutex_lateral_gains_after_toggle = false;
+  double gain_coeff                 = 1;
+  bool   bypass_filter              = mute_lateral_gains_ || mutex_lateral_gains_after_toggle_;
+  mutex_lateral_gains_after_toggle_ = false;
 
-  if (mute_lateral_gains) {
-    gain_coeff = mute_coefficitent_;
+  if (mute_lateral_gains_) {
+    gain_coeff = _mute_coefficitent_;
   }
 
   // calculate the difference
   {
-    std::scoped_lock lock(mutex_gains, mutex_drs_params);
+    std::scoped_lock lock(mutex_gains_, mutex_drs_params_);
 
-    kpxy      = calculateGainChange(kpxy, drs_params.kpxy * gain_coeff, bypass_filter, "kpxy");
-    kvxy      = calculateGainChange(kvxy, drs_params.kvxy * gain_coeff, bypass_filter, "kvxy");
-    kaxy      = calculateGainChange(kaxy, drs_params.kaxy * gain_coeff, bypass_filter, "kaxy");
-    kiwxy     = calculateGainChange(kiwxy, drs_params.kiwxy * gain_coeff, bypass_filter, "kiwxy");
-    kibxy     = calculateGainChange(kibxy, drs_params.kibxy * gain_coeff, bypass_filter, "kibxy");
-    kpz       = calculateGainChange(kpz, drs_params.kpz, false, "kpz");
-    kvz       = calculateGainChange(kvz, drs_params.kvz, false, "kvz");
-    kaz       = calculateGainChange(kaz, drs_params.kaz, false, "kaz");
-    kqxy      = calculateGainChange(kqxy, drs_params.kqxy, false, "kqxy");
-    kqz       = calculateGainChange(kqz, drs_params.kqz, false, "kqz");
-    kwxy      = calculateGainChange(kwxy, drs_params.kwxy, false, "kwxy");
-    kwz       = calculateGainChange(kwz, drs_params.kwz, false, "kwz");
-    km        = calculateGainChange(km, drs_params.km, false, "km");
-    kiwxy_lim = calculateGainChange(kiwxy_lim, drs_params.kiwxy_lim, false, "kiwxy_lim");
-    kibxy_lim = calculateGainChange(kibxy_lim, drs_params.kibxy_lim, false, "kibxy_lim");
-    km_lim    = calculateGainChange(km_lim, drs_params.km_lim, false, "km_lim");
+    kpxy_      = calculateGainChange(kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy");
+    kvxy_      = calculateGainChange(kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy");
+    kaxy_      = calculateGainChange(kaxy_, drs_gains_.kaxy * gain_coeff, bypass_filter, "kaxy");
+    kiwxy_     = calculateGainChange(kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy");
+    kibxy_     = calculateGainChange(kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy");
+    kpz_       = calculateGainChange(kpz_, drs_gains_.kpz, false, "kpz");
+    kvz_       = calculateGainChange(kvz_, drs_gains_.kvz, false, "kvz");
+    kaz_       = calculateGainChange(kaz_, drs_gains_.kaz, false, "kaz");
+    kqxy_      = calculateGainChange(kqxy_, drs_gains_.kqxy, false, "kqxy");
+    kqz_       = calculateGainChange(kqz_, drs_gains_.kqz, false, "kqz");
+    kwxy_      = calculateGainChange(kwxy_, drs_gains_.kwxy, false, "kwxy");
+    kwz_       = calculateGainChange(kwz_, drs_gains_.kwz, false, "kwz");
+    km_        = calculateGainChange(km_, drs_gains_.km, false, "km");
+    kiwxy_lim_ = calculateGainChange(kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim");
+    kibxy_lim_ = calculateGainChange(kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim");
+    km_lim_    = calculateGainChange(km_lim_, drs_gains_.km_lim, false, "km_lim");
   }
 }
 
@@ -1189,21 +1182,21 @@ double So3Controller::calculateGainChange(const double current_value, const doub
     double saturated_change;
 
     if (fabs(current_value) < 1e-6) {
-      change *= gains_filter_max_change_;
+      change *= _gains_filter_max_change_;
     } else {
 
       saturated_change = change;
 
       change_in_perc = (current_value + saturated_change) / current_value - 1.0;
 
-      if (change_in_perc > gains_filter_max_change_) {
-        saturated_change = current_value * gains_filter_max_change_;
-      } else if (change_in_perc < -gains_filter_max_change_) {
-        saturated_change = current_value * -gains_filter_max_change_;
+      if (change_in_perc > _gains_filter_max_change_) {
+        saturated_change = current_value * _gains_filter_max_change_;
+      } else if (change_in_perc < -_gains_filter_max_change_) {
+        saturated_change = current_value * -_gains_filter_max_change_;
       }
 
-      if (fabs(saturated_change) < fabs(change) * gains_filter_min_change_) {
-        change *= gains_filter_min_change_;
+      if (fabs(saturated_change) < fabs(change) * _gains_filter_min_change_) {
+        change *= _gains_filter_min_change_;
       } else {
         change = saturated_change;
       }
@@ -1211,7 +1204,7 @@ double So3Controller::calculateGainChange(const double current_value, const doub
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[So3Controller]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[So3Controller]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
   }
 
   return current_value + change;
