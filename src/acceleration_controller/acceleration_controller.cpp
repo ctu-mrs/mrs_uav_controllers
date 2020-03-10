@@ -253,7 +253,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
   }
 
   // convert to radians
-  _max_tilt_angle_ = (_max_tilt_angle_ / 180) * M_PI;
+  _max_tilt_angle_ = (_max_tilt_angle_ / 180.0) * M_PI;
 
   uav_mass_difference_ = 0;
 

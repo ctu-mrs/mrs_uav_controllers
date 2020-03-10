@@ -137,14 +137,13 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
+  _motor_params_   = motor_params;
+  _uav_mass_       = uav_mass;
+  _g_              = g;
 
   ros::Time::waitForValid();
 
-  this->_motor_params_ = motor_params;
-  this->_uav_mass_     = uav_mass;
-  this->_g_            = g;
-
-  // | --------------------- load parameters -------------------- |
+  // | ------------------- loading parameters ------------------- |
 
   mrs_lib::ParamLoader param_loader(nh_, "AttitudeController");
 

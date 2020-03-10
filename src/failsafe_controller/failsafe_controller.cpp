@@ -51,11 +51,13 @@ private:
 
   std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
 
-  double uav_mass_;
+  // | --------------------- thrust control --------------------- |
+
+  double _uav_mass_;
   double uav_mass_difference_;
 
-  double                       g_;
-  mrs_uav_manager::MotorParams motor_params_;
+  double                       _g_;
+  mrs_uav_manager::MotorParams _motor_params_;
   double                       hover_thrust_;
 
   double _thrust_decrease_rate_;
@@ -63,18 +65,22 @@ private:
 
   std::mutex mutex_hover_thrust_;
 
-  double roll, pitch, yaw;
+  // | ----------------------- yaw control ---------------------- |
+
   double yaw_setpoint_;
 
-  mrs_msgs::AttitudeCommand::ConstPtr last_output_command;
-  mrs_msgs::AttitudeCommand           activation_control_command_;
+  // | ------------------ activation and output ----------------- |
 
-  ros::Time last_update;
-  bool      first_iteration = true;
+  mrs_msgs::AttitudeCommand::ConstPtr last_attitude_cmd_;
+  mrs_msgs::AttitudeCommand           activation_attitude_cmd_;
 
-private:
+  ros::Time last_update_time_;
+  bool      first_iteration_ = true;
+
+  // | ------------------------ profiler ------------------------ |
+
   mrs_lib::Profiler profiler_;
-  bool              profiler_enabled_ = false;
+  bool              _profiler_enabled_ = false;
 };
 
 //}
@@ -92,16 +98,13 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
+  _motor_params_   = motor_params;
+  _uav_mass_       = uav_mass;
+  _g_              = g;
 
   ros::Time::waitForValid();
 
-  this->motor_params_ = motor_params;
-  this->uav_mass_     = uav_mass;
-  this->g_            = g;
-
-  // --------------------------------------------------------------
-  // |                       load parameters                      |
-  // --------------------------------------------------------------
+  // | ------------------- loading parameters ------------------- |
 
   mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
 
@@ -114,29 +117,25 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   }
 
   param_loader.load_param("thrust_decrease_rate", _thrust_decrease_rate_);
-  param_loader.load_param("enable_profiler", profiler_enabled_);
+  param_loader.load_param("enable_profiler", _profiler_enabled_);
   param_loader.load_param("initial_thrust_percentage", _initial_thrust_percentage_);
-
-  uav_mass_difference_ = 0;
-
-  // --------------------------------------------------------------
-  // |                 calculate the hover thrust                 |
-  // --------------------------------------------------------------
-
-  hover_thrust_ = sqrt(uav_mass_ * g_) * motor_params.hover_thrust_a + motor_params.hover_thrust_b;
-
-  // --------------------------------------------------------------
-  // |                          profiler_                          |
-  // --------------------------------------------------------------
-
-  profiler_ = mrs_lib::Profiler(nh_, "FailsafeController", profiler_enabled_);
-
-  // | ----------------------- finish init ---------------------- |
 
   if (!param_loader.loaded_successfully()) {
     ROS_ERROR("[FailsafeController]: Could not load all parameters!");
     ros::shutdown();
   }
+
+  uav_mass_difference_ = 0;
+
+  // | ----------- calculate the default hover thrust ----------- |
+
+  hover_thrust_ = sqrt(_uav_mass_ * _g_) * motor_params.hover_thrust_a + motor_params.hover_thrust_b;
+
+  // | ------------------------ profiler ------------------------ |
+
+  profiler_ = mrs_lib::Profiler(nh_, "FailsafeController", _profiler_enabled_);
+
+  // | ----------------------- finish init ---------------------- |
 
   ROS_INFO("[FailsafeController]: initialized, version %s", VERSION);
 
@@ -153,7 +152,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[FailsafeController]: activated without getting the last controller's command.");
+    ROS_WARN("[FailsafeController]: activated without getting the last controller's command");
 
     return false;
 
@@ -165,17 +164,18 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
     ROS_INFO("[FailsafeController]: activated with yaw: %.2f rad", yaw_setpoint_);
 
-    activation_control_command_ = *cmd;
-    uav_mass_difference_        = cmd->mass_difference;
+    activation_attitude_cmd_ = *cmd;
+    uav_mass_difference_     = cmd->mass_difference;
 
-    activation_control_command_.controller_enforcing_constraints = false;
+    activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    hover_thrust_ = _initial_thrust_percentage_ * sqrt((uav_mass_ + uav_mass_difference_) * g_) * motor_params_.hover_thrust_a + motor_params_.hover_thrust_b;
+    hover_thrust_ =
+        _initial_thrust_percentage_ * sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
 
-    ROS_INFO("[FailsafeController]: activated with uav_mass_difference %0.2f kg.", uav_mass_difference_);
+    ROS_INFO("[FailsafeController]: activated with uav_mass_difference %.2f kg.", uav_mass_difference_);
   }
 
-  first_iteration = true;
+  first_iteration_ = true;
 
   is_active_ = true;
 
@@ -189,7 +189,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 void FailsafeController::deactivate(void) {
 
   is_active_           = false;
-  first_iteration      = false;
+  first_iteration_     = false;
   uav_mass_difference_ = 0;
 
   ROS_INFO("[FailsafeController]: deactivated");
@@ -214,34 +214,32 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  // --------------------------------------------------------------
-  // |                      calculate the dt                      |
-  // --------------------------------------------------------------
+  // | -------------------- calculate the dt -------------------- |
 
   double dt;
 
-  if (first_iteration) {
+  if (first_iteration_) {
 
-    last_update = ros::Time::now();
+    last_update_time_ = ros::Time::now();
 
-    first_iteration = false;
+    first_iteration_ = false;
 
     ROS_INFO("[FailsafeController]: first iteration");
 
   } else {
 
-    dt = (ros::Time::now() - last_update).toSec();
+    dt = (ros::Time::now() - last_update_time_).toSec();
 
     if (dt <= 0.001) {
 
       ROS_WARN("[FailsafeController]: the update was called with too small dt!");
-      if (last_output_command != mrs_msgs::AttitudeCommand::Ptr()) {
+      if (last_attitude_cmd_ != mrs_msgs::AttitudeCommand::Ptr()) {
 
-        return last_output_command;
+        return last_attitude_cmd_;
 
       } else {
 
-        return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_control_command_));
+        return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
       }
     }
 
@@ -249,14 +247,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
     hover_thrust_ -= _thrust_decrease_rate_ * dt;
   }
 
-  last_update = ros::Time::now();
+  last_update_time_ = ros::Time::now();
+
+  // | --------------- prepare the control output --------------- |
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
   if (!std::isfinite(hover_thrust_)) {
     hover_thrust_ = 0;
-    ROS_ERROR("[FailsafeController]: NaN detected in variable \"hover_thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[FailsafeController]: NaN detected in variable 'hover_thrust', setting it to 0 and returning!!!");
   } else if (hover_thrust_ > 1.0) {
     hover_thrust_ = 1.0;
   } else if (hover_thrust_ < 0.0) {
@@ -268,11 +268,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
   output_command->euler_attitude.z   = yaw_setpoint_;
   output_command->euler_attitude_set = true;
 
+  output_command->quater_attitude.x = 0;
+  output_command->quater_attitude.y = 0;
+  output_command->quater_attitude.z = 0;
+  output_command->quater_attitude.w = 1;
+
   output_command->quater_attitude_set = false;
   output_command->attitude_rate_set   = false;
 
   output_command->thrust    = hover_thrust_;
   output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
+
+  output_command->mass_difference = uav_mass_difference_;
+  output_command->total_mass      = _uav_mass_ + uav_mass_difference_;
 
   output_command->desired_acceleration.x = 0;
   output_command->desired_acceleration.y = 0;
@@ -282,7 +290,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
 
   output_command->controller = "FailsafeController";
 
-  last_output_command = output_command;
+  last_attitude_cmd_ = output_command;
 
   return output_command;
 }
