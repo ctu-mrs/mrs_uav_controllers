@@ -174,8 +174,8 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   param_loader.load_param("default_gains/vertical/attitude/kw", kwz_);
 
   // mass estimator
-  param_loader.load_param("default_gains/weight_estimator/km_", km_);
-  param_loader.load_param("default_gains/weight_estimator/km_lim_", km_lim_);
+  param_loader.load_param("default_gains/weight_estimator/km", km_);
+  param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim_);
 
   // gain filtering
   param_loader.load_param("gains_filter/filter_rate", _gains_filter_timer_rate_);
