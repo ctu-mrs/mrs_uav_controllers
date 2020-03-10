@@ -96,7 +96,7 @@ private:
   // | --------------------- gain filtering --------------------- |
 
   ros::Timer timer_gain_filter_;
-  void       gainsFilterTimer(const ros::TimerEvent &event);
+  void       timerGainsFilter(const ros::TimerEvent &event);
 
   double _gains_filter_timer_rate_;
   double _gains_filter_change_rate_;
@@ -282,7 +282,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
 
   // | ------------------------- timers ------------------------- |
 
-  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AccelerationController::gainsFilterTimer, this);
+  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AccelerationController::timerGainsFilter, this);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -616,10 +616,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   /* mass estimatior //{ */
 
-  // --------------------------------------------------------------
-  // |                integrate the mass difference               |
-  // --------------------------------------------------------------
-
   {
     std::scoped_lock lock(mutex_gains_);
 
@@ -801,11 +797,11 @@ void AccelerationController::callbackDrs(mrs_controllers::acceleration_controlle
 // |                           timers                           |
 // --------------------------------------------------------------
 
-/* gainsFilterTimer() //{ */
+/* timerGainsFilter() //{ */
 
-void AccelerationController::gainsFilterTimer(const ros::TimerEvent &event) {
+void AccelerationController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler.createRoutine("gainsFilterTimer", _gains_filter_timer_rate_, 0.05, event);
+  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
 
   {
     std::scoped_lock lock(mutex_gains_, mutex_drs_gains_);
