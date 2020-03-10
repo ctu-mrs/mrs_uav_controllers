@@ -93,8 +93,8 @@ private:
 
   // | --------------------- gain filtering --------------------- |
 
-  ros::Timer timer_gain_filter;
-  void       gainsFilterTimer(const ros::TimerEvent &event);
+  ros::Timer timer_gain_filter_;
+  void       timerGainsFilter(const ros::TimerEvent &event);
 
   double _gains_filter_timer_rate_;
   double _gains_filter_change_rate_;
@@ -119,7 +119,7 @@ private:
   // | ------------------------ profiler ------------------------ |
 
   mrs_lib::Profiler profiler_;
-  bool              profiler_enabled_ = false;
+  bool              _profiler_enabled_ = false;
 };
 
 //}
@@ -144,9 +144,7 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   this->_uav_mass_     = uav_mass;
   this->_g_            = g;
 
-  // --------------------------------------------------------------
-  // |                       load parameters                      |
-  // --------------------------------------------------------------
+  // | --------------------- load parameters -------------------- |
 
   mrs_lib::ParamLoader param_loader(nh_, "AttitudeController");
 
@@ -158,7 +156,7 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
     ros::shutdown();
   }
 
-  param_loader.load_param("enable_profiler", profiler_enabled_);
+  param_loader.load_param("enable_profiler", _profiler_enabled_);
 
   // height gains
   param_loader.load_param("default_gains/vertical/kp", kpz_);
@@ -184,22 +182,22 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   param_loader.load_param("thrust_saturation", _thrust_saturation_);
 
-  _gains_filter_max_change_ = _gains_filter_change_rate_ / _gains_filter_timer_rate_;
-  _gains_filter_min_change_ = _gains_filter_min_change_rate_ / _gains_filter_timer_rate_;
-
   if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[AttitudeController]: Could not load all parameters!");
+    ROS_ERROR("[AttitudeController]: could not load all parameters!");
     ros::shutdown();
   }
+
+  // | ---------------- prepare stuff from params --------------- |
+
+  _gains_filter_max_change_ = _gains_filter_change_rate_ / _gains_filter_timer_rate_;
+  _gains_filter_min_change_ = _gains_filter_min_change_rate_ / _gains_filter_timer_rate_;
 
   // convert to radians
   _max_tilt_angle_ = (_max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference_ = 0;
 
-  // --------------------------------------------------------------
-  // |                     dynamic reconfigure                    |
-  // --------------------------------------------------------------
+  // | --------------- dynamic reconfigure server --------------- |
 
   drs_gains_.kpz    = kpz_;
   drs_gains_.kvz    = kvz_;
@@ -216,24 +214,15 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   Drs_t::CallbackType f = boost::bind(&AttitudeController::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
 
-  // --------------------------------------------------------------
-  // |                          profiler                          |
-  // --------------------------------------------------------------
+  // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(nh_, "AttitudeController", profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(nh_, "AttitudeController", _profiler_enabled_);
 
-  // --------------------------------------------------------------
-  // |                           timers                           |
-  // --------------------------------------------------------------
+  // | ------------------------- timers ------------------------- |
 
-  timer_gain_filter = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AttitudeController::gainsFilterTimer, this);
+  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AttitudeController::timerGainsFilter, this);
 
   // | ----------------------- finish init ---------------------- |
-
-  if (!param_loader.loaded_successfully()) {
-    ROS_ERROR("[AttitudeController]: Could not load all parameters!");
-    ros::shutdown();
-  }
 
   ROS_INFO("[AttitudeController]: initialized, version %s", VERSION);
 
@@ -248,21 +237,20 @@ bool AttitudeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[AttitudeController]: activated without getting the last controller's command.");
+    ROS_WARN("[AttitudeController]: activated without getting the last controller's command");
 
     return false;
 
   } else {
 
     activation_attitude_cmd_ = *cmd;
+    uav_mass_difference_     = cmd->mass_difference;
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    uav_mass_difference_ = cmd->mass_difference;
-
     ROS_INFO("[AttitudeController]: setting mass difference from the last AttitudeCmd: %.2f kg", uav_mass_difference_);
 
-    ROS_INFO("[AttitudeController]: activated with a last controller's command.");
+    ROS_INFO("[AttitudeController]: activated with a last controller's command");
   }
 
   first_iteration_ = true;
@@ -300,47 +288,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  // --------------------------------------------------------------
-  // |          load the control reference and estimates          |
-  // --------------------------------------------------------------
-
-  // Rp - position reference in global frame
-  // Rp - velocity reference in global frame
-  // Ra - velocity reference in global frame
-  // Rw - angular velocity reference
-  Eigen::Vector3d           Rp, Rv, Ra, Rw;
-  Eigen::Quaternion<double> Rq;
-
-  Eigen::Matrix3d Rd;
-
-  Rp << 0, 0, reference->position.z;  // fill the desired position
-  Rv << 0, 0, reference->velocity.z;
-  Ra << 0, 0, reference->acceleration.z;
-  Rw << 0, 0, reference->yaw_dot;
-
-  // Op - position in global frame
-  // Ov - velocity in global frame
-  Eigen::Vector3d Op(0, 0, uav_state->pose.position.z);
-  Eigen::Vector3d Ov(0, 0, uav_state->velocity.linear.z);
-
-  // Oq - UAV attitude quaternion
-  Eigen::Quaternion<double> Oq;
-  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
-  Eigen::Matrix3d R = Oq.toRotationMatrix();
-
-  // Ow - UAV angular rate
-  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
-
-  // --------------------------------------------------------------
-  // |                  calculate control errors                  |
-  // --------------------------------------------------------------
-
-  Eigen::Vector3d Ep = Op - Rp;
-  Eigen::Vector3d Ev = Ov - Rv;
-
-  // --------------------------------------------------------------
-  // |                      calculate the dt                      |
-  // --------------------------------------------------------------
+  // | -------------------- calculate the dt -------------------- |
 
   double dt;
 
@@ -360,7 +308,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_DEBUG("[AttitudeController]: the last odometry message came too close! %f", dt);
+    ROS_DEBUG("[AttitudeController]: the last odometry message came too close (%.2f s)!", dt);
 
     if (last_attitude_cmd_ != mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -373,8 +321,42 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   }
 
   // --------------------------------------------------------------
-  // |                            gains                           |
+  // |          load the control reference and estimates          |
   // --------------------------------------------------------------
+
+  // Rp - position reference in global frame
+  // Rp - velocity reference in global frame
+  // Ra - velocity reference in global frame
+  // Rw - angular velocity reference
+  Eigen::Vector3d           Rp, Rv, Ra, Rw;
+  Eigen::Quaternion<double> Rq;
+
+  Eigen::Matrix3d Rd;
+
+  Rp << 0, 0, reference->position.z;
+  Rv << 0, 0, reference->velocity.z;
+  Ra << 0, 0, reference->acceleration.z;
+  Rw << 0, 0, reference->yaw_dot;
+
+  // Op - position in global frame
+  // Ov - velocity in global frame
+  Eigen::Vector3d Op(0, 0, uav_state->pose.position.z);
+  Eigen::Vector3d Ov(0, 0, uav_state->velocity.linear.z);
+
+  // Oq - UAV attitude quaternion
+  Eigen::Quaternion<double> Oq;
+  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
+  Eigen::Matrix3d R = Oq.toRotationMatrix();
+
+  // Ow - UAV angular rate
+  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
+
+  // | -------------- calculate the control errors -------------- |
+
+  Eigen::Vector3d Ep = Op - Rp;
+  Eigen::Vector3d Ev = Ov - Rv;
+
+  // | --------------------- load the gains --------------------- |
 
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kp, Kv, Kq, Kw;
@@ -389,10 +371,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
     Kw << kwxy_, kwxy_, kwz_;
   }
 
-  // --------------------------------------------------------------
-  // |                 desired orientation matrix                 |
-  // --------------------------------------------------------------
-  //
+  // | --------------- desired orientation matrix --------------- |
+
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
   Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra).array();
@@ -400,20 +380,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   Rq.coeffs() << reference->attitude.x, reference->attitude.y, reference->attitude.z, reference->attitude.w;
   Rd = Rq.matrix();
 
-  // --------------------------------------------------------------
-  // |                      orientation error                     |
-  // --------------------------------------------------------------
+  // | -------------------- orientation error ------------------- |
 
-  /* orientation error */
   Eigen::Matrix3d E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
 
   Eigen::Vector3d Eq;
   Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
 
-  // --------------------------------------------------------------
-  // |                     angular rate error                     |
-  // --------------------------------------------------------------
-  //
+  // | ------------------- angular rate error ------------------- |
+
   Eigen::Vector3d Ew;
   Ew = R.transpose() * (Ow - Rw);
 
@@ -423,13 +398,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   if (thrust_force >= 0) {
     thrust = sqrt(thrust_force) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
   } else {
-    ROS_WARN_THROTTLE(1.0, "[AttitudeController]: Just so you know, the desired thrust force is negative (%f", thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[AttitudeController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
   }
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
     thrust = 0;
-    ROS_ERROR("[AttitudeController]: NaN detected in variable \"thrust\", setting it to 0 and returning!!!");
+    ROS_ERROR("[AttitudeController]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
   } else if (thrust > _thrust_saturation_) {
     thrust = _thrust_saturation_;
     ROS_WARN("[AttitudeController]: saturating thrust to %.2f", _thrust_saturation_);
@@ -442,14 +417,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   t = -Kq * Eq.array() - Kw * Ew.array();
 
   // --------------------------------------------------------------
-  // |                      update parameters                     |
+  // |                       mass estimation                      |
   // --------------------------------------------------------------
 
   /* mass estimatior //{ */
-
-  // --------------------------------------------------------------
-  // |                integrate the mass difference               |
-  // --------------------------------------------------------------
 
   {
     std::scoped_lock lock(mutex_gains_);
@@ -460,7 +431,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
-      ROS_WARN_THROTTLE(1.0, "[AttitudeController]: NaN detected in variable \"uav_mass_difference_\", setting it to 0 and returning!!!");
+      ROS_WARN_THROTTLE(1.0, "[AttitudeController]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
     } else if (uav_mass_difference_ > km_lim_) {
       uav_mass_difference_ = km_lim_;
       uav_mass_saturated   = true;
@@ -470,7 +441,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[AttitudeController]: The uav_mass_difference_ is being saturated to %1.3f!", uav_mass_difference_);
+      ROS_WARN_THROTTLE(1.0, "[AttitudeController]: the UAV mass difference is being saturated to %0.2f!", uav_mass_difference_);
     }
   }
 
@@ -569,11 +540,11 @@ void AttitudeController::callbackDrs(mrs_controllers::attitude_controllerConfig 
 // |                           timers                           |
 // --------------------------------------------------------------
 
-/* timerGainFilter() //{ */
+/* timerGainsFilter() //{ */
 
-void AttitudeController::gainsFilterTimer(const ros::TimerEvent &event) {
+void AttitudeController::timerGainsFilter(const ros::TimerEvent &event) {
 
-  mrs_lib::Routine profiler_routine = profiler_.createRoutine("gainsFilterTimer", _gains_filter_timer_rate_, 0.05, event);
+  mrs_lib::Routine profiler_routine = profiler_.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
 
   {
     std::scoped_lock lock(mutex_gains_, mutex_drs_gains_);
@@ -631,7 +602,7 @@ double AttitudeController::calculateGainChange(const double current_value, const
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[AttitudeController]: changing gain \"%s\" from %f to %f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[AttitudeController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
   }
 
   return current_value + change;
