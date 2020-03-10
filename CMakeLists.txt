@@ -21,7 +21,6 @@ generate_dynamic_reconfigure_options(
   cfg/attitude_controller.cfg
   cfg/mpc_controller.cfg
   cfg/acceleration_controller.cfg
-  cfg/partial_landing_controller.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color -Wall -Wextra")
@@ -158,21 +157,6 @@ target_link_libraries(FailsafeController
   ${catkin_LIBRARIES}
   )
 
-# Partial Landing Controller
-
-add_library(PartialLandingController
-  src/partial_landing_controller/partial_landing_controller.cpp
-  )
-
-add_dependencies(PartialLandingController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  )
-
-target_link_libraries(PartialLandingController
-  ${catkin_LIBRARIES}
-  )
-
 #############
 ## Install ##
 #############
@@ -184,7 +168,6 @@ install(TARGETS
   FailsafeController
   AttitudeController
   NsfController
-  PartialLandingController
   MpcControllerCvxgen
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
