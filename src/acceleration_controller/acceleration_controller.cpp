@@ -79,7 +79,6 @@ private:
   double                       uav_mass_difference_;
   double                       _g_;
   mrs_uav_manager::MotorParams _motor_params_;
-  double                       hover_thrust_;
 
   // | ------------------- configurable gains ------------------- |
 
@@ -96,17 +95,17 @@ private:
 
   // | --------------------- gain filtering --------------------- |
 
-  ros::Timer timer_gain_filter;
+  ros::Timer timer_gain_filter_;
   void       gainsFilterTimer(const ros::TimerEvent &event);
 
-  int    _gains_filter_timer_rate_;
+  double _gains_filter_timer_rate_;
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
   double _gains_filter_max_change_;  // calculated as change_rate/timer_rate;
   double _gains_filter_min_change_;  // calculated as change_rate/timer_rate;
 
-  // | ---------------- tilt and tilt-rate limits --------------- |
+  // | ------------ controller limits and saturations ----------- |
 
   double _tilt_angle_saturation_;
   double _tilt_angle_failsafe_;
@@ -283,7 +282,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
 
   // | ------------------------- timers ------------------------- |
 
-  timer_gain_filter = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AccelerationController::gainsFilterTimer, this);
+  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AccelerationController::gainsFilterTimer, this);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -500,10 +499,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
     Kq << kqxy_, kqxy_, kqz_;
     Kw << kwxy_, kwxy_, kwz_;
   }
-
-  // | -------------- re-calculate the hover thrust ------------- |
-
-  hover_thrust_ = sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
 
   // | ---------- desired orientation matrix and force ---------- |
 
