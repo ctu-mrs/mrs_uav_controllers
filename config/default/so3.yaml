@@ -35,7 +35,7 @@ default_gains:
     km: 1.0
     km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
-lateral_mute_coefficitent: 0.0
+lateral_mute_coefficitent: 0.5
 
 # saturations and limits
 tilt_angle_saturation: 60.0 # [deg], disabled when 0.0

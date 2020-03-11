@@ -125,8 +125,8 @@ private:
 
   // | ----------------------- gain muting ---------------------- |
 
-  bool   mute_lateral_gains_               = false;
-  bool   mutex_lateral_gains_after_toggle_ = false;
+  bool   mute_lateral_gains_              = false;
+  bool   mute_lateral_gains_after_toggle_ = false;
   double _mute_coefficitent_;
 
   // | ------------ controller limits and saturations ----------- |
@@ -867,7 +867,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // | ----------------------- gain muting ---------------------- |
 
   if (mute_lateral_gains_ && !reference->disable_position_gains) {
-    mutex_lateral_gains_after_toggle_ = true;
+    mute_lateral_gains_after_toggle_ = true;
   }
   mute_lateral_gains_ = reference->disable_position_gains;
 
@@ -1373,10 +1373,10 @@ void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
 
   mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
 
-  double gain_coeff                 = 1;
-  mutex_lateral_gains_after_toggle_ = false;
+  double gain_coeff                = 1;
+  mute_lateral_gains_after_toggle_ = false;
 
-  bool bypass_filter = mute_lateral_gains_ || mutex_lateral_gains_after_toggle_;
+  bool bypass_filter = mute_lateral_gains_ || mute_lateral_gains_after_toggle_;
 
   if (mute_lateral_gains_) {
     gain_coeff = _mute_coefficitent_;

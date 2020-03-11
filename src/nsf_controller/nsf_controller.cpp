@@ -128,8 +128,8 @@ private:
 
   // | ----------------------- gain muting ---------------------- |
 
-  bool   mute_lateral_gains_               = false;
-  bool   mutex_lateral_gains_after_toggle_ = false;
+  bool   mute_lateral_gains_              = false;
+  bool   mute_lateral_gains_after_toggle_ = false;
   double _mute_coefficitent_;
 
   // | ------------------------ profiler ------------------------ |
@@ -410,7 +410,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   // | ----------------------- gain muting ---------------------- |
 
   if (mute_lateral_gains_ && !reference->disable_position_gains) {
-    mutex_lateral_gains_after_toggle_ = true;
+    mute_lateral_gains_after_toggle_ = true;
   }
   mute_lateral_gains_ = reference->disable_position_gains;
 
@@ -876,9 +876,9 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
 
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
 
-  double gain_coeff                 = 1;
-  bool   bypass_filter              = mute_lateral_gains_ || mutex_lateral_gains_after_toggle_;
-  mutex_lateral_gains_after_toggle_ = false;
+  double gain_coeff                = 1;
+  bool   bypass_filter             = mute_lateral_gains_ || mute_lateral_gains_after_toggle_;
+  mute_lateral_gains_after_toggle_ = false;
 
   if (mute_lateral_gains_) {
     gain_coeff = _mute_coefficitent_;
