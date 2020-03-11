@@ -264,6 +264,7 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[So3Controller]: output mode has to be {1, 2}!");
+    ros::shutdown();
   }
 
   // convert to radians
