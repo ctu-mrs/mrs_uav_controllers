@@ -250,6 +250,7 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
 
   if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[AccelerationController]: output mode has to be {1, 2}!");
+    ros::shutdown();
   }
 
   // convert to radians
@@ -575,7 +576,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | -------------------- orientation error ------------------- |
 
-  /* orientation error */
   Eigen::Matrix3d E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
 
   Eigen::Vector3d Eq;
