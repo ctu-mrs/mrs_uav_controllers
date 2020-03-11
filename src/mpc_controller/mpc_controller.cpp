@@ -58,8 +58,6 @@ public:
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
-  Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
-
   virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
   void resetDisturbanceEstimators(void);
@@ -713,7 +711,28 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | ---------- desired orientation matrix and force ---------- |
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b_, uav_yaw);
+  Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);
+
+  // get body disturbance in the world frame
+  {
+
+    geometry_msgs::Vector3Stamped Ib_b_stamped;
+
+    Ib_b_stamped.header.stamp    = ros::Time::now();
+    Ib_b_stamped.header.frame_id = "fcu_untilted";
+    Ib_b_stamped.vector.x        = Ib_b_(0);
+    Ib_b_stamped.vector.y        = Ib_b_(1);
+    Ib_b_stamped.vector.z        = 0;
+
+    auto res = common_handlers_->transformer->transformSingle(uav_state_.header.frame_id, Ib_b_stamped);
+
+    if (res) {
+      Ib_w[0] = res.value().vector.x;
+      Ib_w[1] = res.value().vector.y;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not transform the Ib_b_ to the world frame");
+    }
+  }
 
   if (reference->use_acceleration) {
     Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
@@ -861,9 +880,49 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   {
     std::scoped_lock lock(mutex_gains_);
 
-    // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -uav_yaw);
-    Eigen::Vector2d Ev_body = rotate2d(Ev.head(2), -uav_yaw);
+    Eigen::Vector2d Ep_fcu_untilted = Eigen::Vector2d(0, 0);  // position error in the untilted frame of the UAV
+    Eigen::Vector2d Ev_fcu_untilted = Eigen::Vector2d(0, 0);  // velocity error in the untilted frame of the UAV
+
+    // get the position control error in the fcu_untilted frame
+    {
+
+      geometry_msgs::Vector3Stamped Ep_stamped;
+
+      Ep_stamped.header.stamp    = ros::Time::now();
+      Ep_stamped.header.frame_id = uav_state_.header.frame_id;
+      Ep_stamped.vector.x        = Ep(0);
+      Ep_stamped.vector.y        = Ep(1);
+      Ep_stamped.vector.z        = Ep(2);
+
+      auto res = common_handlers_->transformer->transformSingle("fcu_untilted", Ep_stamped);
+
+      if (res) {
+        Ep_fcu_untilted[0] = res.value().vector.x;
+        Ep_fcu_untilted[1] = res.value().vector.y;
+      } else {
+        ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not transform the position error to fcu_untilted");
+      }
+    }
+
+    // get the velocity control error in the fcu_untilted frame
+    {
+      geometry_msgs::Vector3Stamped Ev_stamped;
+
+      Ev_stamped.header.stamp    = ros::Time::now();
+      Ev_stamped.header.frame_id = uav_state_.header.frame_id;
+      Ev_stamped.vector.x        = Ev(0);
+      Ev_stamped.vector.y        = Ev(1);
+      Ev_stamped.vector.z        = Ev(2);
+
+      auto res = common_handlers_->transformer->transformSingle("fcu_untilted", Ev_stamped);
+
+      if (res) {
+        Ev_fcu_untilted[0] = res.value().vector.x;
+        Ev_fcu_untilted[1] = res.value().vector.x;
+      } else {
+        ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not transform the velocity error to fcu_untilted");
+      }
+    }
 
     // integrate the body error
 
@@ -876,9 +935,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     if (integral_terms_enabled_) {
       if (reference->use_position_horizontal) {
-        Ib_b_ -= temp_gain * Ep_body * dt;
+        Ib_b_ -= temp_gain * Ep_fcu_untilted * dt;
       } else if (reference->use_velocity_horizontal) {
-        Ib_b_ -= temp_gain * Ev_body * dt;
+        Ib_b_ -= temp_gain * Ev_fcu_untilted * dt;
       }
     }
 
@@ -1388,15 +1447,6 @@ double MpcController::calculateGainChange(const double current_value, const doub
 }
 
 //}
-
-/* rotate2d() //{ */
-
-Eigen::Vector2d MpcController::rotate2d(const Eigen::Vector2d vector_in, double angle) {
-
-  Eigen::Rotation2D<double> rot2(angle);
-
-  return rot2.toRotationMatrix() * vector_in;
-}
 
 //}
 

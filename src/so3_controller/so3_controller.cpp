@@ -6,9 +6,10 @@
 #include <ros/package.h>
 
 #include <dynamic_reconfigure/server.h>
-#include <mrs_msgs/AttitudeCommand.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_datatypes.h>
+
+#include <mrs_msgs/AttitudeCommand.h>
 
 #include <math.h>
 
@@ -43,19 +44,17 @@ namespace so3_controller
 class So3Controller : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+  void initialize(const ros::NodeHandle& parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
                   const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr& cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::PositionCommand::ConstPtr& reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
-  Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
-
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
+  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr& msg);
 
   void resetDisturbanceEstimators(void);
 
@@ -78,7 +77,7 @@ private:
   typedef mrs_controllers::so3_controllerConfig    DrsConfig_t;
   typedef dynamic_reconfigure::Server<DrsConfig_t> Drs_t;
   boost::shared_ptr<Drs_t>                         drs_;
-  void                                             callbackDrs(mrs_controllers::so3_controllerConfig &config, uint32_t level);
+  void                                             callbackDrs(mrs_controllers::so3_controllerConfig& config, uint32_t level);
   DrsConfig_t                                      drs_gains_;
 
   // | ---------- thrust generation and mass estimation --------- |
@@ -118,7 +117,7 @@ private:
   // | --------------------- gain filtering --------------------- |
 
   ros::Timer timer_gain_filter_;
-  void       timerGainsFilter(const ros::TimerEvent &event);
+  void       timerGainsFilter(const ros::TimerEvent& event);
 
   double _gains_filter_timer_rate_;
   double _gains_filter_change_rate_;
@@ -176,7 +175,7 @@ private:
 
 /* //{ initialize() */
 
-void So3Controller::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] std::string name, std::string name_space,
                                const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
                                std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
@@ -320,7 +319,7 @@ void So3Controller::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
 /* //{ activate() */
 
-bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr& cmd) {
 
   if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -342,7 +341,8 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
     Iw_w_[1] = cmd->disturbance_wy_w;
 
     ROS_INFO(
-        "[So3Controller]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: %.2f, "
+        "[So3Controller]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: "
+        "%.2f, "
         "%.2f N",
         uav_mass_difference_, Ib_b_[0], Ib_b_[1], Iw_w_[0], Iw_w_[1]);
 
@@ -399,8 +399,8 @@ void So3Controller::deactivate(void) {
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
-                                                                const mrs_msgs::PositionCommand::ConstPtr &reference) {
+const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
+                                                                const mrs_msgs::PositionCommand::ConstPtr& reference) {
 
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
 
@@ -611,7 +611,28 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   // | --------------- desired orientation matrix --------------- |
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b_, uav_yaw);
+  Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);
+
+  // get body disturbance in the world frame
+  {
+
+    geometry_msgs::Vector3Stamped Ib_b_stamped;
+
+    Ib_b_stamped.header.stamp    = ros::Time::now();
+    Ib_b_stamped.header.frame_id = "fcu_untilted";
+    Ib_b_stamped.vector.x        = Ib_b_(0);
+    Ib_b_stamped.vector.y        = Ib_b_(1);
+    Ib_b_stamped.vector.z        = 0;
+
+    auto res = common_handlers_->transformer->transformSingle(uav_state_.header.frame_id, Ib_b_stamped);
+
+    if (res) {
+      Ib_w[0] = res.value().vector.x;
+      Ib_w[1] = res.value().vector.y;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform the Ib_b_ to the world frame");
+    }
+  }
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
@@ -804,21 +825,61 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   /* body error integrator //{ */
 
   // --------------------------------------------------------------
-  // |                  integrate the body error                 |
+  // |                  integrate the body error                  |
   // --------------------------------------------------------------
 
   {
     std::scoped_lock lock(mutex_gains_);
 
-    // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), -uav_yaw);
-    Eigen::Vector2d Ev_body = rotate2d(Ev.head(2), -uav_yaw);
+    Eigen::Vector2d Ep_fcu_untilted = Eigen::Vector2d(0, 0);  // position error in the untilted frame of the UAV
+    Eigen::Vector2d Ev_fcu_untilted = Eigen::Vector2d(0, 0);  // velocity error in the untilted frame of the UAV
+
+    // get the position control error in the fcu_untilted frame
+    {
+
+      geometry_msgs::Vector3Stamped Ep_stamped;
+
+      Ep_stamped.header.stamp    = ros::Time::now();
+      Ep_stamped.header.frame_id = uav_state_.header.frame_id;
+      Ep_stamped.vector.x        = Ep(0);
+      Ep_stamped.vector.y        = Ep(1);
+      Ep_stamped.vector.z        = Ep(2);
+
+      auto res = common_handlers_->transformer->transformSingle("fcu_untilted", Ep_stamped);
+
+      if (res) {
+        Ep_fcu_untilted[0] = res.value().vector.x;
+        Ep_fcu_untilted[1] = res.value().vector.y;
+      } else {
+        ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform the position error to fcu_untilted");
+      }
+    }
+
+    // get the velocity control error in the fcu_untilted frame
+    {
+      geometry_msgs::Vector3Stamped Ev_stamped;
+
+      Ev_stamped.header.stamp    = ros::Time::now();
+      Ev_stamped.header.frame_id = uav_state_.header.frame_id;
+      Ev_stamped.vector.x        = Ev(0);
+      Ev_stamped.vector.y        = Ev(1);
+      Ev_stamped.vector.z        = Ev(2);
+
+      auto res = common_handlers_->transformer->transformSingle("fcu_untilted", Ev_stamped);
+
+      if (res) {
+        Ev_fcu_untilted[0] = res.value().vector.x;
+        Ev_fcu_untilted[1] = res.value().vector.x;
+      } else {
+        ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform the velocity error to fcu_untilted");
+      }
+    }
 
     // integrate the body error
     if (reference->use_position_horizontal) {
-      Ib_b_ -= kibxy_ * Ep_body * dt;
+      Ib_b_ -= kibxy_ * Ep_fcu_untilted * dt;
     } else if (reference->use_velocity_horizontal) {
-      Ib_b_ -= kibxy_ * Ev_body * dt;
+      Ib_b_ -= kibxy_ * Ev_fcu_untilted * dt;
     }
 
     // saturate the body
@@ -922,6 +983,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     double world_accel_z = reference->acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;
+
     world_accel.header.stamp    = ros::Time::now();
     world_accel.header.frame_id = uav_state->header.frame_id;
     world_accel.vector.x        = world_accel_x;
@@ -1052,7 +1114,7 @@ const mrs_msgs::ControllerStatus So3Controller::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg) {
+void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr& msg) {
 
   ROS_INFO("[So3Controller]: switching the odometry source");
 
@@ -1108,7 +1170,7 @@ void So3Controller::resetDisturbanceEstimators(void) {
 
 /* //{ callbackDrs() */
 
-void So3Controller::callbackDrs(mrs_controllers::so3_controllerConfig &config, [[maybe_unused]] uint32_t level) {
+void So3Controller::callbackDrs(mrs_controllers::so3_controllerConfig& config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
@@ -1129,7 +1191,7 @@ void So3Controller::callbackDrs(mrs_controllers::so3_controllerConfig &config, [
 
 /* timerGainFilter() //{ */
 
-void So3Controller::timerGainsFilter(const ros::TimerEvent &event) {
+void So3Controller::timerGainsFilter(const ros::TimerEvent& event) {
 
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
 
@@ -1209,17 +1271,6 @@ double So3Controller::calculateGainChange(const double current_value, const doub
   }
 
   return current_value + change;
-}
-
-//}
-
-/* rotate2d() //{ */
-
-Eigen::Vector2d So3Controller::rotate2d(const Eigen::Vector2d vector_in, double angle) {
-
-  Eigen::Rotation2D<double> rot2(angle);
-
-  return rot2.toRotationMatrix() * vector_in;
 }
 
 //}

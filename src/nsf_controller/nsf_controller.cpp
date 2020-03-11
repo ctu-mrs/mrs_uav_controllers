@@ -48,8 +48,6 @@ public:
 
   double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
 
-  Eigen::Vector2d rotate2d(const Eigen::Vector2d vector_in, double angle);
-
   virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
   void resetDisturbanceEstimators(void);
@@ -100,8 +98,8 @@ private:
   double km_;         // mass integral
   double km_lim_;     // mass integral limit
 
-  std::mutex mutex_gains;          // locks the gains the are used and filtered
-  std::mutex mutex_desired_gains;  // locks the gains that came from the drs
+  std::mutex mutex_gains_;          // locks the gains the are used and filtered
+  std::mutex mutex_desired_gains_;  // locks the gains that came from the drs
 
   // | --------------------- gain filtering --------------------- |
 
@@ -420,13 +418,34 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   // |                   calculate the feedback                   |
   // --------------------------------------------------------------
 
-  Eigen::Vector2d Ib_w = rotate2d(Ib_b_, -yaw);
+  Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);  // body integral in the world
+
+  // get the position control error in the fcu_untilted frame
+  {
+
+    geometry_msgs::Vector3Stamped Ib_b_stamped;
+
+    Ib_b_stamped.header.stamp    = ros::Time::now();
+    Ib_b_stamped.header.frame_id = "fcu_untilted";
+    Ib_b_stamped.vector.x        = Ib_b_(0);
+    Ib_b_stamped.vector.y        = Ib_b_(1);
+    Ib_b_stamped.vector.z        = Ib_b_(2);
+
+    auto res = common_handlers_->transformer->transformSingle(uav_state_.header.frame_id, Ib_b_stamped);
+
+    if (res) {
+      Ib_w[0] = res.value().vector.x;
+      Ib_w[1] = res.value().vector.y;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[NsfController]: could not transform the position error to fcu_untilted");
+    }
+  }
 
   // create vectors of gains
   Eigen::Vector3d kp, kv, ka;
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains_);
 
     kp << kpxy_, kpxy_, kpz_;
     kv << kvxy_, kvxy_, kvz_;
@@ -518,7 +537,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains, mutex_integrals_);
+    std::scoped_lock lock(mutex_gains_, mutex_integrals_);
 
     Eigen::Vector3d integration_switch(1, 1, 0);
 
@@ -573,13 +592,34 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains_);
 
     // rotate the control errors to the body
-    Eigen::Vector2d Ep_body = rotate2d(Ep.head(2), yaw);
+    Eigen::Vector2d Ep_fcu_untilted = Eigen::Vector2d(0, 0);  // position error in the untilted frame of the UAV
+
+    // get the position control error in the fcu_untilted frame
+    {
+
+      geometry_msgs::Vector3Stamped Ep_stamped;
+
+      Ep_stamped.header.stamp    = ros::Time::now();
+      Ep_stamped.header.frame_id = uav_state_.header.frame_id;
+      Ep_stamped.vector.x        = Ep(0);
+      Ep_stamped.vector.y        = Ep(1);
+      Ep_stamped.vector.z        = Ep(2);
+
+      auto res = common_handlers_->transformer->transformSingle("fcu_untilted", Ep_stamped);
+
+      if (res) {
+        Ep_fcu_untilted[0] = res.value().vector.x;
+        Ep_fcu_untilted[1] = res.value().vector.y;
+      } else {
+        ROS_ERROR_THROTTLE(1.0, "[NsfController]: could not transform the position error to fcu_untilted");
+      }
+    }
 
     // integrate the body error
-    Ib_b_ += kibxy_ * Ep_body * dt;
+    Ib_b_ += kibxy_ * Ep_fcu_untilted * dt;
 
     // saturate the body
     double body_integral_saturated = false;
@@ -621,7 +661,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   {
-    std::scoped_lock lock(mutex_gains);
+    std::scoped_lock lock(mutex_gains_);
 
     if (!z_saturated) {
       uav_mass_difference_ += km_ * Ep[2] * dt;
@@ -679,7 +719,28 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   output_command->header.stamp = ros::Time::now();
 
   // rotate the feedback to the body frame
-  Eigen::Vector2d feedback_b = rotate2d(feedback_w.head(2), yaw);
+  Eigen::Vector2d feedback_b = Eigen::Vector2d(0, 0);
+
+  // transform the feedback to the body untilted frame
+  {
+
+    geometry_msgs::Vector3Stamped Ep_stamped;
+
+    Ep_stamped.header.stamp    = ros::Time::now();
+    Ep_stamped.header.frame_id = uav_state_.header.frame_id;
+    Ep_stamped.vector.x        = feedback_w(0);
+    Ep_stamped.vector.y        = feedback_w(1);
+    Ep_stamped.vector.z        = 0;
+
+    auto res = common_handlers_->transformer->transformSingle("fcu_untilted", Ep_stamped);
+
+    if (res) {
+      feedback_b[0] = res.value().vector.x;
+      feedback_b[1] = res.value().vector.y;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform the feedback to fcu_untilted");
+    }
+  }
 
   output_command->euler_attitude.x   = feedback_b[1];
   output_command->euler_attitude.y   = feedback_b[0];
@@ -795,7 +856,7 @@ void NsfController::resetDisturbanceEstimators(void) {
 void NsfController::callbackDrs(mrs_controllers::nsf_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
-    std::scoped_lock lock(mutex_desired_gains);
+    std::scoped_lock lock(mutex_desired_gains_);
 
     drs_gains_ = config;
   }
@@ -824,7 +885,7 @@ void NsfController::timerGainsFilter(const ros::TimerEvent &event) {
   }
 
   {
-    std::scoped_lock lock(mutex_gains, mutex_desired_gains);
+    std::scoped_lock lock(mutex_gains_, mutex_desired_gains_);
 
     kpxy_      = calculateGainChange(kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy_");
     kvxy_      = calculateGainChange(kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy_");
@@ -886,17 +947,6 @@ double NsfController::calculateGainChange(const double current_value, const doub
   }
 
   return current_value + change;
-}
-
-//}
-
-/* rotate2d() //{ */
-
-Eigen::Vector2d NsfController::rotate2d(const Eigen::Vector2d vector_in, double angle) {
-
-  Eigen::Rotation2D<double> rot2(angle);
-
-  return rot2.toRotationMatrix() * vector_in;
 }
 
 //}
