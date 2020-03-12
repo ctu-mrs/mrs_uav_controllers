@@ -35,7 +35,9 @@ default_gains:
     km: 1.0
     km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
-lateral_mute_coefficitent: 0.5
+# gains can be muted by the tracker by this factor
+# gains are also muting just after activation
+gain_mute_coefficient: 0.5
 
 # saturations and limits
 tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
@@ -43,12 +45,10 @@ tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
 thrust_saturation: 0.9 # [-], range from 0 to 1
 
 rampup:
-
   enabled: true
   speed: 0.75 # [1/s]
 
 gains_filter:
-  filter_rate: 20 # [Hz]
   perc_change_rate: 1.0
   min_change_rate: 0.1 # perc of the difference
 

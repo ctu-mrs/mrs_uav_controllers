@@ -68,7 +68,6 @@ attitude_feedback:
       km_lim: 5.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
   gains_filter:
-    filter_rate: 20 # [Hz]
     perc_change_rate: 1.0
     min_change_rate: 0.1 # perc of the difference
 
@@ -77,6 +76,10 @@ attitude_feedback:
   tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
   thrust_saturation: 0.9 # [-], range from 0 to 1
   yaw_rate_saturation: 1.0 # [rad/s], disabled when 0.0
+
+# gains can be muted by the tracker by this factor
+# gains are also muting just after activation
+gain_mute_coefficient: 0.5
 
 # output mode to PixHawk
 output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}

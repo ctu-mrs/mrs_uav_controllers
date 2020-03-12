@@ -204,7 +204,7 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.load_param("default_gains/horizontal/kiw", kiwxy_);
   param_loader.load_param("default_gains/horizontal/kib", kibxy_);
 
-  param_loader.load_param("lateral_mute_coefficitent", _gain_mute_coefficient_);
+  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
 
   // | ------------------------- rampup ------------------------- |
 
@@ -1190,19 +1190,20 @@ void So3Controller::filterGains(const bool mute_gains, const double dt) {
 
     bool updated = false;
 
-    kpxy_      = calculateGainChange(dt, kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
-    kvxy_      = calculateGainChange(dt, kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
-    kaxy_      = calculateGainChange(dt, kaxy_, drs_gains_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
-    kiwxy_     = calculateGainChange(dt, kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
-    kibxy_     = calculateGainChange(dt, kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
-    kpz_       = calculateGainChange(dt, kpz_, drs_gains_.kpz * gain_coeff, bypass_filter, "kpz", updated);
-    kvz_       = calculateGainChange(dt, kvz_, drs_gains_.kvz * gain_coeff, bypass_filter, "kvz", updated);
-    kaz_       = calculateGainChange(dt, kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz", updated);
-    kqxy_      = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
-    kqz_       = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
-    kwxy_      = calculateGainChange(dt, kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy", updated);
-    kwz_       = calculateGainChange(dt, kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz", updated);
-    km_        = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+    kpxy_  = calculateGainChange(dt, kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
+    kvxy_  = calculateGainChange(dt, kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
+    kaxy_  = calculateGainChange(dt, kaxy_, drs_gains_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
+    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+    kibxy_ = calculateGainChange(dt, kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+    kpz_   = calculateGainChange(dt, kpz_, drs_gains_.kpz * gain_coeff, bypass_filter, "kpz", updated);
+    kvz_   = calculateGainChange(dt, kvz_, drs_gains_.kvz * gain_coeff, bypass_filter, "kvz", updated);
+    kaz_   = calculateGainChange(dt, kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz", updated);
+    kqxy_  = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_   = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    kwxy_  = calculateGainChange(dt, kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy", updated);
+    kwz_   = calculateGainChange(dt, kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz", updated);
+    km_    = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+
     kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim", updated);
     kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim", updated);
     km_lim_    = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);

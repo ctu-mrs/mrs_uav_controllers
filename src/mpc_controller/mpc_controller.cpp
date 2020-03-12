@@ -56,7 +56,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
 
   virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
@@ -113,21 +113,15 @@ private:
 
   // | --------------------- gain filtering --------------------- |
 
-  ros::Timer timer_gain_filter_;
-  void       timerGainsFilter(const ros::TimerEvent &event);
+  void filterGains(const bool mute_gains, const double dt);
 
-  double _gains_filter_timer_rate_;
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
-  double _gains_filter_max_change_;  // calculated from change_rate/timer_rate;
-  double _gains_filter_min_change_;  // calculated from change_rate/timer_rate;
-
   // | ----------------------- gain muting ---------------------- |
 
-  bool   mute_lateral_gains_              = false;
-  bool   mute_lateral_gains_after_toggle_ = false;
-  double _mute_coefficitent_;
+  bool   gains_muted_ = false;  // the current state (may be initialized in activate())
+  double _gain_mute_coefficient_;
 
   // | ------------ controller limits and saturations ----------- |
 
@@ -273,6 +267,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   param_loader.load_param("cvx_parameters/verbose", _cvx_verbose_);
   param_loader.load_param("cvx_parameters/max_iterations", _cvx_max_iterations_);
 
+  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
+
   // | ------------------------- rampup ------------------------- |
 
   param_loader.load_param("rampup/enabled", _rampup_enabled_);
@@ -308,7 +304,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   param_loader.load_param("attitude_feedback/yaw_rate_saturation", _yaw_rate_saturation_);
 
   // gain filtering
-  param_loader.load_param("attitude_feedback/gains_filter/filter_rate", _gains_filter_timer_rate_);
   param_loader.load_param("attitude_feedback/gains_filter/perc_change_rate", _gains_filter_change_rate_);
   param_loader.load_param("attitude_feedback/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
@@ -326,9 +321,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   if (_yaw_rate_saturation_ <= 1e-3) {
     _yaw_rate_saturation_ = 10e6;
   }
-
-  _gains_filter_max_change_ = _gains_filter_change_rate_ / _gains_filter_timer_rate_;
-  _gains_filter_min_change_ = _gains_filter_min_change_rate_ / _gains_filter_timer_rate_;
 
   if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[%s]: output mode has to be {1, 2}!", this->name_.c_str());
@@ -376,10 +368,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   // | ------------------------ profiler ------------------------ |
 
   profiler = mrs_lib::Profiler(nh_, "MpcController", profiler_enabled_);
-
-  // | ------------------------- timers ------------------------- |
-
-  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &MpcController::timerGainsFilter, this);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -444,6 +432,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   }
 
   first_iteration_ = true;
+  gains_muted_     = true;
 
   ROS_INFO("[%s]: activated", this->name_.c_str());
 
@@ -690,6 +679,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | --------------------- load the gains --------------------- |
 
+  filterGains(reference->disable_position_gains, dt);
+
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kq, Kw;
 
@@ -863,13 +854,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   Eigen::Vector3d t;
   t = -Kq * Eq.array() - Kw * Ew.array();
-
-  // | ----------------------- gain muting ---------------------- |
-
-  if (mute_lateral_gains_ && !reference->disable_position_gains) {
-    mute_lateral_gains_after_toggle_ = true;
-  }
-  mute_lateral_gains_ = reference->disable_position_gains;
 
   // --------------------------------------------------------------
   // |                 integrators and estimators                 |
@@ -1364,52 +1348,71 @@ bool MpcController::callbackSetIntegralTerms(std_srvs::SetBool::Request &req, st
 //}
 
 // --------------------------------------------------------------
-// |                           timers                           |
+// |                       other routines                       |
 // --------------------------------------------------------------
 
-/* timerGainFilter() //{ */
+/* filterGains() //{ */
 
-void MpcController::timerGainsFilter(const ros::TimerEvent &event) {
+void MpcController::filterGains(const bool mute_gains, const double dt) {
 
-  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
+  // When muting the gains, we want to bypass the filter,
+  // so it happens immediately.
+  bool   bypass_filter = (mute_gains || gains_muted_);
+  double gain_coeff    = (mute_gains || gains_muted_) ? _gain_mute_coefficient_ : 1.0;
 
-  double gain_coeff                = 1;
-  mute_lateral_gains_after_toggle_ = false;
-
-  bool bypass_filter = mute_lateral_gains_ || mute_lateral_gains_after_toggle_;
-
-  if (mute_lateral_gains_) {
-    gain_coeff = _mute_coefficitent_;
-  }
+  gains_muted_ = mute_gains;
 
   // calculate the difference
   {
     std::scoped_lock lock(mutex_gains_, mutex_drs_params_);
 
-    kqxy_      = calculateGainChange(kqxy_, drs_gains_.kqxy, false, "kqxy");
-    kqz_       = calculateGainChange(kqz_, drs_gains_.kqz, false, "kqz");
-    kwxy_      = calculateGainChange(kwxy_, drs_gains_.kwxy, false, "kwxy");
-    kwz_       = calculateGainChange(kwz_, drs_gains_.kwz, false, "kwz");
-    km_        = calculateGainChange(km_, drs_gains_.km, false, "km");
-    km_lim_    = calculateGainChange(km_lim_, drs_gains_.km_lim, false, "km_lim");
-    kiwxy_     = calculateGainChange(kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy");
-    kibxy_     = calculateGainChange(kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy");
-    kiwxy_lim_ = calculateGainChange(kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim");
-    kibxy_lim_ = calculateGainChange(kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim");
+    bool updated = false;
+
+    kqxy_  = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_   = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    kwxy_  = calculateGainChange(dt, kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy", updated);
+    kwz_   = calculateGainChange(dt, kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz", updated);
+    km_    = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+    kibxy_ = calculateGainChange(dt, kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+
+    km_lim_    = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);
+    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim", updated);
+    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim", updated);
+
+    // set the gains back to dynamic reconfigure
+    // and only do it when some filtering occurs
+    if (updated) {
+
+      DrsConfig_t new_drs_gains_;
+
+      new_drs_gains_.kiwxy     = kiwxy_;
+      new_drs_gains_.kibxy     = kibxy_;
+      new_drs_gains_.kqxy      = kqxy_;
+      new_drs_gains_.kqz       = kqz_;
+      new_drs_gains_.kwxy      = kwxy_;
+      new_drs_gains_.kwz       = kwz_;
+      new_drs_gains_.km        = km_;
+      new_drs_gains_.km_lim    = km_lim_;
+      new_drs_gains_.kiwxy_lim = kiwxy_lim_;
+      new_drs_gains_.kibxy_lim = kibxy_lim_;
+
+      drs_->updateConfig(new_drs_gains_);
+    }
   }
 }
 
 //}
 
-// --------------------------------------------------------------
-// |                       other routines                       |
-// --------------------------------------------------------------
-
 /* calculateGainChange() //{ */
 
-double MpcController::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
+double MpcController::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
+                                          bool &updated) {
 
   double change = desired_value - current_value;
+
+  double gains_filter_max_change = _gains_filter_change_rate_ * dt;
+  double gains_filter_min_change = _gains_filter_min_change_rate_ * dt;
 
   if (!bypass_rate) {
 
@@ -1418,21 +1421,21 @@ double MpcController::calculateGainChange(const double current_value, const doub
     double saturated_change;
 
     if (fabs(current_value) < 1e-6) {
-      change *= _gains_filter_max_change_;
+      change *= gains_filter_max_change;
     } else {
 
       saturated_change = change;
 
       change_in_perc = (current_value + saturated_change) / current_value - 1.0;
 
-      if (change_in_perc > _gains_filter_max_change_) {
-        saturated_change = current_value * _gains_filter_max_change_;
-      } else if (change_in_perc < -_gains_filter_max_change_) {
-        saturated_change = current_value * -_gains_filter_max_change_;
+      if (change_in_perc > gains_filter_max_change) {
+        saturated_change = current_value * gains_filter_max_change;
+      } else if (change_in_perc < -gains_filter_max_change) {
+        saturated_change = current_value * -gains_filter_max_change;
       }
 
-      if (fabs(saturated_change) < fabs(change) * _gains_filter_min_change_) {
-        change *= _gains_filter_min_change_;
+      if (fabs(saturated_change) < fabs(change) * gains_filter_min_change) {
+        change *= gains_filter_min_change;
       } else {
         change = saturated_change;
       }
@@ -1440,7 +1443,8 @@ double MpcController::calculateGainChange(const double current_value, const doub
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[%s]: changing gain '%s' from %.2f to %.2f", this->name_.c_str(), name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[MpcController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    updated = true;
   }
 
   return current_value + change;
