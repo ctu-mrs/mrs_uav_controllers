@@ -52,7 +52,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::PositionCommand::ConstPtr& reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
 
   virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr& msg);
 
@@ -115,13 +115,10 @@ private:
 
   // | --------------------- gain filtering --------------------- |
 
-  void filterGains(const bool mute_gains);
+  void filterGains(const bool mute_gains, const double dt);
 
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
-
-  double _gains_filter_max_change_;  // calculated from change_rate/100.0;
-  double _gains_filter_min_change_;  // calculated from change_rate/100.0;
 
   // | ------------ controller limits and saturations ----------- |
 
@@ -253,10 +250,6 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   }
 
   // | ---------------- prepare stuff from params --------------- |
-
-  // expect that fast controller will run at 100 Hz
-  _gains_filter_max_change_ = _gains_filter_change_rate_ / 100.0;
-  _gains_filter_min_change_ = _gains_filter_min_change_rate_ / 100.0;
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[So3Controller]: output mode has to be {1, 2}!");
@@ -548,7 +541,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   // | --------------------- load the gains --------------------- |
 
-  filterGains(reference->disable_position_gains);
+  filterGains(reference->disable_position_gains, dt);
 
   Eigen::Vector3d Ka = Eigen::Vector3d::Zero(3);
   Eigen::Array3d  Kp = Eigen::Array3d::Zero(3);
@@ -1182,7 +1175,7 @@ void So3Controller::callbackDrs(mrs_controllers::so3_controllerConfig& config, [
 
 /* filterGains() //{ */
 
-void So3Controller::filterGains(const bool mute_gains) {
+void So3Controller::filterGains(const bool mute_gains, const double dt) {
 
   // When muting the gains, we want to bypass the filter,
   // so it happens immediately.
@@ -1195,45 +1188,51 @@ void So3Controller::filterGains(const bool mute_gains) {
   {
     std::scoped_lock lock(mutex_gains_, mutex_drs_params_);
 
-    kpxy_      = calculateGainChange(kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy");
-    kvxy_      = calculateGainChange(kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy");
-    kaxy_      = calculateGainChange(kaxy_, drs_gains_.kaxy * gain_coeff, bypass_filter, "kaxy");
-    kiwxy_     = calculateGainChange(kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy");
-    kibxy_     = calculateGainChange(kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy");
-    kpz_       = calculateGainChange(kpz_, drs_gains_.kpz * gain_coeff, bypass_filter, "kpz");
-    kvz_       = calculateGainChange(kvz_, drs_gains_.kvz * gain_coeff, bypass_filter, "kvz");
-    kaz_       = calculateGainChange(kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz");
-    kqxy_      = calculateGainChange(kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy");
-    kqz_       = calculateGainChange(kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz");
-    kwxy_      = calculateGainChange(kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy");
-    kwz_       = calculateGainChange(kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz");
-    km_        = calculateGainChange(km_, drs_gains_.km * gain_coeff, bypass_filter, "km");
-    kiwxy_lim_ = calculateGainChange(kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim");
-    kibxy_lim_ = calculateGainChange(kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim");
-    km_lim_    = calculateGainChange(km_lim_, drs_gains_.km_lim, false, "km_lim");
+    bool updated = false;
+
+    kpxy_      = calculateGainChange(dt, kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
+    kvxy_      = calculateGainChange(dt, kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
+    kaxy_      = calculateGainChange(dt, kaxy_, drs_gains_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
+    kiwxy_     = calculateGainChange(dt, kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+    kibxy_     = calculateGainChange(dt, kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+    kpz_       = calculateGainChange(dt, kpz_, drs_gains_.kpz * gain_coeff, bypass_filter, "kpz", updated);
+    kvz_       = calculateGainChange(dt, kvz_, drs_gains_.kvz * gain_coeff, bypass_filter, "kvz", updated);
+    kaz_       = calculateGainChange(dt, kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz", updated);
+    kqxy_      = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_       = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    kwxy_      = calculateGainChange(dt, kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy", updated);
+    kwz_       = calculateGainChange(dt, kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz", updated);
+    km_        = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim", updated);
+    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim", updated);
+    km_lim_    = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);
 
     // set the gains back to dynamic reconfigure
-    DrsConfig_t new_drs_gains_;
+    // and only do it when some filtering occurs
+    if (updated) {
 
-    new_drs_gains_.kpxy        = kpxy_;
-    new_drs_gains_.kvxy        = kvxy_;
-    new_drs_gains_.kaxy        = kaxy_;
-    new_drs_gains_.kiwxy       = kiwxy_;
-    new_drs_gains_.kibxy       = kibxy_;
-    new_drs_gains_.kpz         = kpz_;
-    new_drs_gains_.kvz         = kvz_;
-    new_drs_gains_.kaz         = kaz_;
-    new_drs_gains_.kqxy        = kqxy_;
-    new_drs_gains_.kqz         = kqz_;
-    new_drs_gains_.kwxy        = kwxy_;
-    new_drs_gains_.kwz         = kwz_;
-    new_drs_gains_.kiwxy_lim   = kiwxy_lim_;
-    new_drs_gains_.kibxy_lim   = kibxy_lim_;
-    new_drs_gains_.km          = km_;
-    new_drs_gains_.km_lim      = km_lim_;
-    new_drs_gains_.output_mode = output_mode_;
+      DrsConfig_t new_drs_gains_;
 
-    drs_->updateConfig(new_drs_gains_);
+      new_drs_gains_.kpxy        = kpxy_;
+      new_drs_gains_.kvxy        = kvxy_;
+      new_drs_gains_.kaxy        = kaxy_;
+      new_drs_gains_.kiwxy       = kiwxy_;
+      new_drs_gains_.kibxy       = kibxy_;
+      new_drs_gains_.kpz         = kpz_;
+      new_drs_gains_.kvz         = kvz_;
+      new_drs_gains_.kaz         = kaz_;
+      new_drs_gains_.kqxy        = kqxy_;
+      new_drs_gains_.kqz         = kqz_;
+      new_drs_gains_.kwxy        = kwxy_;
+      new_drs_gains_.kwz         = kwz_;
+      new_drs_gains_.kiwxy_lim   = kiwxy_lim_;
+      new_drs_gains_.kibxy_lim   = kibxy_lim_;
+      new_drs_gains_.km          = km_;
+      new_drs_gains_.km_lim      = km_lim_;
+      new_drs_gains_.output_mode = output_mode_;
+
+      drs_->updateConfig(new_drs_gains_);
+    }
   }
 }
 
@@ -1241,9 +1240,13 @@ void So3Controller::filterGains(const bool mute_gains) {
 
 /* calculateGainChange() //{ */
 
-double So3Controller::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
+double So3Controller::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
+                                          bool& updated) {
 
   double change = desired_value - current_value;
+
+  double gains_filter_max_change = _gains_filter_change_rate_ * dt;
+  double gains_filter_min_change = _gains_filter_min_change_rate_ * dt;
 
   if (!bypass_rate) {
 
@@ -1252,21 +1255,21 @@ double So3Controller::calculateGainChange(const double current_value, const doub
     double saturated_change;
 
     if (fabs(current_value) < 1e-6) {
-      change *= _gains_filter_max_change_;
+      change *= gains_filter_max_change;
     } else {
 
       saturated_change = change;
 
       change_in_perc = (current_value + saturated_change) / current_value - 1.0;
 
-      if (change_in_perc > _gains_filter_max_change_) {
-        saturated_change = current_value * _gains_filter_max_change_;
-      } else if (change_in_perc < -_gains_filter_max_change_) {
-        saturated_change = current_value * -_gains_filter_max_change_;
+      if (change_in_perc > gains_filter_max_change) {
+        saturated_change = current_value * gains_filter_max_change;
+      } else if (change_in_perc < -gains_filter_max_change) {
+        saturated_change = current_value * -gains_filter_max_change;
       }
 
-      if (fabs(saturated_change) < fabs(change) * _gains_filter_min_change_) {
-        change *= _gains_filter_min_change_;
+      if (fabs(saturated_change) < fabs(change) * gains_filter_min_change) {
+        change *= gains_filter_min_change;
       } else {
         change = saturated_change;
       }
@@ -1275,6 +1278,7 @@ double So3Controller::calculateGainChange(const double current_value, const doub
 
   if (fabs(change) > 1e-3) {
     ROS_INFO_THROTTLE(1.0, "[So3Controller]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    updated = true;
   }
 
   return current_value + change;
