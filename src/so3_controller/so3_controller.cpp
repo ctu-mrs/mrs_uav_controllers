@@ -204,8 +204,6 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.load_param("default_gains/horizontal/kiw", kiwxy_);
   param_loader.load_param("default_gains/horizontal/kib", kibxy_);
 
-  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
-
   // | ------------------------- rampup ------------------------- |
 
   param_loader.load_param("rampup/enabled", _rampup_enabled_);
@@ -240,6 +238,9 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   // gain filtering
   param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
   param_loader.load_param("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+
+  // gain muting
+  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
   param_loader.load_param("output_mode", output_mode_);

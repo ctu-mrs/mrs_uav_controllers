@@ -267,8 +267,6 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   param_loader.load_param("cvx_parameters/verbose", _cvx_verbose_);
   param_loader.load_param("cvx_parameters/max_iterations", _cvx_max_iterations_);
 
-  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
-
   // | ------------------------- rampup ------------------------- |
 
   param_loader.load_param("rampup/enabled", _rampup_enabled_);
@@ -306,6 +304,9 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   // gain filtering
   param_loader.load_param("attitude_feedback/gains_filter/perc_change_rate", _gains_filter_change_rate_);
   param_loader.load_param("attitude_feedback/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+
+  // gain muting
+  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
   param_loader.load_param("output_mode", _output_mode_);
