@@ -45,7 +45,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
 
   virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
@@ -88,20 +88,20 @@ private:
   double kwxy_;    // attitude tilt rate pitch/roll gain
   double kwz_;     // attitude yaw rate gain
 
-  std::mutex mutex_gains_;      // locks the gains the are used and filtered
-  std::mutex mutex_drs_gains_;  // locks the gains that came from the drs
+  std::mutex mutex_gains_;       // locks the gains the are used and filtered
+  std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
   // | --------------------- gain filtering --------------------- |
 
-  ros::Timer timer_gain_filter_;
-  void       timerGainsFilter(const ros::TimerEvent &event);
+  void filterGains(const bool mute_gains, const double dt);
 
-  double _gains_filter_timer_rate_;
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
-  double _gains_filter_max_change_;  // calculated as change_rate/timer_rate;
-  double _gains_filter_min_change_;  // calculated as change_rate/timer_rate;
+  // | ----------------------- gain muting ---------------------- |
+
+  bool   gains_muted_ = false;  // the current state (may be initialized in activate())
+  double _gain_mute_coefficient_;
 
   // | ------------ controller limits and saturations ----------- |
 
@@ -175,9 +175,11 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim_);
 
   // gain filtering
-  param_loader.load_param("gains_filter/filter_rate", _gains_filter_timer_rate_);
   param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
   param_loader.load_param("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+
+  // gain muting
+  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
 
   param_loader.load_param("thrust_saturation", _thrust_saturation_);
 
@@ -187,9 +189,6 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   }
 
   // | ---------------- prepare stuff from params --------------- |
-
-  _gains_filter_max_change_ = _gains_filter_change_rate_ / _gains_filter_timer_rate_;
-  _gains_filter_min_change_ = _gains_filter_min_change_rate_ / _gains_filter_timer_rate_;
 
   // convert to radians
   _max_tilt_angle_ = (_max_tilt_angle_ / 180) * M_PI;
@@ -216,10 +215,6 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   // | ------------------------ profiler ------------------------ |
 
   profiler_ = mrs_lib::Profiler(nh_, "AttitudeController", _profiler_enabled_);
-
-  // | ------------------------- timers ------------------------- |
-
-  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AttitudeController::timerGainsFilter, this);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -253,6 +248,7 @@ bool AttitudeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
   }
 
   first_iteration_ = true;
+  gains_muted_     = true;
 
   ROS_INFO("[AttitudeController]: activated");
 
@@ -356,6 +352,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   Eigen::Vector3d Ev = Ov - Rv;
 
   // | --------------------- load the gains --------------------- |
+
+  filterGains(reference->disable_position_gains, dt);
 
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kp, Kv, Kq, Kw;
@@ -525,7 +523,7 @@ void AttitudeController::resetDisturbanceEstimators(void) {
 void AttitudeController::callbackDrs(mrs_controllers::attitude_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
-    std::scoped_lock lock(mutex_drs_gains_);
+    std::scoped_lock lock(mutex_drs_params_);
 
     drs_gains_ = config;
   }
@@ -536,41 +534,69 @@ void AttitudeController::callbackDrs(mrs_controllers::attitude_controllerConfig 
 //}
 
 // --------------------------------------------------------------
-// |                           timers                           |
+// |                       other routines                       |
 // --------------------------------------------------------------
 
-/* timerGainsFilter() //{ */
+/* filterGains() //{ */
 
-void AttitudeController::timerGainsFilter(const ros::TimerEvent &event) {
+void AttitudeController::filterGains(const bool mute_gains, const double dt) {
 
-  mrs_lib::Routine profiler_routine = profiler_.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
+  // When muting the gains, we want to bypass the filter,
+  // so it happens immediately.
+  bool   bypass_filter = (mute_gains || gains_muted_);
+  double gain_coeff    = (mute_gains || gains_muted_) ? _gain_mute_coefficient_ : 1.0;
 
+  gains_muted_ = mute_gains;
+
+  // calculate the difference
   {
-    std::scoped_lock lock(mutex_gains_, mutex_drs_gains_);
+    std::scoped_lock lock(mutex_gains_, mutex_drs_params_);
 
-    kpz_    = calculateGainChange(kpz_, drs_gains_.kpz, false, "kpz");
-    kvz_    = calculateGainChange(kvz_, drs_gains_.kvz, false, "kvz");
-    kaz_    = calculateGainChange(kaz_, drs_gains_.kaz, false, "kaz");
-    kqxy_   = calculateGainChange(kqxy_, drs_gains_.kqxy, false, "kqxy");
-    kqz_    = calculateGainChange(kqz_, drs_gains_.kqz, false, "kqz");
-    kwxy_   = calculateGainChange(kwxy_, drs_gains_.kwxy, false, "kwxy");
-    kwz_    = calculateGainChange(kwz_, drs_gains_.kwz, false, "kwz");
-    km_     = calculateGainChange(km_, drs_gains_.km, false, "km");
-    km_lim_ = calculateGainChange(km_lim_, drs_gains_.km_lim, false, "km_lim");
+    bool updated = false;
+
+    kpz_  = calculateGainChange(dt, kpz_, drs_gains_.kpz * gain_coeff, bypass_filter, "kpz", updated);
+    kvz_  = calculateGainChange(dt, kvz_, drs_gains_.kvz * gain_coeff, bypass_filter, "kvz", updated);
+    kaz_  = calculateGainChange(dt, kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz", updated);
+    kqxy_ = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_  = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    kwxy_ = calculateGainChange(dt, kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy", updated);
+    kwz_  = calculateGainChange(dt, kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz", updated);
+    km_   = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+
+    km_lim_ = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);
+
+    // set the gains back to dynamic reconfigure
+    // and only do it when some filtering occurs
+    if (updated) {
+
+      DrsConfig_t new_drs_gains;
+
+      new_drs_gains.kpz    = kpz_;
+      new_drs_gains.kvz    = kvz_;
+      new_drs_gains.kaz    = kaz_;
+      new_drs_gains.kqxy   = kqxy_;
+      new_drs_gains.kqz    = kqz_;
+      new_drs_gains.kwxy   = kwxy_;
+      new_drs_gains.kwz    = kwz_;
+      new_drs_gains.km     = km_;
+      new_drs_gains.km_lim = km_lim_;
+
+      drs_->updateConfig(new_drs_gains);
+    }
   }
 }
 
 //}
 
-// --------------------------------------------------------------
-// |                       other routines                       |
-// --------------------------------------------------------------
-
 /* calculateGainChange() //{ */
 
-double AttitudeController::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
+double AttitudeController::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate,
+                                               std::string name, bool &updated) {
 
   double change = desired_value - current_value;
+
+  double gains_filter_max_change = _gains_filter_change_rate_ * dt;
+  double gains_filter_min_change = _gains_filter_min_change_rate_ * dt;
 
   if (!bypass_rate) {
 
@@ -579,21 +605,21 @@ double AttitudeController::calculateGainChange(const double current_value, const
     double saturated_change;
 
     if (fabs(current_value) < 1e-6) {
-      change *= _gains_filter_max_change_;
+      change *= gains_filter_max_change;
     } else {
 
       saturated_change = change;
 
       change_in_perc = (current_value + saturated_change) / current_value - 1.0;
 
-      if (change_in_perc > _gains_filter_max_change_) {
-        saturated_change = current_value * _gains_filter_max_change_;
-      } else if (change_in_perc < -_gains_filter_max_change_) {
-        saturated_change = current_value * -_gains_filter_max_change_;
+      if (change_in_perc > gains_filter_max_change) {
+        saturated_change = current_value * gains_filter_max_change;
+      } else if (change_in_perc < -gains_filter_max_change) {
+        saturated_change = current_value * -gains_filter_max_change;
       }
 
-      if (fabs(saturated_change) < fabs(change) * _gains_filter_min_change_) {
-        change *= _gains_filter_min_change_;
+      if (fabs(saturated_change) < fabs(change) * gains_filter_min_change) {
+        change *= gains_filter_min_change;
       } else {
         change = saturated_change;
       }
@@ -602,6 +628,7 @@ double AttitudeController::calculateGainChange(const double current_value, const
 
   if (fabs(change) > 1e-3) {
     ROS_INFO_THROTTLE(1.0, "[AttitudeController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    updated = true;
   }
 
   return current_value + change;
