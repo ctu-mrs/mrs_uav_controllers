@@ -824,17 +824,17 @@ void AccelerationController::filterGains(const bool mute_gains, const double dt)
     // and only do it when some filtering occurs
     if (updated) {
 
-      DrsConfig_t new_drs_gains_;
+      DrsConfig_t new_drs_gains;
 
-      new_drs_gains_.kqxy = kqxy_;
-      new_drs_gains_.kqz  = kqz_;
-      new_drs_gains_.kwxy = kwxy_;
-      new_drs_gains_.kwz  = kwz_;
-      new_drs_gains_.km   = km_;
+      new_drs_gains.kqxy = kqxy_;
+      new_drs_gains.kqz  = kqz_;
+      new_drs_gains.kwxy = kwxy_;
+      new_drs_gains.kwz  = kwz_;
+      new_drs_gains.km   = km_;
 
-      new_drs_gains_.km_lim = km_lim_;
+      new_drs_gains.km_lim = km_lim_;
 
-      drs_->updateConfig(new_drs_gains_);
+      drs_->updateConfig(new_drs_gains);
     }
   }
 }
