@@ -50,7 +50,7 @@ public:
   const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name);
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
 
   virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
 
@@ -90,20 +90,20 @@ private:
   double kwxy_;    // attitude tilt rate pitch/roll gain
   double kwz_;     // attitude yaw rate gain
 
-  std::mutex mutex_gains_;      // locks the gains the are used and filtered
-  std::mutex mutex_drs_gains_;  // locks the gains that came from the drs
+  std::mutex mutex_gains_;       // locks the gains the are used and filtered
+  std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
   // | --------------------- gain filtering --------------------- |
 
-  ros::Timer timer_gain_filter_;
-  void       timerGainsFilter(const ros::TimerEvent &event);
-
-  double _gains_filter_timer_rate_;
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
-  double _gains_filter_max_change_;  // calculated as change_rate/timer_rate;
-  double _gains_filter_min_change_;  // calculated as change_rate/timer_rate;
+  void filterGains(const bool mute_gains, const double dt);
+
+  // | ----------------------- gain muting ---------------------- |
+
+  bool   gains_muted_ = false;  // the current state (may be initialized in activate())
+  double _gain_mute_coefficient_;
 
   // | ------------ controller limits and saturations ----------- |
 
@@ -231,12 +231,14 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
   param_loader.load_param("attitude_vertical_feedback/thrust_saturation", _thrust_saturation_);
 
   // gain filtering
-  param_loader.load_param("attitude_vertical_feedback/gains_filter/filter_rate", _gains_filter_timer_rate_);
   param_loader.load_param("attitude_vertical_feedback/gains_filter/perc_change_rate", _gains_filter_change_rate_);
   param_loader.load_param("attitude_vertical_feedback/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // output mode
   param_loader.load_param("output_mode", _output_mode_);
+
+  // gain muting
+  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
 
   if (!param_loader.loaded_successfully()) {
     ROS_ERROR("[AccelerationController]: could not load all parameters!");
@@ -244,9 +246,6 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
   }
 
   // | ---------------- prepare stuff from params --------------- |
-
-  _gains_filter_max_change_ = _gains_filter_change_rate_ / _gains_filter_timer_rate_;
-  _gains_filter_min_change_ = _gains_filter_min_change_rate_ / _gains_filter_timer_rate_;
 
   if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[AccelerationController]: output mode has to be {1, 2}!");
@@ -281,10 +280,6 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
 
   profiler = mrs_lib::Profiler(nh_, "AccelerationController", _profiler_enabled_);
 
-  // | ------------------------- timers ------------------------- |
-
-  timer_gain_filter_ = nh_.createTimer(ros::Rate(_gains_filter_timer_rate_), &AccelerationController::timerGainsFilter, this);
-
   // | ----------------------- finish init ---------------------- |
 
   ROS_INFO("[AccelerationController]: initialized, version %s", VERSION);
@@ -317,6 +312,7 @@ bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr 
   }
 
   first_iteration_ = true;
+  gains_muted_     = true;
 
   ROS_INFO("[AccelerationController]: activated");
 
@@ -490,6 +486,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   m.getRPY(roll, pitch, yaw);
 
   // | --------------------- load the gains --------------------- |
+
+  filterGains(reference->disable_position_gains, dt);
 
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kq, Kw;
@@ -783,7 +781,7 @@ void AccelerationController::resetDisturbanceEstimators(void) {
 void AccelerationController::callbackDrs(mrs_controllers::acceleration_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
-    std::scoped_lock lock(mutex_drs_gains_);
+    std::scoped_lock lock(mutex_drs_params_);
 
     drs_gains_ = config;
   }
@@ -794,38 +792,64 @@ void AccelerationController::callbackDrs(mrs_controllers::acceleration_controlle
 //}
 
 // --------------------------------------------------------------
-// |                           timers                           |
+// |                       other routines                       |
 // --------------------------------------------------------------
 
-/* timerGainsFilter() //{ */
+/* filterGains() //{ */
 
-void AccelerationController::timerGainsFilter(const ros::TimerEvent &event) {
+void AccelerationController::filterGains(const bool mute_gains, const double dt) {
 
-  mrs_lib::Routine profiler_routine = profiler.createRoutine("timerGainsFilter", _gains_filter_timer_rate_, 0.05, event);
+  // When muting the gains, we want to bypass the filter,
+  // so it happens immediately.
+  bool   bypass_filter = (mute_gains || gains_muted_);
+  double gain_coeff    = (mute_gains || gains_muted_) ? _gain_mute_coefficient_ : 1.0;
 
+  gains_muted_ = mute_gains;
+
+  // calculate the difference
   {
-    std::scoped_lock lock(mutex_gains_, mutex_drs_gains_);
+    std::scoped_lock lock(mutex_gains_, mutex_drs_params_);
 
-    kqxy_   = calculateGainChange(kqxy_, drs_gains_.kqxy, false, "kqxy");
-    kqz_    = calculateGainChange(kqz_, drs_gains_.kqz, false, "kqz");
-    kwxy_   = calculateGainChange(kwxy_, drs_gains_.kwxy, false, "kwxy");
-    kwz_    = calculateGainChange(kwz_, drs_gains_.kwz, false, "kwz");
-    km_     = calculateGainChange(km_, drs_gains_.km, false, "km");
-    km_lim_ = calculateGainChange(km_lim_, drs_gains_.km_lim, false, "km_lim");
+    bool updated = false;
+
+    kqxy_ = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_  = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    kwxy_ = calculateGainChange(dt, kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy", updated);
+    kwz_  = calculateGainChange(dt, kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz", updated);
+    km_   = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+
+    km_lim_ = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);
+
+    // set the gains back to dynamic reconfigure
+    // and only do it when some filtering occurs
+    if (updated) {
+
+      DrsConfig_t new_drs_gains_;
+
+      new_drs_gains_.kqxy = kqxy_;
+      new_drs_gains_.kqz  = kqz_;
+      new_drs_gains_.kwxy = kwxy_;
+      new_drs_gains_.kwz  = kwz_;
+      new_drs_gains_.km   = km_;
+
+      new_drs_gains_.km_lim = km_lim_;
+
+      drs_->updateConfig(new_drs_gains_);
+    }
   }
 }
 
 //}
 
-// --------------------------------------------------------------
-// |                       other routines                       |
-// --------------------------------------------------------------
-
 /* calculateGainChange() //{ */
 
-double AccelerationController::calculateGainChange(const double current_value, const double desired_value, const bool bypass_rate, std::string name) {
+double AccelerationController::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate,
+                                                   std::string name, bool &updated) {
 
   double change = desired_value - current_value;
+
+  double gains_filter_max_change = _gains_filter_change_rate_ * dt;
+  double gains_filter_min_change = _gains_filter_min_change_rate_ * dt;
 
   if (!bypass_rate) {
 
@@ -834,21 +858,21 @@ double AccelerationController::calculateGainChange(const double current_value, c
     double saturated_change;
 
     if (fabs(current_value) < 1e-6) {
-      change *= _gains_filter_max_change_;
+      change *= gains_filter_max_change;
     } else {
 
       saturated_change = change;
 
       change_in_perc = (current_value + saturated_change) / current_value - 1.0;
 
-      if (change_in_perc > _gains_filter_max_change_) {
-        saturated_change = current_value * _gains_filter_max_change_;
-      } else if (change_in_perc < -_gains_filter_max_change_) {
-        saturated_change = current_value * -_gains_filter_max_change_;
+      if (change_in_perc > gains_filter_max_change) {
+        saturated_change = current_value * gains_filter_max_change;
+      } else if (change_in_perc < -gains_filter_max_change) {
+        saturated_change = current_value * -gains_filter_max_change;
       }
 
-      if (fabs(saturated_change) < fabs(change) * _gains_filter_min_change_) {
-        change *= _gains_filter_min_change_;
+      if (fabs(saturated_change) < fabs(change) * gains_filter_min_change) {
+        change *= gains_filter_min_change;
       } else {
         change = saturated_change;
       }
@@ -856,7 +880,8 @@ double AccelerationController::calculateGainChange(const double current_value, c
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[AccelerationController]: changing gain '%s' from '%.2f' to '%.2f'", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[AccelerationController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    updated = true;
   }
 
   return current_value + change;
