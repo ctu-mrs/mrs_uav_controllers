@@ -1213,27 +1213,27 @@ void So3Controller::filterGains(const bool mute_gains, const double dt) {
     // and only do it when some filtering occurs
     if (updated) {
 
-      DrsConfig_t new_drs_gains_;
+      DrsConfig_t new_drs_gains;
 
-      new_drs_gains_.kpxy        = kpxy_;
-      new_drs_gains_.kvxy        = kvxy_;
-      new_drs_gains_.kaxy        = kaxy_;
-      new_drs_gains_.kiwxy       = kiwxy_;
-      new_drs_gains_.kibxy       = kibxy_;
-      new_drs_gains_.kpz         = kpz_;
-      new_drs_gains_.kvz         = kvz_;
-      new_drs_gains_.kaz         = kaz_;
-      new_drs_gains_.kqxy        = kqxy_;
-      new_drs_gains_.kqz         = kqz_;
-      new_drs_gains_.kwxy        = kwxy_;
-      new_drs_gains_.kwz         = kwz_;
-      new_drs_gains_.kiwxy_lim   = kiwxy_lim_;
-      new_drs_gains_.kibxy_lim   = kibxy_lim_;
-      new_drs_gains_.km          = km_;
-      new_drs_gains_.km_lim      = km_lim_;
-      new_drs_gains_.output_mode = output_mode_;
+      new_drs_gains.kpxy        = kpxy_;
+      new_drs_gains.kvxy        = kvxy_;
+      new_drs_gains.kaxy        = kaxy_;
+      new_drs_gains.kiwxy       = kiwxy_;
+      new_drs_gains.kibxy       = kibxy_;
+      new_drs_gains.kpz         = kpz_;
+      new_drs_gains.kvz         = kvz_;
+      new_drs_gains.kaz         = kaz_;
+      new_drs_gains.kqxy        = kqxy_;
+      new_drs_gains.kqz         = kqz_;
+      new_drs_gains.kwxy        = kwxy_;
+      new_drs_gains.kwz         = kwz_;
+      new_drs_gains.kiwxy_lim   = kiwxy_lim_;
+      new_drs_gains.kibxy_lim   = kibxy_lim_;
+      new_drs_gains.km          = km_;
+      new_drs_gains.km_lim      = km_lim_;
+      new_drs_gains.output_mode = output_mode_;
 
-      drs_->updateConfig(new_drs_gains_);
+      drs_->updateConfig(new_drs_gains);
     }
   }
 }
