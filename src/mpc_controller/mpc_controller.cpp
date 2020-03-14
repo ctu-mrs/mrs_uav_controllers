@@ -129,6 +129,7 @@ private:
   double _tilt_angle_failsafe_;
   double _thrust_saturation_;
   double _yaw_rate_saturation_;
+  double _pitch_roll_rate_saturation_;
   double _max_tilt_angle_;
 
   // | ------------------ activation and output ----------------- |
@@ -296,10 +297,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
   param_loader.load_param("attitude_feedback/default_gains/weight_estimator/km_lim", km_lim_);
 
   // constraints
-  param_loader.load_param("attitude_feedback/tilt_angle_saturation", _tilt_angle_saturation_);
-  param_loader.load_param("attitude_feedback/tilt_angle_failsafe", _tilt_angle_failsafe_);
-  param_loader.load_param("attitude_feedback/thrust_saturation", _thrust_saturation_);
-  param_loader.load_param("attitude_feedback/yaw_rate_saturation", _yaw_rate_saturation_);
+  param_loader.load_param("attitude_feedback/constraints/tilt_angle_saturation", _tilt_angle_saturation_);
+  param_loader.load_param("attitude_feedback/constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.load_param("attitude_feedback/constraints/thrust_saturation", _thrust_saturation_);
+  param_loader.load_param("attitude_feedback/constraints/yaw_rate_saturation", _yaw_rate_saturation_);
+  param_loader.load_param("attitude_feedback/constraints/pitch_roll_rate_saturation", _pitch_roll_rate_saturation_);
 
   // gain filtering
   param_loader.load_param("attitude_feedback/gains_filter/perc_change_rate", _gains_filter_change_rate_);
@@ -320,7 +322,12 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string nam
 
   // if yaw_rate_saturation is 0 (or close), set it to something very high, so its inactive
   if (_yaw_rate_saturation_ <= 1e-3) {
-    _yaw_rate_saturation_ = 10e6;
+    _yaw_rate_saturation_ = std::numeric_limits<double>::max();
+  }
+
+  // if _pitch_roll_rate_saturation_ is 0 (or close), set it to something very high, so its inactive
+  if (_pitch_roll_rate_saturation_ <= 1e-3) {
+    _pitch_roll_rate_saturation_ = std::numeric_limits<double>::max();
   }
 
   if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
@@ -1089,10 +1096,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | -------------------- saturate yaw rate ------------------- |
 
-  if (!std::isfinite(t[2])) {
-    t[2] = 0;
-    ROS_ERROR("[MpcController]: NaN detected in variable 't[2]', setting it to 0 and returning!!!");
-  } else if (t[2] > _yaw_rate_saturation_) {
+  if (t[0] > _pitch_roll_rate_saturation_) {
+    t[0] = _pitch_roll_rate_saturation_;
+  } else if (t[0] < -_pitch_roll_rate_saturation_) {
+    t[0] = -_pitch_roll_rate_saturation_;
+  }
+
+  if (t[1] > _pitch_roll_rate_saturation_) {
+    t[1] = _pitch_roll_rate_saturation_;
+  } else if (t[1] < -_pitch_roll_rate_saturation_) {
+    t[1] = -_pitch_roll_rate_saturation_;
+  }
+
+  if (t[2] > _yaw_rate_saturation_) {
     t[2] = _yaw_rate_saturation_;
   } else if (t[2] < -_yaw_rate_saturation_) {
     t[2] = -_yaw_rate_saturation_;

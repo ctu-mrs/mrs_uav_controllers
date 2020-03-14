@@ -122,6 +122,7 @@ private:
 
   // | ------------ controller limits and saturations ----------- |
 
+  double _attitude_rate_saturation_;
   double _tilt_angle_saturation_;
   double _tilt_angle_failsafe_;
   double _thrust_saturation_;
@@ -231,9 +232,10 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.load_param("default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.load_param("tilt_angle_saturation", _tilt_angle_saturation_);
-  param_loader.load_param("tilt_angle_failsafe", _tilt_angle_failsafe_);
-  param_loader.load_param("thrust_saturation", _thrust_saturation_);
+  param_loader.load_param("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
+  param_loader.load_param("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
+  param_loader.load_param("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.load_param("constraints/thrust_saturation", _thrust_saturation_);
 
   // gain filtering
   param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
@@ -260,6 +262,11 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   // convert to radians
   _tilt_angle_saturation_ = (_tilt_angle_saturation_ / 180.0) * M_PI;
   _tilt_angle_failsafe_   = (_tilt_angle_failsafe_ / 180.0) * M_PI;
+
+  // if _attitude_rate_saturation_ is 0 (or close), set it to something very high, so its inactive
+  if (_attitude_rate_saturation_ <= 1e-3) {
+    _attitude_rate_saturation_ = std::numeric_limits<double>::max();
+  }
 
   // initialize the integrals
   uav_mass_difference_ = 0;
@@ -983,6 +990,26 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       desired_y_accel = res.value().vector.y;
       desired_z_accel = res.value().vector.z;
     }
+  }
+
+  // | --------------- saturate the attitude rate --------------- |
+
+  if (t[0] > _attitude_rate_saturation_) {
+    t[0] = _attitude_rate_saturation_;
+  } else if (t[0] < -_attitude_rate_saturation_) {
+    t[0] = -_attitude_rate_saturation_;
+  }
+
+  if (t[1] > _attitude_rate_saturation_) {
+    t[1] = _attitude_rate_saturation_;
+  } else if (t[1] < -_attitude_rate_saturation_) {
+    t[1] = -_attitude_rate_saturation_;
+  }
+
+  if (t[2] > _attitude_rate_saturation_) {
+    t[2] = _attitude_rate_saturation_;
+  } else if (t[2] < -_attitude_rate_saturation_) {
+    t[2] = -_attitude_rate_saturation_;
   }
 
   // | --------------- fill the resulting command --------------- |
