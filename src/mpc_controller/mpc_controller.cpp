@@ -557,7 +557,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, reference->acceleration.x;
   } else {
     initial_x << uav_state->pose.position.x, reference->velocity.x, reference->acceleration.x;
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceedds constraints (%.2f > %.2f m), using reference for initial condition",
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.x), _max_speed_horizontal_);
   }
 
@@ -565,7 +565,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, reference->acceleration.y;
   } else {
     initial_y << uav_state->pose.position.y, reference->velocity.y, reference->acceleration.y;
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceedds constraints (%.2f > %.2f m), using reference for initial condition",
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.y), _max_speed_horizontal_);
   }
 
@@ -573,7 +573,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, reference->acceleration.z;
   } else {
     initial_z << uav_state->pose.position.z, reference->velocity.z, reference->acceleration.z;
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceedds constraints (%.2f > %.2f m), using reference for initial condition",
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.z), _max_speed_vertical_);
   }
 
@@ -1094,7 +1094,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  // | -------------------- saturate yaw rate ------------------- |
+  // | --------------- saturate the attitude rate --------------- |
 
   if (t[0] > _pitch_roll_rate_saturation_) {
     t[0] = _pitch_roll_rate_saturation_;
