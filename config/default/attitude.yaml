@@ -28,7 +28,9 @@ gains_filter:
   perc_change_rate: 1.0
   min_change_rate: 0.1 # perc of the difference
 
-thrust_saturation: 0.90 # [-], range from 0 to 1
+constraints:
+  attitude_rate_saturation: 10 # [rad/s]
+  thrust_saturation: 0.90 # [-], range from 0 to 1
 
 # gains can be muted by the tracker by this factor
 # gains are also muting just after activation

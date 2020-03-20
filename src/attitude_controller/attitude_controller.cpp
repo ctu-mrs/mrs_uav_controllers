@@ -105,7 +105,8 @@ private:
 
   // | ------------ controller limits and saturations ----------- |
 
-  double _max_tilt_angle_;
+  double _attitude_rate_saturation_;
+  double _tilt_angle_saturation_;
   double _thrust_saturation_;
 
   // | ------------------ activation and output ----------------- |
@@ -181,17 +182,13 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   // gain muting
   param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
 
-  param_loader.load_param("thrust_saturation", _thrust_saturation_);
+  param_loader.load_param("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
+  param_loader.load_param("constraints/thrust_saturation", _thrust_saturation_);
 
   if (!param_loader.loaded_successfully()) {
     ROS_ERROR("[AttitudeController]: could not load all parameters!");
     ros::shutdown();
   }
-
-  // | ---------------- prepare stuff from params --------------- |
-
-  // convert to radians
-  _max_tilt_angle_ = (_max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference_ = 0;
 
@@ -448,6 +445,62 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   // |                 produce the control output                 |
   // --------------------------------------------------------------
 
+  // | --------------- saturate the attitude rate --------------- |
+
+  if (t[0] > _attitude_rate_saturation_) {
+    t[0] = _attitude_rate_saturation_;
+  } else if (t[0] < -_attitude_rate_saturation_) {
+    t[0] = -_attitude_rate_saturation_;
+  }
+
+  if (t[1] > _attitude_rate_saturation_) {
+    t[1] = _attitude_rate_saturation_;
+  } else if (t[1] < -_attitude_rate_saturation_) {
+    t[1] = -_attitude_rate_saturation_;
+  }
+
+  if (t[2] > _attitude_rate_saturation_) {
+    t[2] = _attitude_rate_saturation_;
+  } else if (t[2] < -_attitude_rate_saturation_) {
+    t[2] = -_attitude_rate_saturation_;
+  }
+
+  // | ------------ compensated desired acceleration ------------ |
+
+  double desired_x_accel = 0;
+  double desired_y_accel = 0;
+  double desired_z_accel = 0;
+
+  {
+    Eigen::Quaterniond des_quater = Eigen::Quaterniond(Rd);
+
+    // rotate the drone's z axis
+    Eigen::Vector3d uav_z_in_world = des_quater * Eigen::Vector3d(0, 0, 1);
+
+    Eigen::Vector3d thrust_vector = thrust_force * uav_z_in_world;
+
+    double world_accel_x = (thrust_vector[0] / total_mass);
+    double world_accel_y = (thrust_vector[1] / total_mass);
+    double world_accel_z = reference->acceleration.z;
+
+    geometry_msgs::Vector3Stamped world_accel;
+
+    world_accel.header.stamp    = ros::Time::now();
+    world_accel.header.frame_id = uav_state->header.frame_id;
+    world_accel.vector.x        = world_accel_x;
+    world_accel.vector.y        = world_accel_y;
+    world_accel.vector.z        = world_accel_z;
+
+    auto res = common_handlers_->transformer->transformSingle("fcu", world_accel);
+
+    if (res) {
+
+      desired_x_accel = res.value().vector.x;
+      desired_y_accel = res.value().vector.y;
+      desired_z_accel = res.value().vector.z;
+    }
+  }
+
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
@@ -463,9 +516,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   output_command->quater_attitude.z   = thrust_vec.z();
   output_command->quater_attitude_set = true;
 
-  output_command->desired_acceleration.x = f[0] / total_mass;
-  output_command->desired_acceleration.y = f[1] / total_mass;
-  output_command->desired_acceleration.z = f[2] / total_mass;
+  output_command->desired_acceleration.x = desired_x_accel;
+  output_command->desired_acceleration.y = desired_y_accel;
+  output_command->desired_acceleration.z = desired_z_accel;
 
   output_command->euler_attitude_set = false;
 
