@@ -38,17 +38,15 @@ namespace nsf_controller
 class NsfController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
                   const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &control_reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
-
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
+  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -105,6 +103,8 @@ private:
 
   void filterGains(const bool mute_gains, const double dt);
 
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
+
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
@@ -146,7 +146,7 @@ private:
 
 /* //{ initialize() */
 
-void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
                                const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
                                std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
@@ -222,7 +222,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   // | ----------- calculate the default hover thrust ----------- |
 
-  hover_thrust_ = sqrt(_uav_mass_ * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+  hover_thrust_ = sqrt(_uav_mass_ * _g_) * _motor_params_.A + _motor_params_.B;
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -259,9 +259,9 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
 /* //{ activate() */
 
-bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd) {
 
-  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+  if (last_attitude_cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
     ROS_WARN("[NsfController]: activated without getting the last controller's command");
 
@@ -269,21 +269,22 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   } else {
 
-    activation_attitude_cmd_ = *cmd;
-    uav_mass_difference_     = cmd->mass_difference;
+    activation_attitude_cmd_ = *last_attitude_cmd;
+    uav_mass_difference_     = last_attitude_cmd->mass_difference;
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    Ib_b_[0] = asin(cmd->disturbance_bx_b / (_g_ * cmd->total_mass));
-    Ib_b_[1] = asin(cmd->disturbance_by_b / (_g_ * cmd->total_mass));
+    Ib_b_[0] = asin(last_attitude_cmd->disturbance_bx_b / (_g_ * last_attitude_cmd->total_mass));
+    Ib_b_[1] = asin(last_attitude_cmd->disturbance_by_b / (_g_ * last_attitude_cmd->total_mass));
 
-    Iw_w_[0] = asin(cmd->disturbance_wx_w / (_g_ * cmd->total_mass));
-    Iw_w_[1] = asin(cmd->disturbance_wy_w / (_g_ * cmd->total_mass));
+    Iw_w_[0] = asin(last_attitude_cmd->disturbance_wx_w / (_g_ * last_attitude_cmd->total_mass));
+    Iw_w_[1] = asin(last_attitude_cmd->disturbance_wy_w / (_g_ * last_attitude_cmd->total_mass));
 
     ROS_INFO(
         "[NsfController]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: %.2f, "
         "%.2f N",
-        uav_mass_difference_, cmd->disturbance_bx_b, cmd->disturbance_by_b, cmd->disturbance_wx_w, cmd->disturbance_wx_w);
+        uav_mass_difference_, last_attitude_cmd->disturbance_bx_b, last_attitude_cmd->disturbance_by_b, last_attitude_cmd->disturbance_wx_w,
+        last_attitude_cmd->disturbance_wx_w);
 
     ROS_INFO("[NsfController]: activated with a last controller's command.");
   }
@@ -316,7 +317,7 @@ void NsfController::deactivate(void) {
 /* //{ update() */
 
 const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
-                                                                const mrs_msgs::PositionCommand::ConstPtr &reference) {
+                                                                const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
 
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
 
@@ -368,8 +369,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   // Rp - position reference in global frame
   // Rp - velocity reference in global frame
-  Eigen::Vector3d Rp(reference->position.x, -reference->position.y, reference->position.z);
-  Eigen::Vector3d Rv(reference->velocity.x, -reference->velocity.y, reference->velocity.z);
+  Eigen::Vector3d Rp(control_reference->position.x, -control_reference->position.y, control_reference->position.z);
+  Eigen::Vector3d Rv(control_reference->velocity.x, -control_reference->velocity.y, control_reference->velocity.z);
 
   // Op - position in global frame
   // Op - velocity in global frame
@@ -393,7 +394,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
-  hover_thrust_ = sqrt(total_mass * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+  hover_thrust_ = sqrt(total_mass * _g_) * _motor_params_.A + _motor_params_.B;
 
   // --------------------------------------------------------------
   // |                   calculate the feedback                   |
@@ -422,7 +423,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
     }
   }
 
-  filterGains(reference->disable_position_gains, dt);
+  filterGains(control_reference->disable_position_gains, dt);
 
   // create vectors of gains
   Eigen::Vector3d kp, kv, ka;
@@ -436,8 +437,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   }
 
   // calculate the feed forwared acceleration
-  Eigen::Vector3d feed_forward(asin((reference->acceleration.x * cos(pitch) * cos(roll)) / _g_),
-                               asin((-reference->acceleration.y * cos(pitch) * cos(roll)) / _g_), reference->acceleration.z * (hover_thrust_ / _g_));
+  Eigen::Vector3d feed_forward(asin((control_reference->acceleration.x * cos(pitch) * cos(roll)) / _g_),
+                               asin((-control_reference->acceleration.y * cos(pitch) * cos(roll)) / _g_),
+                               control_reference->acceleration.z * (hover_thrust_ / _g_));
 
   // | -------- calculate the componentes of our feedback ------- |
   Eigen::Vector3d p_component, v_component, a_component, i_component;
@@ -727,7 +729,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   output_command->euler_attitude.x   = feedback_b[1];
   output_command->euler_attitude.y   = feedback_b[0];
-  output_command->euler_attitude.z   = reference->yaw;  // ISSUE: this will not work with custom heading estimator
+  output_command->euler_attitude.z   = control_reference->yaw;  // ISSUE: this will not work with custom heading estimator
   output_command->euler_attitude_set = true;
 
   output_command->quater_attitude.x = 0;
@@ -780,7 +782,7 @@ const mrs_msgs::ControllerStatus NsfController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void NsfController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg) {
+void NsfController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state) {
 
   ROS_INFO("[NfsController]: switching the odometry source");
 
@@ -797,7 +799,7 @@ void NsfController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg
   world_integrals.vector.y = Iw_w_[1];
   world_integrals.vector.z = 0;
 
-  auto res = common_handlers_->transformer->transformSingle(msg->header.frame_id, world_integrals);
+  auto res = common_handlers_->transformer->transformSingle(new_uav_state->header.frame_id, world_integrals);
 
   if (res) {
 

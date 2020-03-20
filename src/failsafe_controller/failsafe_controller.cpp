@@ -31,15 +31,15 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const mrs_uav_manager::MotorParams motor_params,
                   const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &control_reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
+  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -91,7 +91,7 @@ private:
 
 /* initialize() //{ */
 
-void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
                                     const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
                                     std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
@@ -129,7 +129,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   // | ----------- calculate the default hover thrust ----------- |
 
-  hover_thrust_ = sqrt(_uav_mass_ * _g_) * motor_params.hover_thrust_a + motor_params.hover_thrust_b;
+  hover_thrust_ = sqrt(_uav_mass_ * _g_) * motor_params.A + motor_params.B;
 
   // | ------------------------ profiler ------------------------ |
 
@@ -146,11 +146,11 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
 /* activate() //{ */
 
-bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd) {
 
   std::scoped_lock lock(mutex_hover_thrust_);
 
-  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+  if (last_attitude_cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
     ROS_WARN("[FailsafeController]: activated without getting the last controller's command");
 
@@ -160,17 +160,16 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd
 
     // | --------------- calculate the euler angles --------------- |
 
-    yaw_setpoint_ = cmd->euler_attitude.z;
+    yaw_setpoint_ = last_attitude_cmd->euler_attitude.z;
 
     ROS_INFO("[FailsafeController]: activated with yaw: %.2f rad", yaw_setpoint_);
 
-    activation_attitude_cmd_ = *cmd;
-    uav_mass_difference_     = cmd->mass_difference;
+    activation_attitude_cmd_ = *last_attitude_cmd;
+    uav_mass_difference_     = last_attitude_cmd->mass_difference;
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    hover_thrust_ =
-        _initial_thrust_percentage_ * sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+    hover_thrust_ = _initial_thrust_percentage_ * sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.A + _motor_params_.B;
 
     ROS_INFO("[FailsafeController]: activated with uav_mass_difference %.2f kg.", uav_mass_difference_);
   }
@@ -200,7 +199,7 @@ void FailsafeController::deactivate(void) {
 /* update() //{ */
 
 const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &       uav_state,
-                                                                     [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &reference) {
+                                                                     [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
 
   // WARNING: this mutex keeps the disarming routine from being called during the same moment, when the update routine is being called
   // If we try to disarm during the update() execution, it will freeze, since the update() is being called by the control manager
@@ -312,7 +311,7 @@ const mrs_msgs::ControllerStatus FailsafeController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void FailsafeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &msg) {
+void FailsafeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &new_uav_state) {
 }
 
 //}

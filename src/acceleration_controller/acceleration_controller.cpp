@@ -42,17 +42,15 @@ namespace acceleration_controller
 class AccelerationController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const mrs_uav_manager::MotorParams motor_params,
                   const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &control_reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
-
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
+  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -95,10 +93,12 @@ private:
 
   // | --------------------- gain filtering --------------------- |
 
+  void filterGains(const bool mute_gains, const double dt);
+
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
+
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
-
-  void filterGains(const bool mute_gains, const double dt);
 
   // | ----------------------- gain muting ---------------------- |
 
@@ -166,7 +166,7 @@ private:
 
 /* //{ initialize() */
 
-void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
                                         const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
                                         std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
@@ -293,9 +293,9 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
 
 /* //{ activate() */
 
-bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd) {
 
-  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+  if (last_attitude_cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
     ROS_WARN("[AccelerationController]: activated without getting the last controller's command");
 
@@ -303,8 +303,8 @@ bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr 
 
   } else {
 
-    activation_attitude_cmd_ = *cmd;
-    uav_mass_difference_     = cmd->mass_difference;
+    activation_attitude_cmd_ = *last_attitude_cmd;
+    uav_mass_difference_     = last_attitude_cmd->mass_difference;
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
@@ -341,7 +341,7 @@ void AccelerationController::deactivate(void) {
 /* //{ update() */
 
 const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
-                                                                         const mrs_msgs::PositionCommand::ConstPtr &reference) {
+                                                                         const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
 
   mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
@@ -394,9 +394,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   Eigen::Matrix3d Rd;
 
-  Rp << reference->position.x, reference->position.y, reference->position.z;
-  Rv << reference->velocity.x, reference->velocity.y, reference->velocity.z;
-  Rw << 0, 0, reference->yaw_dot;
+  Rp << control_reference->position.x, control_reference->position.y, control_reference->position.z;
+  Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
+  Rw << 0, 0, control_reference->yaw_dot;
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -422,28 +422,28 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   // | ------------------- initial conditions ------------------- |
 
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
-  initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, reference->acceleration.z;
+  initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, control_reference->acceleration.z;
 
   // | ---------------------- set reference --------------------- |
 
   Eigen::MatrixXd mpc_reference_z = Eigen::MatrixXd::Zero(_horizon_length_ * _n_states_, 1);
 
   // prepare the full reference vector
-  if (reference->use_position_vertical) {
+  if (control_reference->use_position_vertical) {
     for (int i = 0; i < _horizon_length_; i++) {
-      mpc_reference_z((i * _n_states_) + 0, 0) = reference->position.z;
+      mpc_reference_z((i * _n_states_) + 0, 0) = control_reference->position.z;
     }
   }
 
-  if (reference->use_velocity_vertical) {
+  if (control_reference->use_velocity_vertical) {
     for (int i = 0; i < _horizon_length_; i++) {
-      mpc_reference_z((i * _n_states_) + 1, 0) = reference->velocity.z;
+      mpc_reference_z((i * _n_states_) + 1, 0) = control_reference->velocity.z;
     }
   }
 
-  if (reference->use_acceleration) {
+  if (control_reference->use_acceleration) {
     for (int i = 0; i < _horizon_length_; i++) {
-      mpc_reference_z((i * _n_states_) + 2, 0) = reference->acceleration.z;
+      mpc_reference_z((i * _n_states_) + 2, 0) = control_reference->acceleration.z;
     }
   }
 
@@ -453,12 +453,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   std::vector<double> temp_Q = _Q_z_;
   std::vector<double> temp_S = _S_z_;
 
-  if (!reference->use_position_vertical) {
+  if (!control_reference->use_position_vertical) {
     temp_Q[0] = 0;
     temp_S[0] = 0;
   }
 
-  if (!reference->use_velocity_vertical) {
+  if (!control_reference->use_velocity_vertical) {
     temp_Q[1] = 0;
     temp_S[1] = 0;
   }
@@ -489,7 +489,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | --------------------- load the gains --------------------- |
 
-  filterGains(reference->disable_position_gains, dt);
+  filterGains(control_reference->disable_position_gains, dt);
 
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kq, Kw;
@@ -503,7 +503,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | ---------- desired orientation matrix and force ---------- |
 
-  Ra << reference->acceleration.x, reference->acceleration.y, reference->acceleration.z + cvx_z_u_;
+  Ra << control_reference->acceleration.x, control_reference->acceleration.y, control_reference->acceleration.z + cvx_z_u_;
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
@@ -543,8 +543,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
               (180.0 / M_PI) * theta, (180.0 / M_PI) * _tilt_angle_failsafe_);
     ROS_INFO("[AccelerationController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
     ROS_INFO("[AccelerationController]: feed forward: [%.2f, %.2f, %.2f]", feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[AccelerationController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y,
-             reference->position.z, reference->yaw);
+    ROS_INFO("[AccelerationController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", control_reference->position.x, control_reference->position.y,
+             control_reference->position.z, control_reference->yaw);
     ROS_INFO("[AccelerationController]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
              uav_state->pose.position.z, yaw);
 
@@ -565,7 +565,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | ---------------------- yaw reference --------------------- |
 
-  Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
+  Rq.coeffs() << 0, 0, sin(control_reference->yaw / 2.0), cos(control_reference->yaw / 2.0);
 
   // | ------------- construct the rotational matrix ------------ |
 
@@ -590,7 +590,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   double thrust       = 0;
 
   if (thrust_force >= 0) {
-    thrust = sqrt(thrust_force) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+    thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
   } else {
     ROS_WARN_THROTTLE(1.0, "[AccelerationController]: just so you know, the desired thrust force is negative (%.2f", thrust_force);
   }
@@ -690,7 +690,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
     double world_accel_x = (thrust_vector[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass);
-    double world_accel_z = reference->acceleration.z;
+    double world_accel_z = control_reference->acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;
     world_accel.header.stamp    = ros::Time::now();
@@ -782,7 +782,7 @@ const mrs_msgs::ControllerStatus AccelerationController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void AccelerationController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &msg) {
+void AccelerationController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &new_uav_state) {
 }
 
 //}
@@ -801,7 +801,6 @@ void AccelerationController::resetDisturbanceEstimators(void) {
 /* //{ callbackDrs() */
 
 void AccelerationController::callbackDrs(mrs_controllers::acceleration_controllerConfig &config, [[maybe_unused]] uint32_t level) {
-
   {
     std::scoped_lock lock(mutex_drs_params_);
 
@@ -820,7 +819,6 @@ void AccelerationController::callbackDrs(mrs_controllers::acceleration_controlle
 /* filterGains() //{ */
 
 void AccelerationController::filterGains(const bool mute_gains, const double dt) {
-
   // When muting the gains, we want to bypass the filter,
   // so it happens immediately.
   bool   bypass_filter = (mute_gains || gains_muted_);
@@ -867,7 +865,6 @@ void AccelerationController::filterGains(const bool mute_gains, const double dt)
 
 double AccelerationController::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate,
                                                    std::string name, bool &updated) {
-
   double change = desired_value - current_value;
 
   double gains_filter_max_change = _gains_filter_change_rate_ * dt;

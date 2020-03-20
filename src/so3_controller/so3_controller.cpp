@@ -44,17 +44,15 @@ namespace so3_controller
 class So3Controller : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle& parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+  void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space, const mrs_uav_manager::MotorParams motor_params,
                   const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr& cmd);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::PositionCommand::ConstPtr& reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::PositionCommand::ConstPtr& control_reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
-
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr& msg);
+  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -117,6 +115,8 @@ private:
 
   void filterGains(const bool mute_gains, const double dt);
 
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
+
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
@@ -170,7 +170,7 @@ private:
 
 /* //{ initialize() */
 
-void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] std::string name, std::string name_space,
+void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
                                const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
                                std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
@@ -313,9 +313,9 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
 /* //{ activate() */
 
-bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr& cmd) {
+bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd) {
 
-  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+  if (last_attitude_cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
     ROS_WARN("[So3Controller]: activated without getting the last controller's command");
 
@@ -323,21 +323,20 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr& cmd) {
 
   } else {
 
-    activation_attitude_cmd_ = *cmd;
-    uav_mass_difference_     = cmd->mass_difference;
+    activation_attitude_cmd_ = *last_attitude_cmd;
+    uav_mass_difference_     = last_attitude_cmd->mass_difference;
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    Ib_b_[0] = cmd->disturbance_bx_b;
-    Ib_b_[1] = cmd->disturbance_by_b;
+    Ib_b_[0] = last_attitude_cmd->disturbance_bx_b;
+    Ib_b_[1] = last_attitude_cmd->disturbance_by_b;
 
-    Iw_w_[0] = cmd->disturbance_wx_w;
-    Iw_w_[1] = cmd->disturbance_wy_w;
+    Iw_w_[0] = last_attitude_cmd->disturbance_wx_w;
+    Iw_w_[1] = last_attitude_cmd->disturbance_wy_w;
 
     ROS_INFO(
         "[So3Controller]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: "
-        "%.2f, "
-        "%.2f N",
+        "%.2f, %.2f N",
         uav_mass_difference_, Ib_b_[0], Ib_b_[1], Iw_w_[0], Iw_w_[1]);
 
     ROS_INFO("[So3Controller]: activated with a last controller's command, mass difference %.2f kg", uav_mass_difference_);
@@ -346,8 +345,8 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr& cmd) {
   // rampup check
   if (_rampup_enabled_) {
 
-    double hover_thrust      = sqrt(cmd->total_mass * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
-    double thrust_difference = hover_thrust - cmd->thrust;
+    double hover_thrust      = sqrt(last_attitude_cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
+    double thrust_difference = hover_thrust - last_attitude_cmd->thrust;
 
     if (thrust_difference > 0) {
       rampup_direction_ = 1;
@@ -357,12 +356,12 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr& cmd) {
       rampup_direction_ = 0;
     }
 
-    ROS_INFO("[So3Controller]: activating rampup with initial thrust: %.4f, target: %.4f", cmd->thrust, hover_thrust);
+    ROS_INFO("[So3Controller]: activating rampup with initial thrust: %.4f, target: %.4f", last_attitude_cmd->thrust, hover_thrust);
 
     rampup_active_     = true;
     rampup_start_time_ = ros::Time::now();
     rampup_last_time_  = ros::Time::now();
-    rampup_thrust_     = cmd->thrust;
+    rampup_thrust_     = last_attitude_cmd->thrust;
 
     rampup_duration_ = fabs(thrust_difference) / _rampup_speed_;
   }
@@ -395,7 +394,7 @@ void So3Controller::deactivate(void) {
 /* //{ update() */
 
 const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
-                                                                const mrs_msgs::PositionCommand::ConstPtr& reference) {
+                                                                const mrs_msgs::PositionCommand::ConstPtr& control_reference) {
 
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
 
@@ -469,53 +468,53 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   Eigen::Matrix3d Rd;
 
-  if (reference->use_position_vertical || reference->use_position_horizontal) {
+  if (control_reference->use_position_vertical || control_reference->use_position_horizontal) {
 
-    if (reference->use_position_horizontal) {
-      Rp[0] = reference->position.x;
-      Rp[1] = reference->position.y;
+    if (control_reference->use_position_horizontal) {
+      Rp[0] = control_reference->position.x;
+      Rp[1] = control_reference->position.y;
     } else {
       Rv[0] = 0;
       Rv[1] = 0;
     }
 
-    if (reference->use_position_vertical) {
-      Rp[2] = reference->position.z;
+    if (control_reference->use_position_vertical) {
+      Rp[2] = control_reference->position.z;
     } else {
       Rv[2] = 0;
     }
   }
 
-  if (reference->use_velocity_horizontal) {
-    Rv[0] = reference->velocity.x;
-    Rv[1] = reference->velocity.y;
+  if (control_reference->use_velocity_horizontal) {
+    Rv[0] = control_reference->velocity.x;
+    Rv[1] = control_reference->velocity.y;
   } else {
     Rv[0] = 0;
     Rv[1] = 0;
   }
 
-  if (reference->use_velocity_vertical) {
-    Rv[2] = reference->velocity.z;
+  if (control_reference->use_velocity_vertical) {
+    Rv[2] = control_reference->velocity.z;
   } else {
     Rv[2] = 0;
   }
 
-  if (reference->use_acceleration) {
-    Ra << reference->acceleration.x, reference->acceleration.y, reference->acceleration.z;
+  if (control_reference->use_acceleration) {
+    Ra << control_reference->acceleration.x, control_reference->acceleration.y, control_reference->acceleration.z;
   } else {
     Ra << 0, 0, 0;
   }
 
-  if (reference->use_yaw) {
-    Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
+  if (control_reference->use_yaw) {
+    Rq.coeffs() << 0, 0, sin(control_reference->yaw / 2.0), cos(control_reference->yaw / 2.0);
   } else {
     Rq.coeffs() << 0, 0, sin(uav_yaw / 2.0), cos(uav_yaw / 2.0);
   }
 
-  if (reference->use_attitude_rate) {
-    Rw << reference->attitude_rate.x, reference->attitude_rate.y, reference->attitude_rate.z;
-  } else if (reference->use_yaw_dot) {
-    Rw << 0, 0, reference->yaw_dot;
+  if (control_reference->use_attitude_rate) {
+    Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
+  } else if (control_reference->use_yaw_dot) {
+    Rw << 0, 0, control_reference->yaw_dot;
   }
 
   // Op - position in global frame
@@ -536,20 +535,20 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // position control error
   Eigen::Vector3d Ep = Eigen::Vector3d::Zero(3);
 
-  if (reference->use_position_horizontal || reference->use_position_vertical) {
+  if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
     Ep = Op - Rp;
   }
 
   // velocity control error
   Eigen::Vector3d Ev = Eigen::Vector3d::Zero(3);
 
-  if (reference->use_velocity_horizontal || reference->use_velocity_vertical) {
+  if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical) {
     Ev = Ov - Rv;
   }
 
   // | --------------------- load the gains --------------------- |
 
-  filterGains(reference->disable_position_gains, dt);
+  filterGains(control_reference->disable_position_gains, dt);
 
   Eigen::Vector3d Ka = Eigen::Vector3d::Zero(3);
   Eigen::Array3d  Kp = Eigen::Array3d::Zero(3);
@@ -560,7 +559,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   {
     std::scoped_lock lock(mutex_gains_);
 
-    if (reference->use_position_horizontal) {
+    if (control_reference->use_position_horizontal) {
       Kp[0] = kpxy_;
       Kp[1] = kpxy_;
     } else {
@@ -568,13 +567,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       Kp[1] = 0;
     }
 
-    if (reference->use_position_vertical) {
+    if (control_reference->use_position_vertical) {
       Kp[2] = kpz_;
     } else {
       Kp[2] = 0;
     }
 
-    if (reference->use_velocity_horizontal) {
+    if (control_reference->use_velocity_horizontal) {
       Kv[0] = kvxy_;
       Kv[1] = kvxy_;
     } else {
@@ -582,13 +581,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       Kv[1] = 0;
     }
 
-    if (reference->use_velocity_vertical) {
+    if (control_reference->use_velocity_vertical) {
       Kv[2] = kvz_;
     } else {
       Kv[2] = 0;
     }
 
-    if (reference->use_acceleration) {
+    if (control_reference->use_acceleration) {
       Ka << kaxy_, kaxy_, kaz_;
     } else {
       Ka << 0, 0, 0;
@@ -596,7 +595,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     Kq << kqxy_, kqxy_, kqz_;
 
-    if (!reference->use_yaw) {
+    if (!control_reference->use_yaw) {
       Kq[2] = 0;
     }
 
@@ -680,8 +679,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     ROS_INFO("[So3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
     ROS_INFO("[So3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
     ROS_INFO("[So3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[So3Controller]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", reference->position.x, reference->position.y, reference->position.z,
-             reference->yaw);
+    ROS_INFO("[So3Controller]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", control_reference->position.x, control_reference->position.y,
+             control_reference->position.z, control_reference->yaw);
     ROS_INFO("[So3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
              uav_state->pose.position.z, uav_yaw);
 
@@ -730,7 +729,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   double thrust = 0;
 
   if (thrust_force >= 0) {
-    thrust = sqrt(thrust_force) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+    thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
   } else {
     ROS_WARN_THROTTLE(1.0, "[So3Controller]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
   }
@@ -771,9 +770,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Eigen::Vector3d integration_switch(1, 1, 0);
 
     // integrate the world error
-    if (reference->use_position_horizontal) {
+    if (control_reference->use_position_horizontal) {
       Iw_w_ -= kiwxy_ * Ep.head(2) * dt;
-    } else if (reference->use_velocity_horizontal) {
+    } else if (control_reference->use_velocity_horizontal) {
       Iw_w_ -= kiwxy_ * Ev.head(2) * dt;
     }
 
@@ -868,9 +867,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     }
 
     // integrate the body error
-    if (reference->use_position_horizontal) {
+    if (control_reference->use_position_horizontal) {
       Ib_b_ -= kibxy_ * Ep_fcu_untilted * dt;
-    } else if (reference->use_velocity_horizontal) {
+    } else if (control_reference->use_velocity_horizontal) {
       Ib_b_ -= kibxy_ * Ev_fcu_untilted * dt;
     }
 
@@ -920,7 +919,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   {
     std::scoped_lock lock(mutex_gains_);
 
-    if (reference->use_position_vertical && !rampup_active_) {
+    if (control_reference->use_position_vertical && !rampup_active_) {
       uav_mass_difference_ -= km_ * Ep[2] * dt;
     }
 
@@ -972,7 +971,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = reference->acceleration.z;
+    double world_accel_z = control_reference->acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;
 
@@ -1126,7 +1125,7 @@ const mrs_msgs::ControllerStatus So3Controller::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr& msg) {
+void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new_uav_state) {
 
   ROS_INFO("[So3Controller]: switching the odometry source");
 
@@ -1143,7 +1142,7 @@ void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr& msg
   world_integrals.vector.y = Iw_w_[1];
   world_integrals.vector.z = 0;
 
-  auto res = common_handlers_->transformer->transformSingle(msg->header.frame_id, world_integrals);
+  auto res = common_handlers_->transformer->transformSingle(new_uav_state->header.frame_id, world_integrals);
 
   if (res) {
 

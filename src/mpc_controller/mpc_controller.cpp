@@ -48,17 +48,15 @@ namespace mpc_controller
 class MpcController : public mrs_uav_manager::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const mrs_uav_manager::MotorParams motor_params,
                   const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd);
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &control_reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
-  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
-
-  virtual void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg);
+  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -114,6 +112,8 @@ private:
   // | --------------------- gain filtering --------------------- |
 
   void filterGains(const bool mute_gains, const double dt);
+
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
 
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
@@ -217,8 +217,9 @@ private:
 
 /* //{ initialize() */
 
-void MpcController::initialize(const ros::NodeHandle &parent_nh, std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
-                               const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
+void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
+                               const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
+                               std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
@@ -418,7 +419,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   // rampup check
   if (_rampup_enabled_) {
 
-    double hover_thrust_     = sqrt(cmd->total_mass * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+    double hover_thrust_     = sqrt(cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
     double thrust_difference = hover_thrust_ - cmd->thrust;
 
     if (thrust_difference > 0) {
@@ -467,7 +468,7 @@ void MpcController::deactivate(void) {
 /* //{ update() */
 
 const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
-                                                                const mrs_msgs::PositionCommand::ConstPtr &reference) {
+                                                                const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
 
   mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
 
@@ -526,9 +527,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   Eigen::Matrix3d Rd;
 
-  Rp << reference->position.x, reference->position.y, reference->position.z;  // fill the desired position
-  Rv << reference->velocity.x, reference->velocity.y, reference->velocity.z;
-  Rw << 0, 0, reference->yaw_dot;
+  Rp << control_reference->position.x, control_reference->position.y, control_reference->position.z;  // fill the desired position
+  Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
+  Rw << 0, 0, control_reference->yaw_dot;
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -554,25 +555,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
 
   if (fabs(uav_state->velocity.linear.x) < _max_speed_horizontal_) {
-    initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, reference->acceleration.x;
+    initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, control_reference->acceleration.x;
   } else {
-    initial_x << uav_state->pose.position.x, reference->velocity.x, reference->acceleration.x;
+    initial_x << uav_state->pose.position.x, control_reference->velocity.x, control_reference->acceleration.x;
     ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.x), _max_speed_horizontal_);
   }
 
   if (fabs(uav_state->velocity.linear.x) < _max_speed_horizontal_) {
-    initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, reference->acceleration.y;
+    initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, control_reference->acceleration.y;
   } else {
-    initial_y << uav_state->pose.position.y, reference->velocity.y, reference->acceleration.y;
+    initial_y << uav_state->pose.position.y, control_reference->velocity.y, control_reference->acceleration.y;
     ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.y), _max_speed_horizontal_);
   }
 
   if (fabs(uav_state->velocity.linear.z) < _max_speed_vertical_) {
-    initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, reference->acceleration.z;
+    initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, control_reference->acceleration.z;
   } else {
-    initial_z << uav_state->pose.position.z, reference->velocity.z, reference->acceleration.z;
+    initial_z << uav_state->pose.position.z, control_reference->velocity.z, control_reference->acceleration.z;
     ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.z), _max_speed_vertical_);
   }
@@ -586,17 +587,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // prepare the full reference vector
   for (int i = 0; i < _horizon_length_; i++) {
 
-    mpc_reference_x((i * _n_states_) + 0, 0) = reference->position.x;
-    mpc_reference_x((i * _n_states_) + 1, 0) = reference->velocity.x;
-    mpc_reference_x((i * _n_states_) + 2, 0) = reference->acceleration.x;
+    mpc_reference_x((i * _n_states_) + 0, 0) = control_reference->position.x;
+    mpc_reference_x((i * _n_states_) + 1, 0) = control_reference->velocity.x;
+    mpc_reference_x((i * _n_states_) + 2, 0) = control_reference->acceleration.x;
 
-    mpc_reference_y((i * _n_states_) + 0, 0) = reference->position.y;
-    mpc_reference_y((i * _n_states_) + 1, 0) = reference->velocity.y;
-    mpc_reference_y((i * _n_states_) + 2, 0) = reference->acceleration.y;
+    mpc_reference_y((i * _n_states_) + 0, 0) = control_reference->position.y;
+    mpc_reference_y((i * _n_states_) + 1, 0) = control_reference->velocity.y;
+    mpc_reference_y((i * _n_states_) + 2, 0) = control_reference->acceleration.y;
 
-    mpc_reference_z((i * _n_states_) + 0, 0) = reference->position.z;
-    mpc_reference_z((i * _n_states_) + 1, 0) = reference->velocity.z;
-    mpc_reference_z((i * _n_states_) + 2, 0) = reference->acceleration.z;
+    mpc_reference_z((i * _n_states_) + 0, 0) = control_reference->position.z;
+    mpc_reference_z((i * _n_states_) + 1, 0) = control_reference->velocity.z;
+    mpc_reference_z((i * _n_states_) + 2, 0) = control_reference->acceleration.z;
   }
 
   // | ------------------ set the penalizations ----------------- |
@@ -607,22 +608,22 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   std::vector<double> temp_S_horizontal = _S_;
   std::vector<double> temp_S_vertical   = _S_z_;
 
-  if (!reference->use_position_horizontal) {
+  if (!control_reference->use_position_horizontal) {
     temp_Q_horizontal[0] = 0;
     temp_S_horizontal[0] = 0;
   }
 
-  if (!reference->use_velocity_horizontal) {
+  if (!control_reference->use_velocity_horizontal) {
     temp_Q_horizontal[1] = 0;
     temp_S_horizontal[1] = 0;
   }
 
-  if (!reference->use_position_vertical) {
+  if (!control_reference->use_position_vertical) {
     temp_Q_vertical[0] = 0;
     temp_S_vertical[0] = 0;
   }
 
-  if (!reference->use_velocity_vertical) {
+  if (!control_reference->use_velocity_vertical) {
     temp_Q_vertical[1] = 0;
     temp_S_vertical[1] = 0;
   }
@@ -667,7 +668,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | ----------- disable lateral feedback if needed ----------- |
 
-  if (reference->disable_position_gains) {
+  if (control_reference->disable_position_gains) {
     cvx_x_u = 0;
     cvx_y_u = 0;
   }
@@ -687,7 +688,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | --------------------- load the gains --------------------- |
 
-  filterGains(reference->disable_position_gains, dt);
+  filterGains(control_reference->disable_position_gains, dt);
 
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kq, Kw;
@@ -697,7 +698,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     Kq << kqxy_, kqxy_, kqz_;
 
-    if (!reference->use_yaw) {
+    if (!control_reference->use_yaw) {
       Kq[2] = 0;
     }
 
@@ -706,7 +707,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | -------------- recalculate the hover thrust -------------- |
 
-  hover_thrust_ = sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+  hover_thrust_ = sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.A + _motor_params_.B;
 
   // | ---------- desired orientation matrix and force ---------- |
 
@@ -733,8 +734,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     }
   }
 
-  if (reference->use_acceleration) {
-    Ra << reference->acceleration.x + cvx_x_u, reference->acceleration.y + cvx_y_u, reference->acceleration.z + cvx_z_u;
+  if (control_reference->use_acceleration) {
+    Ra << control_reference->acceleration.x + cvx_x_u, control_reference->acceleration.y + cvx_y_u, control_reference->acceleration.z + cvx_z_u;
   } else {
     Ra << cvx_x_u, cvx_y_u, cvx_z_u;
   }
@@ -787,8 +788,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     ROS_INFO("[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f[0], f[1], f[2]);
     ROS_INFO("[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback[0], integral_feedback[1], integral_feedback[2]);
     ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), reference->position.x, reference->position.y,
-             reference->position.z, reference->yaw);
+    ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), control_reference->position.x, control_reference->position.y,
+             control_reference->position.z, control_reference->yaw);
     ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
              uav_state->pose.position.z, uav_yaw);
 
@@ -809,8 +810,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | ---------------------- yaw reference --------------------- |
 
-  if (reference->use_yaw) {
-    Rq.coeffs() << 0, 0, sin(reference->yaw / 2.0), cos(reference->yaw / 2.0);
+  if (control_reference->use_yaw) {
+    Rq.coeffs() << 0, 0, sin(control_reference->yaw / 2.0), cos(control_reference->yaw / 2.0);
   } else {
     Rq.coeffs() << 0, 0, sin(uav_yaw / 2.0), cos(uav_yaw / 2.0);
   }
@@ -838,7 +839,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   double thrust       = 0;
 
   if (thrust_force >= 0) {
-    thrust = sqrt(thrust_force) * _motor_params_.hover_thrust_a + _motor_params_.hover_thrust_b;
+    thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
   } else {
     ROS_WARN_THROTTLE(1.0, "[%s]: just so you know, the desired thrust force is negative (%.2f)", this->name_.c_str(), thrust_force);
   }
@@ -926,9 +927,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     }
 
     if (integral_terms_enabled_) {
-      if (reference->use_position_horizontal) {
+      if (control_reference->use_position_horizontal) {
         Ib_b_ -= temp_gain * Ep_fcu_untilted * dt;
-      } else if (reference->use_velocity_horizontal) {
+      } else if (control_reference->use_velocity_horizontal) {
         Ib_b_ -= temp_gain * Ev_fcu_untilted * dt;
       }
     }
@@ -991,9 +992,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     }
 
     if (integral_terms_enabled_) {
-      if (reference->use_position_horizontal) {
+      if (control_reference->use_position_horizontal) {
         Iw_w_ -= temp_gain * Ep.head(2) * dt;
-      } else if (reference->use_velocity_horizontal) {
+      } else if (control_reference->use_velocity_horizontal) {
         Iw_w_ -= temp_gain * Ev.head(2) * dt;
       }
     }
@@ -1052,7 +1053,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
 
-    if (reference->use_position_vertical) {
+    if (control_reference->use_position_vertical) {
       uav_mass_difference_ -= temp_gain * Ep[2] * dt;
     }
 
@@ -1132,7 +1133,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = reference->acceleration.z;
+    double world_accel_z = control_reference->acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;
     world_accel.header.stamp    = ros::Time::now();
@@ -1272,7 +1273,7 @@ const mrs_msgs::ControllerStatus MpcController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void MpcController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg) {
+void MpcController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state) {
 
   ROS_INFO("[%s]: switching the odometry source", this->name_.c_str());
 
@@ -1289,7 +1290,7 @@ void MpcController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr &msg
   world_integrals.vector.y = Iw_w_[1];
   world_integrals.vector.z = 0;
 
-  auto res = common_handlers_->transformer->transformSingle(msg->header.frame_id, world_integrals);
+  auto res = common_handlers_->transformer->transformSingle(new_uav_state->header.frame_id, world_integrals);
 
   if (res) {
 
