@@ -137,6 +137,7 @@ private:
   int _horizon_length_;
 
   // constraints
+  double _attitude_rate_saturation_;
   double _max_speed_vertical_;
   double _max_acceleration_vertical_;
   double _max_u_vertical_;
@@ -214,25 +215,26 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
   // | ------------- height and attitude controller ------------- |
 
   // attitude gains
-  param_loader.load_param("attitude_vertical_feedback/default_gains/horizontal/attitude/kq", kqxy_);
-  param_loader.load_param("attitude_vertical_feedback/default_gains/vertical/attitude/kq", kqz_);
+  param_loader.load_param("attitude_feedback/default_gains/horizontal/attitude/kq", kqxy_);
+  param_loader.load_param("attitude_feedback/default_gains/vertical/attitude/kq", kqz_);
 
   // attitude rate gains
-  param_loader.load_param("attitude_vertical_feedback/default_gains/horizontal/attitude/kw", kwxy_);
-  param_loader.load_param("attitude_vertical_feedback/default_gains/vertical/attitude/kw", kwz_);
-
-  // mass estimator
-  param_loader.load_param("attitude_vertical_feedback/default_gains/weight_estimator/km", km_);
-  param_loader.load_param("attitude_vertical_feedback/default_gains/weight_estimator/km_lim", km_lim_);
-
-  // constraints
-  param_loader.load_param("attitude_vertical_feedback/tilt_angle_saturation", _tilt_angle_saturation_);
-  param_loader.load_param("attitude_vertical_feedback/tilt_angle_failsafe", _tilt_angle_failsafe_);
-  param_loader.load_param("attitude_vertical_feedback/thrust_saturation", _thrust_saturation_);
+  param_loader.load_param("attitude_feedback/default_gains/horizontal/attitude/kw", kwxy_);
+  param_loader.load_param("attitude_feedback/default_gains/vertical/attitude/kw", kwz_);
 
   // gain filtering
-  param_loader.load_param("attitude_vertical_feedback/gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.load_param("attitude_vertical_feedback/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.load_param("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+
+  // mass estimator
+  param_loader.load_param("weight_estimator/km", km_);
+  param_loader.load_param("weight_estimator/km_lim", km_lim_);
+
+  // constraints and limits
+  param_loader.load_param("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
+  param_loader.load_param("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
+  param_loader.load_param("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.load_param("constraints/thrust_saturation", _thrust_saturation_);
 
   // output mode
   param_loader.load_param("output_mode", _output_mode_);
@@ -651,6 +653,26 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
+
+  // | --------------- saturate the attitude rate --------------- |
+
+  if (t[0] > _attitude_rate_saturation_) {
+    t[0] = _attitude_rate_saturation_;
+  } else if (t[0] < -_attitude_rate_saturation_) {
+    t[0] = -_attitude_rate_saturation_;
+  }
+
+  if (t[1] > _attitude_rate_saturation_) {
+    t[1] = _attitude_rate_saturation_;
+  } else if (t[1] < -_attitude_rate_saturation_) {
+    t[1] = -_attitude_rate_saturation_;
+  }
+
+  if (t[2] > _attitude_rate_saturation_) {
+    t[2] = _attitude_rate_saturation_;
+  } else if (t[2] < -_attitude_rate_saturation_) {
+    t[2] = -_attitude_rate_saturation_;
+  }
 
   // | ------------ compensated desired acceleration ------------ |
 
