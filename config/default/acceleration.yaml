@@ -53,7 +53,7 @@ constraints:
   tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
   thrust_saturation: 0.90 # [-], range from 0 to 1
 
-weight_estimator:
+mass_estimator:
   km: 1.0
   km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 

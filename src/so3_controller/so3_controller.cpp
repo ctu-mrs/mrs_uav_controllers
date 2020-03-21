@@ -224,8 +224,8 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.load_param("default_gains/vertical/attitude/kw", kwz_);
 
   // mass estimator
-  param_loader.load_param("default_gains/weight_estimator/km", km_);
-  param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim_);
+  param_loader.load_param("default_gains/mass_estimator/km", km_);
+  param_loader.load_param("default_gains/mass_estimator/km_lim", km_lim_);
 
   // integrator limits
   param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim_);
@@ -328,14 +328,14 @@ bool So3Controller::activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_att
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    Ib_b_[0] = last_attitude_cmd->disturbance_bx_b;
-    Ib_b_[1] = last_attitude_cmd->disturbance_by_b;
+    Ib_b_[0] = -last_attitude_cmd->disturbance_bx_b;
+    Ib_b_[1] = -last_attitude_cmd->disturbance_by_b;
 
-    Iw_w_[0] = last_attitude_cmd->disturbance_wx_w;
-    Iw_w_[1] = last_attitude_cmd->disturbance_wy_w;
+    Iw_w_[0] = -last_attitude_cmd->disturbance_wx_w;
+    Iw_w_[1] = -last_attitude_cmd->disturbance_wy_w;
 
     ROS_INFO(
-        "[So3Controller]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: "
+        "[So3Controller]: setting the mass difference and integrals from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: "
         "%.2f, %.2f N",
         uav_mass_difference_, Ib_b_[0], Ib_b_[1], Iw_w_[0], Iw_w_[1]);
 
@@ -607,9 +607,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   // | --------------- desired orientation matrix --------------- |
 
+  // get body integral in the world frame
+
   Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);
 
-  // get body disturbance in the world frame
   {
 
     geometry_msgs::Vector3Stamped Ib_b_stamped;
@@ -629,6 +630,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform the Ib_b_ to the world frame");
     }
   }
+
+  // construct the desired force vector
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
@@ -943,11 +946,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   //}
 
-  // | ----------- report the values of the integrals ----------- |
-
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", Iw_w_[X], Iw_w_[Y], kiwxy_lim_);
-  ROS_INFO_THROTTLE(5.0, "[So3Controller]: body error integral:  x %.2f N, y %.2f N, lim: %.2f N", Ib_b_[X], Ib_b_[Y], kibxy_lim_);
-
   // --------------------------------------------------------------
   // |                 produce the control output                 |
   // --------------------------------------------------------------
@@ -1090,14 +1088,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = total_mass;
 
-  output_command->disturbance_bx_b = Ib_b_[0];
-  output_command->disturbance_by_b = Ib_b_[1];
+  output_command->disturbance_bx_b = -Ib_b_[0];
+  output_command->disturbance_by_b = -Ib_b_[1];
 
-  output_command->disturbance_bx_w = Ib_w[0];
-  output_command->disturbance_by_w = Ib_w[1];
+  output_command->disturbance_bx_w = -Ib_w[0];
+  output_command->disturbance_by_w = -Ib_w[1];
 
-  output_command->disturbance_wx_w = Iw_w_[0];
-  output_command->disturbance_wy_w = Iw_w_[1];
+  output_command->disturbance_wx_w = -Iw_w_[0];
+  output_command->disturbance_wy_w = -Iw_w_[1];
 
   output_command->controller_enforcing_constraints = false;
 
@@ -1150,6 +1148,7 @@ void So3Controller::switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new
 
     Iw_w_[0] = res.value().vector.x;
     Iw_w_[1] = res.value().vector.y;
+
   } else {
 
     ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform world integral to the new frame");

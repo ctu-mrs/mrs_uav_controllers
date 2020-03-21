@@ -227,8 +227,8 @@ void AccelerationController::initialize(const ros::NodeHandle &parent_nh, [[mayb
   param_loader.load_param("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // mass estimator
-  param_loader.load_param("weight_estimator/km", km_);
-  param_loader.load_param("weight_estimator/km_lim", km_lim_);
+  param_loader.load_param("mass_estimator/km", km_);
+  param_loader.load_param("mass_estimator/km_lim", km_lim_);
 
   // constraints and limits
   param_loader.load_param("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
@@ -308,7 +308,7 @@ bool AccelerationController::activate(const mrs_msgs::AttitudeCommand::ConstPtr 
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    ROS_INFO("[AttitudeController]: setting mass difference from the last AttitudeCmd: %.2f kg", uav_mass_difference_);
+    ROS_INFO("[AccelerationController]: setting mass difference from the last AttitudeCmd: %.2f kg", uav_mass_difference_);
 
     ROS_INFO("[AccelerationController]: activated with the last controller's command");
   }
@@ -503,20 +503,46 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | ---------- desired orientation matrix and force ---------- |
 
+  // get body integral in the world frame
+  Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);
+
+  {
+    geometry_msgs::Vector3Stamped Ib_b_stamped;
+
+    Ib_b_stamped.header.stamp    = ros::Time::now();
+    Ib_b_stamped.header.frame_id = "fcu_untilted";
+    Ib_b_stamped.vector.x        = -activation_attitude_cmd_.disturbance_bx_b;
+    Ib_b_stamped.vector.y        = -activation_attitude_cmd_.disturbance_by_b;
+    Ib_b_stamped.vector.z        = 0;
+
+    auto res = common_handlers_->transformer->transformSingle(uav_state->header.frame_id, Ib_b_stamped);
+
+    if (res) {
+      Ib_w[0] = res.value().vector.x;
+      Ib_w[1] = res.value().vector.y;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[AccelerationController]: could not transform the Ib_b to the world frame");
+    }
+  }
+
+  // construct the desired force vector
+
   Ra << control_reference->acceleration.x, control_reference->acceleration.y, control_reference->acceleration.z + cvx_z_u_;
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
   Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra);
+  Eigen::Vector3d integral_feedback =
+      Eigen::Vector3d(Ib_w[0] + -activation_attitude_cmd_.disturbance_wx_w, Ib_w[1] + -activation_attitude_cmd_.disturbance_wy_w, 0);
 
-  Eigen::Vector3d f = feed_forward;
+  Eigen::Vector3d f = feed_forward + integral_feedback;
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
 
   if (f[2] < 0) {
 
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
+    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
 
     f << 0, 0, 1;
   }
@@ -745,7 +771,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
     output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
 
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion (this is not normal)");
+    ROS_WARN_THROTTLE(1.0, "[AccelerationController]: outputting attitude quaternion (this is not normal)");
   }
 
   output_command->desired_acceleration.x = desired_x_accel;
@@ -755,6 +781,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   output_command->thrust          = thrust;
   output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = _uav_mass_ + uav_mass_difference_;
+
+  // since this controller does not estimate disturbances, fill in the
+  // original disturbance that were pass in by the previous controller
+  output_command->disturbance_bx_b = activation_attitude_cmd_.disturbance_bx_b;
+  output_command->disturbance_by_b = activation_attitude_cmd_.disturbance_by_b;
+
+  output_command->disturbance_bx_w = activation_attitude_cmd_.disturbance_bx_w;
+  output_command->disturbance_by_w = activation_attitude_cmd_.disturbance_by_w;
+
+  output_command->disturbance_wx_w = activation_attitude_cmd_.disturbance_wx_w;
+  output_command->disturbance_wy_w = activation_attitude_cmd_.disturbance_wy_w;
 
   output_command->controller_enforcing_constraints = false;
 
@@ -790,6 +827,17 @@ void AccelerationController::switchOdometrySource([[maybe_unused]] const mrs_msg
 /* resetDisturbanceEstimators() //{ */
 
 void AccelerationController::resetDisturbanceEstimators(void) {
+
+  // Since this controller does not estimate distrubances, but it does pass the old onces,
+  // set them to zeros here.
+  activation_attitude_cmd_.disturbance_bx_b = 0;
+  activation_attitude_cmd_.disturbance_by_b = 0;
+
+  activation_attitude_cmd_.disturbance_bx_w = 0;
+  activation_attitude_cmd_.disturbance_by_w = 0;
+
+  activation_attitude_cmd_.disturbance_wx_w = 0;
+  activation_attitude_cmd_.disturbance_wy_w = 0;
 }
 
 //}

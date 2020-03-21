@@ -188,8 +188,8 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   param_loader.load_param("default_gains/vertical/ka", kaz_);
 
   // mass estimator
-  param_loader.load_param("default_gains/weight_estimator/km", km_);
-  param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim_);
+  param_loader.load_param("default_gains/mass_estimator/km", km_);
+  param_loader.load_param("default_gains/mass_estimator/km_lim", km_lim_);
 
   // integrator limits
   param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim_);
@@ -274,14 +274,14 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_att
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    Ib_b_[0] = asin(last_attitude_cmd->disturbance_bx_b / (_g_ * last_attitude_cmd->total_mass));
-    Ib_b_[1] = asin(last_attitude_cmd->disturbance_by_b / (_g_ * last_attitude_cmd->total_mass));
+    Ib_b_[0] = asin(-last_attitude_cmd->disturbance_bx_b / (_g_ * last_attitude_cmd->total_mass));
+    Ib_b_[1] = asin(-last_attitude_cmd->disturbance_by_b / (_g_ * last_attitude_cmd->total_mass));
 
-    Iw_w_[0] = asin(last_attitude_cmd->disturbance_wx_w / (_g_ * last_attitude_cmd->total_mass));
-    Iw_w_[1] = asin(last_attitude_cmd->disturbance_wy_w / (_g_ * last_attitude_cmd->total_mass));
+    Iw_w_[0] = asin(-last_attitude_cmd->disturbance_wx_w / (_g_ * last_attitude_cmd->total_mass));
+    Iw_w_[1] = asin(-last_attitude_cmd->disturbance_wy_w / (_g_ * last_attitude_cmd->total_mass));
 
     ROS_INFO(
-        "[NsfController]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: %.2f, "
+        "[NsfController]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Db_b: %.2f, %.2f N, Dw_w: %.2f, "
         "%.2f N",
         uav_mass_difference_, last_attitude_cmd->disturbance_bx_b, last_attitude_cmd->disturbance_by_b, last_attitude_cmd->disturbance_wx_w,
         last_attitude_cmd->disturbance_wx_w);
@@ -671,32 +671,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   }
 
   // --------------------------------------------------------------
-  // |            report on the values of the integrals           |
-  // --------------------------------------------------------------
-
-  {
-    std::scoped_lock lock(mutex_integrals_);
-
-    // report in the internal representation of the disturbance -> tilt angle
-    double rad_deg = 180.0 / M_PI;
-
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: disturbance in the tilt represenation");
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %.2f deg, y %.2f deg, lim: %.2f deg", rad_deg * Iw_w_[X], rad_deg * Iw_w_[Y],
-                      rad_deg * kiwxy_lim_);
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %.2f deg, y %.2f deg, lim: %.2f deg", rad_deg * Ib_b_[X], rad_deg * Ib_b_[Y],
-                      rad_deg * kibxy_lim_);
-
-    // report in the more universal representation -> force
-    double hover_force = total_mass * _g_;
-
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: disturbance in the force represenation");
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: world error integral: x %.2f N, y %.2f N, lim: %.2f N", hover_force * sin(Iw_w_[X]), hover_force * sin(Iw_w_[Y]),
-                      hover_force * sin(kiwxy_lim_));
-    ROS_INFO_THROTTLE(5.0, "[NsfController]: body error integral:  x %.2f N, y %.2f N, lim: %.2f N", hover_force * sin(Ib_b_[X]), hover_force * sin(Ib_b_[Y]),
-                      hover_force * sin(kibxy_lim_));
-  }
-
-  // --------------------------------------------------------------
   // |                 produce the control output                 |
   // --------------------------------------------------------------
 
@@ -747,14 +721,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = total_mass;
 
-  output_command->disturbance_bx_b = _g_ * total_mass * sin(Ib_b_[0]);
-  output_command->disturbance_by_b = _g_ * total_mass * sin(Ib_b_[1]);
+  output_command->disturbance_bx_b = -_g_ * total_mass * sin(Ib_b_[0]);
+  output_command->disturbance_by_b = -_g_ * total_mass * sin(Ib_b_[1]);
 
-  output_command->disturbance_bx_w = _g_ * total_mass * sin(Ib_w[0]);
-  output_command->disturbance_by_w = _g_ * total_mass * sin(Ib_w[1]);
+  output_command->disturbance_bx_w = -_g_ * total_mass * sin(Ib_w[0]);
+  output_command->disturbance_by_w = -_g_ * total_mass * sin(Ib_w[1]);
 
-  output_command->disturbance_wx_w = _g_ * total_mass * sin(Iw_w_[0]);
-  output_command->disturbance_wy_w = _g_ * total_mass * sin(Iw_w_[1]);
+  output_command->disturbance_wx_w = -_g_ * total_mass * sin(Iw_w_[0]);
+  output_command->disturbance_wy_w = -_g_ * total_mass * sin(Iw_w_[1]);
 
   output_command->controller_enforcing_constraints = false;
 

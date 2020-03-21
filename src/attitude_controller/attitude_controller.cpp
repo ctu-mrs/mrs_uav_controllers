@@ -172,8 +172,8 @@ void AttitudeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   param_loader.load_param("default_gains/vertical/attitude/kw", kwz_);
 
   // mass estimator
-  param_loader.load_param("default_gains/weight_estimator/km", km_);
-  param_loader.load_param("default_gains/weight_estimator/km_lim", km_lim_);
+  param_loader.load_param("default_gains/mass_estimator/km", km_);
+  param_loader.load_param("default_gains/mass_estimator/km_lim", km_lim_);
 
   // gain filtering
   param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
@@ -324,6 +324,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   Eigen::Quaternion<double> Rq;
 
   Eigen::Matrix3d Rd;
+  Eigen::Matrix3d Rd_integrals;
 
   Rp << 0, 0, control_reference->position.z;
   Rv << 0, 0, control_reference->velocity.z;
@@ -367,11 +368,25 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
 
   // | --------------- desired orientation matrix --------------- |
 
+  // construct the desired force vector
+
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
-  Eigen::Vector3d f = -Kp * Ep.array() - Kv * Ev.array() + total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra).array();
+  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra);
+  Eigen::Vector3d position_feedback = -Kp * Ep.array();
+  Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
 
-  Rq.coeffs() << control_reference->attitude.x, control_reference->attitude.y, control_reference->attitude.z, control_reference->attitude.w;
+  Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward;
+
+  // | ------- extract the attitude reference from tracker ------ |
+
+  if (control_reference->use_quat_attitude) {
+    Rq.coeffs() << control_reference->attitude.x, control_reference->attitude.y, control_reference->attitude.z, control_reference->attitude.w;
+  } else {
+    Rq.coeffs() << 0, 0, sin(control_reference->yaw / 2.0), cos(control_reference->yaw / 2.0);
+    ROS_ERROR_THROTTLE(1.0, "[AttitudeController]: missing attitude reference, maintaining a leveled attitude");
+  }
+
   Rd = Rq.matrix();
 
   // | -------------------- orientation error ------------------- |
@@ -501,6 +516,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
     }
   }
 
+  // | --------------- fill the resulting command --------------- |
+
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
@@ -528,6 +545,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
 
   output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = total_mass;
+
+  // since this controller does not estimate disturbances, fill in the
+  // original disturbance that were pass in by the previous controller
+  output_command->disturbance_bx_b = activation_attitude_cmd_.disturbance_bx_b;
+  output_command->disturbance_by_b = activation_attitude_cmd_.disturbance_by_b;
+
+  output_command->disturbance_bx_w = activation_attitude_cmd_.disturbance_bx_w;
+  output_command->disturbance_by_w = activation_attitude_cmd_.disturbance_by_w;
+
+  output_command->disturbance_wx_w = activation_attitude_cmd_.disturbance_wx_w;
+  output_command->disturbance_wy_w = activation_attitude_cmd_.disturbance_wy_w;
 
   last_attitude_cmd_ = output_command;
 
@@ -563,6 +591,17 @@ void AttitudeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::U
 /* resetDisturbanceEstimators() //{ */
 
 void AttitudeController::resetDisturbanceEstimators(void) {
+
+  // Since this controller does not estimate distrubances, but it does pass the old onces,
+  // set them to zeros here.
+  activation_attitude_cmd_.disturbance_bx_b = 0;
+  activation_attitude_cmd_.disturbance_by_b = 0;
+
+  activation_attitude_cmd_.disturbance_bx_w = 0;
+  activation_attitude_cmd_.disturbance_by_w = 0;
+
+  activation_attitude_cmd_.disturbance_wx_w = 0;
+  activation_attitude_cmd_.disturbance_wy_w = 0;
 }
 
 //}
