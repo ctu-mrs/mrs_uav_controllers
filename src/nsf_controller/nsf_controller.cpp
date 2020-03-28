@@ -380,6 +380,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   auto [roll, pitch, yaw] = mrs_lib::AttitudeConvertor(uav_state->pose.orientation).getRPY();
 
+  std::ignore = yaw;  // prevent warning about not using the yaw
+
   // | -------------- recaltulate the hover thrust -------------- |
 
   double total_mass = _uav_mass_ + uav_mass_difference_;

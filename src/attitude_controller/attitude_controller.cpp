@@ -314,8 +314,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   // Rp - velocity reference in global frame
   // Ra - velocity reference in global frame
   // Rw - angular velocity reference
-  Eigen::Vector3d           Rp, Rv, Ra, Rw;
-  Eigen::Quaternion<double> Rq;
+  Eigen::Vector3d Rp, Rv, Ra, Rw;
 
   Eigen::Matrix3d Rd;
   Eigen::Matrix3d Rd_integrals;
@@ -374,10 +373,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
 
   // | ------- extract the attitude reference from tracker ------ |
 
+  Eigen::Matrix3d Rq;
+
   if (control_reference->use_quat_attitude) {
-    Rq.coeffs() << control_reference->attitude.x, control_reference->attitude.y, control_reference->attitude.z, control_reference->attitude.w;
+    Rq = mrs_lib::AttitudeConvertor(control_reference->attitude);
   } else {
-    Rq.coeffs() << 0, 0, sin(control_reference->yaw / 2.0), cos(control_reference->yaw / 2.0);
+    Rq = mrs_lib::AttitudeConvertor(0, 0, control_reference->yaw);
     ROS_ERROR_THROTTLE(1.0, "[AttitudeController]: missing attitude reference, maintaining a leveled attitude");
   }
 

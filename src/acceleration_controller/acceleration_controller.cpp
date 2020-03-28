@@ -383,8 +383,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   // Rc - velocity reference in global frame
   // Ra - velocity reference in global frame
   // Rw - angular velocity reference
-  Eigen::Vector3d           Rp, Rv, Ra, Rw;
-  Eigen::Quaternion<double> Rq;
+  Eigen::Vector3d Rp, Rv, Ra, Rw;
 
   Eigen::Matrix3d Rd;
 
@@ -579,12 +578,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | ---------------------- yaw reference --------------------- |
 
-  Rq.coeffs() << 0, 0, sin(control_reference->yaw / 2.0), cos(control_reference->yaw / 2.0);
+  Eigen::Matrix3d Rq = mrs_lib::AttitudeConvertor(0, 0, control_reference->yaw);
 
   // | ------------- construct the rotational matrix ------------ |
 
   Rd.col(2) = f_norm;
-  Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0));
+  Rd.col(1) = Rd.col(2).cross(Rq.col(0));
   Rd.col(1).normalize();
   Rd.col(0) = Rd.col(1).cross(Rd.col(2));
 
