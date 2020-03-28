@@ -3,24 +3,18 @@
 /* includes //{ */
 
 #include <ros/ros.h>
-#include <ros/package.h>
-
-#include <dynamic_reconfigure/server.h>
-#include <mrs_msgs/AttitudeCommand.h>
-#include <nav_msgs/Odometry.h>
-#include <tf/transform_datatypes.h>
-
-#include <math.h>
 
 #include <mrs_uav_manager/Controller.h>
 
+#include <mrs_controllers/cvx_wrapper.h>
+
+#include <dynamic_reconfigure/server.h>
 #include <mrs_controllers/acceleration_controllerConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
-
-#include <mrs_controllers/cvx_wrapper.h>
+#include <mrs_lib/geometry_utils.h>
 
 //}
 
@@ -479,13 +473,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   // |                       lateral control                      |
   // --------------------------------------------------------------
 
-  // | ----------- get the current orientation angles ----------- |
-
-  double         yaw, pitch, roll;
-  tf::Quaternion quaternion_odometry;
-  quaternionMsgToTF(uav_state->pose.orientation, quaternion_odometry);
-  tf::Matrix3x3 m(quaternion_odometry);
-  m.getRPY(roll, pitch, yaw);
+  double yaw = mrs_lib::AttitudeConvertor(uav_state->pose.orientation).getYaw();
 
   // | --------------------- load the gains --------------------- |
 
@@ -737,39 +725,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | --------------- fill the resulting command --------------- |
 
+  // fill in the desired attitude anyway, since we know it
+  output_command->attitude = mrs_lib::AttitudeConvertor(Rd);
+
   if (_output_mode_ == OUTPUT_ATTITUDE_RATE) {
 
     // output the desired attitude rate
-    output_command->attitude_rate.x   = t[0];
-    output_command->attitude_rate.y   = t[1];
-    output_command->attitude_rate.z   = t[2];
-    output_command->attitude_rate_set = true;
-
-    Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
-    output_command->quater_attitude.w   = thrust_vec.w();
-    output_command->quater_attitude.x   = thrust_vec.x();
-    output_command->quater_attitude.y   = thrust_vec.y();
-    output_command->quater_attitude.z   = thrust_vec.z();
-    output_command->quater_attitude_set = true;
-
-    output_command->euler_attitude_set = false;
+    output_command->attitude_rate.x = t[0];
+    output_command->attitude_rate.y = t[1];
+    output_command->attitude_rate.z = t[2];
 
     output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 
   } else if (_output_mode_ == OUTPUT_ATTITUDE_QUATERNION) {
 
-    // output the desired attitude
-    Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
-    output_command->quater_attitude.w   = thrust_vec.w();
-    output_command->quater_attitude.x   = thrust_vec.x();
-    output_command->quater_attitude.y   = thrust_vec.y();
-    output_command->quater_attitude.z   = thrust_vec.z();
-    output_command->quater_attitude_set = true;
-
-    output_command->euler_attitude_set = false;
-    output_command->attitude_rate_set  = false;
-
-    output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
+    output_command->mode_mask = output_command->MODE_ATTITUDE;
 
     ROS_WARN_THROTTLE(1.0, "[AccelerationController]: outputting attitude quaternion (this is not normal)");
   }

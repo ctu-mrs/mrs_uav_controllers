@@ -3,22 +3,16 @@
 /* includes //{ */
 
 #include <ros/ros.h>
-#include <ros/package.h>
-
-#include <dynamic_reconfigure/server.h>
-#include <mrs_msgs/AttitudeCommand.h>
-#include <nav_msgs/Odometry.h>
-#include <tf/transform_datatypes.h>
-
-#include <math.h>
 
 #include <mrs_uav_manager/Controller.h>
 
+#include <dynamic_reconfigure/server.h>
 #include <mrs_controllers/attitude_controllerConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
+#include <mrs_lib/geometry_utils.h>
 
 //}
 
@@ -521,23 +515,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  output_command->attitude_rate.x   = t[0];
-  output_command->attitude_rate.y   = t[1];
-  output_command->attitude_rate.z   = t[2];
-  output_command->attitude_rate_set = true;
+  output_command->attitude_rate.x = t[0];
+  output_command->attitude_rate.y = t[1];
+  output_command->attitude_rate.z = t[2];
 
-  Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
-  output_command->quater_attitude.w   = thrust_vec.w();
-  output_command->quater_attitude.x   = thrust_vec.x();
-  output_command->quater_attitude.y   = thrust_vec.y();
-  output_command->quater_attitude.z   = thrust_vec.z();
-  output_command->quater_attitude_set = true;
+  output_command->attitude = mrs_lib::AttitudeConvertor(Rd);
 
   output_command->desired_acceleration.x = desired_x_accel;
   output_command->desired_acceleration.y = desired_y_accel;
   output_command->desired_acceleration.z = desired_z_accel;
-
-  output_command->euler_attitude_set = false;
 
   output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 

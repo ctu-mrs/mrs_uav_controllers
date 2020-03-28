@@ -3,20 +3,12 @@
 /* includes //{ */
 
 #include <ros/ros.h>
-#include <ros/package.h>
-
-#include <mrs_msgs/AttitudeCommand.h>
-#include <nav_msgs/Odometry.h>
-#include <tf/transform_datatypes.h>
-
-#include <math.h>
 
 #include <mrs_uav_manager/Controller.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
-
-#include <std_srvs/SetBool.h>
+#include <mrs_lib/geometry_utils.h>
 
 //}
 
@@ -160,7 +152,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &las
 
     // | --------------- calculate the euler angles --------------- |
 
-    yaw_setpoint_ = last_attitude_cmd->euler_attitude.z;
+    yaw_setpoint_ = mrs_lib::AttitudeConvertor(last_attitude_cmd->attitude).getYaw();
 
     ROS_INFO("[FailsafeController]: activated with yaw: %.2f rad", yaw_setpoint_);
 
@@ -262,21 +254,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
     hover_thrust_ = 0.0;
   }
 
-  output_command->euler_attitude.x   = 0.0;
-  output_command->euler_attitude.y   = 0.0;
-  output_command->euler_attitude.z   = yaw_setpoint_;
-  output_command->euler_attitude_set = true;
-
-  output_command->quater_attitude.x = 0;
-  output_command->quater_attitude.y = 0;
-  output_command->quater_attitude.z = 0;
-  output_command->quater_attitude.w = 1;
-
-  output_command->quater_attitude_set = false;
-  output_command->attitude_rate_set   = false;
+  output_command->attitude = mrs_lib::AttitudeConvertor(0, 0, yaw_setpoint_);
 
   output_command->thrust    = hover_thrust_;
-  output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
+  output_command->mode_mask = output_command->MODE_ATTITUDE;
 
   output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = _uav_mass_ + uav_mass_difference_;

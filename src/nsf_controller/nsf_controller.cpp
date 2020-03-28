@@ -3,23 +3,17 @@
 /* includes //{ */
 
 #include <ros/ros.h>
-#include <ros/package.h>
-
-#include <dynamic_reconfigure/server.h>
-#include <mrs_msgs/AttitudeCommand.h>
-#include <nav_msgs/Odometry.h>
-#include <tf/transform_datatypes.h>
-
-#include <math.h>
 
 #include <mrs_uav_manager/Controller.h>
 
+#include <dynamic_reconfigure/server.h>
 #include <mrs_controllers/nsf_controllerConfig.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
 #include <mrs_lib/mutex.h>
+#include <mrs_lib/geometry_utils.h>
 
 //}
 
@@ -384,11 +378,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   // | ----------- calculate the current Euler angles ----------- |
 
-  double         yaw, pitch, roll;
-  tf::Quaternion uav_attitude;
-  quaternionMsgToTF(uav_state->pose.orientation, uav_attitude);
-  tf::Matrix3x3 m(uav_attitude);
-  m.getRPY(roll, pitch, yaw);
+  auto [roll, pitch, yaw] = mrs_lib::AttitudeConvertor(uav_state->pose.orientation).getRPY();
 
   // | -------------- recaltulate the hover thrust -------------- |
 
@@ -701,22 +691,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
     }
   }
 
-  output_command->euler_attitude.x   = feedback_b[1];
-  output_command->euler_attitude.y   = feedback_b[0];
-  output_command->euler_attitude.z   = control_reference->yaw;  // ISSUE: this will not work with custom heading estimator
-  output_command->euler_attitude_set = true;
-
-  output_command->quater_attitude.x = 0;
-  output_command->quater_attitude.y = 0;
-  output_command->quater_attitude.z = 0;
-  output_command->quater_attitude.w = 1;
-
-  output_command->quater_attitude_set = false;
-  output_command->attitude_rate_set   = false;
+  // roll, pitch, yaw -> quaternion
+  output_command->attitude  = mrs_lib::AttitudeConvertor(feedback_b[1], feedback_b[0], control_reference->yaw);
+  output_command->mode_mask = output_command->MODE_ATTITUDE;
 
   output_command->thrust = feedback_w[2];
-
-  output_command->mode_mask = output_command->MODE_EULER_ATTITUDE;
 
   output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = total_mass;

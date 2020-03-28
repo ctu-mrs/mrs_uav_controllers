@@ -3,28 +3,23 @@
 /* includes //{ */
 
 #include <ros/ros.h>
-#include <ros/package.h>
-
-#include <dynamic_reconfigure/server.h>
-#include <mrs_msgs/AttitudeCommand.h>
-#include <nav_msgs/Odometry.h>
-#include <std_srvs/SetBool.h>
-#include <tf/transform_datatypes.h>
-
-#include <math.h>
 
 #include <mrs_uav_manager/Controller.h>
 
+#include <mrs_controllers/cvx_wrapper.h>
+
+#include <dynamic_reconfigure/server.h>
 #include <mrs_controllers/mpc_controllerConfig.h>
+
+#include <std_srvs/SetBool.h>
 
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
 #include <mrs_lib/mutex.h>
+#include <mrs_lib/geometry_utils.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
-
-#include <mrs_controllers/cvx_wrapper.h>
 
 //}
 
@@ -478,6 +473,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     uav_state_ = *uav_state;
   }
 
+  double uav_yaw = mrs_lib::AttitudeConvertor(uav_state->pose.orientation).getYaw();
+
   if (!is_active) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -522,10 +519,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // Rv - velocity reference in global frame
   // Ra - velocity reference in global frame
   // Rw - angular velocity reference
-  Eigen::Vector3d           Rp, Rv, Ra, Rw;
-  Eigen::Quaternion<double> Rq;
-
-  Eigen::Matrix3d Rd;
+  Eigen::Vector3d Rp, Rv, Ra, Rw;
 
   Rp << control_reference->position.x, control_reference->position.y, control_reference->position.z;  // fill the desired position
   Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
@@ -536,10 +530,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Eigen::Vector3d Op(uav_state->pose.position.x, uav_state->pose.position.y, uav_state->pose.position.z);
   Eigen::Vector3d Ov(uav_state->velocity.linear.x, uav_state->velocity.linear.y, uav_state->velocity.linear.z);
 
-  // Oq - UAV attitude quaternion
-  Eigen::Quaternion<double> Oq;
-  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
-  Eigen::Matrix3d R = Oq.toRotationMatrix();
+  // R - current uav attitude
+  Eigen::Matrix3d R = mrs_lib::AttitudeConvertor(uav_state->pose.orientation);
 
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
@@ -678,14 +670,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Eigen::Vector3d Ep = Op - Rp;
   Eigen::Vector3d Ev = Ov - Rv;
 
-  // | -------- calculate the current orientation angles -------- |
-
-  double         uav_yaw, uav_pitch, uav_roll;
-  tf::Quaternion uav_attitude;
-  quaternionMsgToTF(uav_state->pose.orientation, uav_attitude);
-  tf::Matrix3x3 m(uav_attitude);
-  m.getRPY(uav_roll, uav_pitch, uav_yaw);
-
   // | --------------------- load the gains --------------------- |
 
   filterGains(control_reference->disable_position_gains, dt);
@@ -811,18 +795,22 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   f_norm[1] = sin(theta) * sin(phi);
   f_norm[2] = cos(theta);
 
-  // | ---------------------- yaw reference --------------------- |
+  // | ------------------- attitude reference ------------------- |
+
+  Eigen::Matrix3d Rq;
 
   if (control_reference->use_yaw) {
-    Rq.coeffs() << 0, 0, sin(control_reference->yaw / 2.0), cos(control_reference->yaw / 2.0);
+    Rq = mrs_lib::AttitudeConvertor(0, 0, control_reference->yaw);
   } else {
-    Rq.coeffs() << 0, 0, sin(uav_yaw / 2.0), cos(uav_yaw / 2.0);
+    Rq = mrs_lib::AttitudeConvertor(0, 0, uav_yaw);
   }
 
   // | ------------- construct the rotational matrix ------------ |
 
+  Eigen::Matrix3d Rd;
+
   Rd.col(2) = f_norm;
-  Rd.col(1) = Rd.col(2).cross(Rq.toRotationMatrix().col(0));
+  Rd.col(1) = Rd.col(2).cross(Rq.col(0));
   Rd.col(1).normalize();
   Rd.col(0) = Rd.col(1).cross(Rd.col(2));
 
@@ -1114,7 +1102,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   double desired_z_accel = 0;
 
   {
-    Eigen::Quaterniond des_quater = Eigen::Quaterniond(Rd);
+    Eigen::Quaterniond des_quater = mrs_lib::AttitudeConvertor(Rd);
 
     // rotate the drone's z axis
     Eigen::Vector3d uav_z_in_world = des_quater * Eigen::Vector3d(0, 0, 1);
@@ -1144,39 +1132,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | --------------- fill the resulting command --------------- |
 
+  // fill the attitude anyway, since we know it
+  output_command->attitude = mrs_lib::AttitudeConvertor(Rd);
+
   if (_output_mode_ == OUTPUT_ATTITUDE_RATE) {
 
     // output the desired attitude rate
-    output_command->attitude_rate.x   = t[0];
-    output_command->attitude_rate.y   = t[1];
-    output_command->attitude_rate.z   = t[2];
-    output_command->attitude_rate_set = true;
-
-    Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
-    output_command->quater_attitude.w   = thrust_vec.w();
-    output_command->quater_attitude.x   = thrust_vec.x();
-    output_command->quater_attitude.y   = thrust_vec.y();
-    output_command->quater_attitude.z   = thrust_vec.z();
-    output_command->quater_attitude_set = true;
-
-    output_command->euler_attitude_set = false;
+    output_command->attitude_rate.x = t[0];
+    output_command->attitude_rate.y = t[1];
+    output_command->attitude_rate.z = t[2];
 
     output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 
   } else if (_output_mode_ == OUTPUT_ATTITUDE_QUATERNION) {
 
-    // output the desired attitude
-    Eigen::Quaterniond thrust_vec       = Eigen::Quaterniond(Rd);
-    output_command->quater_attitude.w   = thrust_vec.w();
-    output_command->quater_attitude.x   = thrust_vec.x();
-    output_command->quater_attitude.y   = thrust_vec.y();
-    output_command->quater_attitude.z   = thrust_vec.z();
-    output_command->quater_attitude_set = true;
-
-    output_command->euler_attitude_set = false;
-    output_command->attitude_rate_set  = false;
-
-    output_command->mode_mask = output_command->MODE_QUATER_ATTITUDE;
+    output_command->mode_mask = output_command->MODE_ATTITUDE;
 
     ROS_WARN_THROTTLE(1.0, "[%s]: outputting attitude quaternion (this is not normal)", this->name_.c_str());
   }
