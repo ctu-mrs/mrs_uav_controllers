@@ -13,6 +13,7 @@
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
 #include <mrs_lib/geometry_utils.h>
+#include <mrs_lib/attitude_converter.h>
 
 //}
 
@@ -330,7 +331,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   Eigen::Vector3d Ov(0, 0, uav_state->velocity.linear.z);
 
   // R - current uav attitude
-  Eigen::Matrix3d R = mrs_lib::AttitudeConvertor(uav_state->pose.orientation);
+  Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
 
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
@@ -374,9 +375,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   Eigen::Matrix3d Rq;
 
   if (control_reference->use_quat_attitude) {
-    Rq = mrs_lib::AttitudeConvertor(control_reference->attitude);
+    Rq = mrs_lib::AttitudeConverter(control_reference->attitude);
   } else {
-    Rq = mrs_lib::AttitudeConvertor(0, 0, control_reference->yaw);
+    Rq = mrs_lib::AttitudeConverter(0, 0, control_reference->yaw);
     ROS_ERROR_THROTTLE(1.0, "[AttitudeController]: missing attitude reference, maintaining a leveled attitude");
   }
 
@@ -518,7 +519,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   output_command->attitude_rate.y = t[1];
   output_command->attitude_rate.z = t[2];
 
-  output_command->attitude = mrs_lib::AttitudeConvertor(Rd);
+  output_command->attitude = mrs_lib::AttitudeConverter(Rd);
 
   output_command->desired_acceleration.x = desired_x_accel;
   output_command->desired_acceleration.y = desired_y_accel;

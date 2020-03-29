@@ -14,6 +14,7 @@
 #include <mrs_lib/Utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/geometry_utils.h>
+#include <mrs_lib/attitude_converter.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
 
@@ -401,7 +402,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  double uav_yaw = mrs_lib::AttitudeConvertor(uav_state->pose.orientation).getYaw();
+  double uav_yaw = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYaw();
 
   // | -------------------- calculate the dt -------------------- |
 
@@ -491,9 +492,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   Eigen::Matrix3d Rq;
 
   if (control_reference->use_yaw) {
-    Rq = mrs_lib::AttitudeConvertor(0, 0, control_reference->yaw);
+    Rq = mrs_lib::AttitudeConverter(0, 0, control_reference->yaw);
   } else {
-    Rq = mrs_lib::AttitudeConvertor(0, 0, uav_yaw);
+    Rq = mrs_lib::AttitudeConverter(0, 0, uav_yaw);
   }
 
   if (control_reference->use_attitude_rate) {
@@ -508,7 +509,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   Eigen::Vector3d Ov(uav_state->velocity.linear.x, uav_state->velocity.linear.y, uav_state->velocity.linear.z);
 
   // R - current uav attitude
-  Eigen::Matrix3d R = mrs_lib::AttitudeConvertor(uav_state->pose.orientation);
+  Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
 
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
@@ -999,7 +1000,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   auto output_mode = mrs_lib::get_mutexed(mutex_output_mode_, output_mode_);
 
   // fill in the desired attitude anyway, since we know it
-  output_command->attitude = mrs_lib::AttitudeConvertor(Rd);
+  output_command->attitude = mrs_lib::AttitudeConverter(Rd);
 
   if (output_mode == OUTPUT_ATTITUDE_RATE) {
 

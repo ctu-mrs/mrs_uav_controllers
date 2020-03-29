@@ -15,6 +15,7 @@
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/Utils.h>
 #include <mrs_lib/geometry_utils.h>
+#include <mrs_lib/attitude_converter.h>
 
 //}
 
@@ -397,7 +398,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   Eigen::Vector3d Ov(uav_state->velocity.linear.x, uav_state->velocity.linear.y, uav_state->velocity.linear.z);
 
   // R - current UAV attitude
-  Eigen::Matrix3d R = mrs_lib::AttitudeConvertor(uav_state->pose.orientation);
+  Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
 
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
@@ -470,7 +471,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   // |                       lateral control                      |
   // --------------------------------------------------------------
 
-  double yaw = mrs_lib::AttitudeConvertor(uav_state->pose.orientation).getYaw();
+  double yaw = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYaw();
 
   // | --------------------- load the gains --------------------- |
 
@@ -576,7 +577,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   // | ---------------------- yaw reference --------------------- |
 
-  Eigen::Matrix3d Rq = mrs_lib::AttitudeConvertor(0, 0, control_reference->yaw);
+  Eigen::Matrix3d Rq = mrs_lib::AttitudeConverter(0, 0, control_reference->yaw);
 
   // | ------------- construct the rotational matrix ------------ |
 
@@ -723,7 +724,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   // | --------------- fill the resulting command --------------- |
 
   // fill in the desired attitude anyway, since we know it
-  output_command->attitude = mrs_lib::AttitudeConvertor(Rd);
+  output_command->attitude = mrs_lib::AttitudeConverter(Rd);
 
   if (_output_mode_ == OUTPUT_ATTITUDE_RATE) {
 

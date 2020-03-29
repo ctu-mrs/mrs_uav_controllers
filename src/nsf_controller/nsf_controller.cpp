@@ -14,6 +14,7 @@
 #include <mrs_lib/Utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/geometry_utils.h>
+#include <mrs_lib/attitude_converter.h>
 
 //}
 
@@ -378,7 +379,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   // | ----------- calculate the current Euler angles ----------- |
 
-  auto [roll, pitch, yaw] = mrs_lib::AttitudeConvertor(uav_state->pose.orientation).getRPY();
+  auto [roll, pitch, yaw] = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
 
   std::ignore = yaw;  // prevent warning about not using the yaw
 
@@ -694,7 +695,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   }
 
   // roll, pitch, yaw -> quaternion
-  output_command->attitude  = mrs_lib::AttitudeConvertor(feedback_b[1], feedback_b[0], control_reference->yaw);
+  output_command->attitude  = mrs_lib::AttitudeConverter(feedback_b[1], feedback_b[0], control_reference->yaw);
   output_command->mode_mask = output_command->MODE_ATTITUDE;
 
   output_command->thrust = feedback_w[2];

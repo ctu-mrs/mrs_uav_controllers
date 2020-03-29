@@ -9,6 +9,7 @@
 #include <mrs_lib/Profiler.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/geometry_utils.h>
+#include <mrs_lib/attitude_converter.h>
 
 //}
 
@@ -152,7 +153,7 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &las
 
     // | --------------- calculate the euler angles --------------- |
 
-    yaw_setpoint_ = mrs_lib::AttitudeConvertor(last_attitude_cmd->attitude).getYaw();
+    yaw_setpoint_ = mrs_lib::AttitudeConverter(last_attitude_cmd->attitude).getYaw();
 
     ROS_INFO("[FailsafeController]: activated with yaw: %.2f rad", yaw_setpoint_);
 
@@ -254,7 +255,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
     hover_thrust_ = 0.0;
   }
 
-  output_command->attitude = mrs_lib::AttitudeConvertor(0, 0, yaw_setpoint_);
+  output_command->attitude = mrs_lib::AttitudeConverter(0, 0, yaw_setpoint_);
 
   output_command->thrust    = hover_thrust_;
   output_command->mode_mask = output_command->MODE_ATTITUDE;
