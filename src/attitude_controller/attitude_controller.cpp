@@ -329,10 +329,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   Eigen::Vector3d Op(0, 0, uav_state->pose.position.z);
   Eigen::Vector3d Ov(0, 0, uav_state->velocity.linear.z);
 
-  // Oq - UAV attitude quaternion
-  Eigen::Quaternion<double> Oq;
-  Oq.coeffs() << uav_state->pose.orientation.x, uav_state->pose.orientation.y, uav_state->pose.orientation.z, uav_state->pose.orientation.w;
-  Eigen::Matrix3d R = Oq.toRotationMatrix();
+  // R - current uav attitude
+  Eigen::Matrix3d R = mrs_lib::AttitudeConvertor(uav_state->pose.orientation);
 
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
