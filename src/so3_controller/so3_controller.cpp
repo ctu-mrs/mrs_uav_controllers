@@ -402,8 +402,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  double uav_yaw = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYaw();
-
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
@@ -436,6 +434,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
     }
+  }
+
+  // | ----------------- get the current heading ---------------- |
+
+  double uav_heading = 0;
+
+  try {
+    uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
+  }
+  catch (...) {
+    ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not calculate the UAV heading");
   }
 
   // --------------------------------------------------------------
@@ -489,18 +498,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Ra << 0, 0, 0;
   }
 
-  Eigen::Matrix3d Rq;
+  Eigen::Vector3d bxd;  // desired heading vector
 
-  if (control_reference->use_yaw) {
-    Rq = mrs_lib::AttitudeConverter(0, 0, control_reference->yaw);
+  if (control_reference->use_heading) {
+    bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
   } else {
-    Rq = mrs_lib::AttitudeConverter(0, 0, uav_yaw);
+    bxd << cos(uav_heading), sin(uav_heading), 0;
   }
 
   if (control_reference->use_attitude_rate) {
     Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
-  } else if (control_reference->use_yaw_dot) {
-    Rw << 0, 0, control_reference->yaw_dot;
+  } else if (control_reference->use_heading_rate) {
+    Rw << 0, 0, control_reference->heading_rate;
   }
 
   // Op - position in global frame
@@ -579,7 +588,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     Kq << kqxy_, kqxy_, kqz_;
 
-    if (!control_reference->use_yaw) {
+    if (!control_reference->use_heading) {
       Kq[2] = 0;
     }
 
@@ -666,10 +675,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     ROS_INFO("[So3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
     ROS_INFO("[So3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
     ROS_INFO("[So3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[So3Controller]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", control_reference->position.x, control_reference->position.y,
-             control_reference->position.z, control_reference->yaw);
-    ROS_INFO("[So3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
-             uav_state->pose.position.z, uav_yaw);
+    ROS_INFO("[So3Controller]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", control_reference->position.x, control_reference->position.y,
+             control_reference->position.z, control_reference->heading);
+    ROS_INFO("[So3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
+             uav_state->pose.position.z, uav_heading);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -691,7 +700,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   Eigen::Matrix3d Rd;
 
   Rd.col(2) = f_norm;
-  Rd.col(1) = Rd.col(2).cross(Rq.col(0));
+  Rd.col(1) = Rd.col(2).cross(bxd);
   Rd.col(1).normalize();
   Rd.col(0) = Rd.col(1).cross(Rd.col(2));
 

@@ -307,6 +307,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
     }
   }
 
+  // | ----------------- get the current heading ---------------- |
+
+  double uav_heading = 0;
+
+  try {
+    uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
+  }
+  catch (...) {
+    ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not calculate the UAV heading");
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -323,7 +334,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
   Rp << 0, 0, control_reference->position.z;
   Rv << 0, 0, control_reference->velocity.z;
   Ra << 0, 0, control_reference->acceleration.z;
-  Rw << 0, 0, control_reference->yaw_dot;
+  Rw << 0, 0, control_reference->heading_rate;
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -370,18 +381,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr AttitudeController::update(const mrs_m
 
   Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward;
 
-  // | ------- extract the attitude reference from tracker ------ |
+  // | ----------------- desired heading vector ----------------- |
 
-  Eigen::Matrix3d Rq;
+  Eigen::Vector3d bxd;
 
-  if (control_reference->use_quat_attitude) {
-    Rq = mrs_lib::AttitudeConverter(control_reference->attitude);
+  if (control_reference->use_heading) {
+    bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
   } else {
-    Rq = mrs_lib::AttitudeConverter(0, 0, control_reference->yaw);
-    ROS_ERROR_THROTTLE(1.0, "[AttitudeController]: missing attitude reference, maintaining a leveled attitude");
+    bxd << cos(uav_heading), sin(uav_heading), 0;
   }
-
-  Rd = Rq.matrix();
 
   // | -------------------- orientation error ------------------- |
 

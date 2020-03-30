@@ -695,7 +695,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   }
 
   // roll, pitch, yaw -> quaternion
-  output_command->attitude  = mrs_lib::AttitudeConverter(feedback_b[1], feedback_b[0], control_reference->yaw);
+  // TODO: heading != yaw, this works only if pitch and roll all small
+  output_command->attitude = mrs_lib::AttitudeConverter(feedback_b[1], feedback_b[0], control_reference->heading);
+
   output_command->mode_mask = output_command->MODE_ATTITUDE;
 
   output_command->thrust = feedback_w[2];

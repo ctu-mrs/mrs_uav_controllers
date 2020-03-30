@@ -474,8 +474,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     uav_state_ = *uav_state;
   }
 
-  double uav_yaw = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYaw();
-
   if (!is_active) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -512,6 +510,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     }
   }
 
+  // | ----------------- get the current heading ---------------- |
+
+  double uav_heading = 0;
+
+  try {
+    uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
+  }
+  catch (...) {
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not calculate the UAV heading");
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -524,7 +533,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   Rp << control_reference->position.x, control_reference->position.y, control_reference->position.z;  // fill the desired position
   Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
-  Rw << 0, 0, control_reference->yaw_dot;
+  Rw << 0, 0, control_reference->heading_rate;
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -683,7 +692,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     Kq << kqxy_, kqxy_, kqz_;
 
-    if (!control_reference->use_yaw) {
+    if (!control_reference->use_heading) {
       Kq[2] = 0;
     }
 
@@ -776,10 +785,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     ROS_INFO("[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f[0], f[1], f[2]);
     ROS_INFO("[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback[0], integral_feedback[1], integral_feedback[2]);
     ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), control_reference->position.x, control_reference->position.y,
-             control_reference->position.z, control_reference->yaw);
-    ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
-             uav_state->pose.position.z, uav_yaw);
+    ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), control_reference->position.x, control_reference->position.y,
+             control_reference->position.z, control_reference->heading);
+    ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
+             uav_state->pose.position.z, uav_heading);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -796,14 +805,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   f_norm[1] = sin(theta) * sin(phi);
   f_norm[2] = cos(theta);
 
-  // | ------------------- attitude reference ------------------- |
+  // | -------------------- heading reference ------------------- |
 
-  Eigen::Matrix3d Rq;
+  Eigen::Vector3d bxd;  // desired heading vector
 
-  if (control_reference->use_yaw) {
-    Rq = mrs_lib::AttitudeConverter(0, 0, control_reference->yaw);
+  if (control_reference->use_heading) {
+    bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
   } else {
-    Rq = mrs_lib::AttitudeConverter(0, 0, uav_yaw);
+    bxd << cos(uav_heading), sin(uav_heading), 0;
   }
 
   // | ------------- construct the rotational matrix ------------ |
@@ -811,7 +820,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Eigen::Matrix3d Rd;
 
   Rd.col(2) = f_norm;
-  Rd.col(1) = Rd.col(2).cross(Rq.col(0));
+  Rd.col(1) = Rd.col(2).cross(bxd);
   Rd.col(1).normalize();
   Rd.col(0) = Rd.col(1).cross(Rd.col(2));
 

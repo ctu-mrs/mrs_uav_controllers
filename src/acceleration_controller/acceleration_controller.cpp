@@ -390,7 +390,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
 
   Rp << control_reference->position.x, control_reference->position.y, control_reference->position.z;
   Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
-  Rw << 0, 0, control_reference->yaw_dot;
+  Rw << 0, 0, control_reference->heading_rate;
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -471,7 +471,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   // |                       lateral control                      |
   // --------------------------------------------------------------
 
-  double yaw = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYaw();
+  // | ----------------- get the current heading ---------------- |
+
+  double uav_heading = 0;
+
+  try {
+    uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
+  }
+  catch (...) {
+    ROS_ERROR_THROTTLE(1.0, "[AccelerationController]: could not calculate the UAV heading");
+  }
 
   // | --------------------- load the gains --------------------- |
 
@@ -555,10 +564,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
               (180.0 / M_PI) * theta, (180.0 / M_PI) * _tilt_angle_failsafe_);
     ROS_INFO("[AccelerationController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
     ROS_INFO("[AccelerationController]: feed forward: [%.2f, %.2f, %.2f]", feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[AccelerationController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", control_reference->position.x, control_reference->position.y,
-             control_reference->position.z, control_reference->yaw);
-    ROS_INFO("[AccelerationController]: odometry: x: %.2f, y: %.2f, z: %.2f, yaw: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
-             uav_state->pose.position.z, yaw);
+    ROS_INFO("[AccelerationController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", control_reference->position.x, control_reference->position.y,
+             control_reference->position.z, control_reference->heading);
+    ROS_INFO("[AccelerationController]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
+             uav_state->pose.position.z, uav_heading);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -575,14 +584,20 @@ const mrs_msgs::AttitudeCommand::ConstPtr AccelerationController::update(const m
   f_norm[1] = sin(theta) * sin(phi);
   f_norm[2] = cos(theta);
 
-  // | ---------------------- yaw reference --------------------- |
+  // | -------------------- heading reference ------------------- |
 
-  Eigen::Matrix3d Rq = mrs_lib::AttitudeConverter(0, 0, control_reference->yaw);
+  Eigen::Vector3d bxd;  // desired heading vector
+
+  if (control_reference->use_heading) {
+    bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
+  } else {
+    bxd << cos(uav_heading), sin(uav_heading), 0;
+  }
 
   // | ------------- construct the rotational matrix ------------ |
 
   Rd.col(2) = f_norm;
-  Rd.col(1) = Rd.col(2).cross(Rq.col(0));
+  Rd.col(1) = Rd.col(2).cross(bxd);
   Rd.col(1).normalize();
   Rd.col(0) = Rd.col(1).cross(Rd.col(2));
 
