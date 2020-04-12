@@ -690,13 +690,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   {
     std::scoped_lock lock(mutex_gains_);
 
-    Kq << kqxy_, kqxy_, kqz_;
-
-    if (!control_reference->use_heading) {
-      Kq[2] = 0;
+    if (control_reference->use_attitude_rate) {
+      Kw << kwxy_, kwxy_, kwz_;
+    } else if (control_reference->use_heading_rate) {
+      Kw << 0, 0, kwz_;
+    } else {
+      Kw << 0, 0, 0;
     }
 
-    Kw << kwxy_, kwxy_, kwz_;
+    Kq << kqxy_, kqxy_, kqz_;
   }
 
   // | -------------- recalculate the hover thrust -------------- |
@@ -805,24 +807,36 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   f_norm[1] = sin(theta) * sin(phi);
   f_norm[2] = cos(theta);
 
-  // | -------------------- heading reference ------------------- |
-
-  Eigen::Vector3d bxd;  // desired heading vector
-
-  if (control_reference->use_heading) {
-    bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
-  } else {
-    bxd << cos(uav_heading), sin(uav_heading), 0;
-  }
-
   // | ------------- construct the rotational matrix ------------ |
 
   Eigen::Matrix3d Rd;
 
-  Rd.col(2) = f_norm;
-  Rd.col(1) = Rd.col(2).cross(bxd);
-  Rd.col(1).normalize();
-  Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+  if (control_reference->use_orientation) {
+
+    // fill in the desired orientation based on the desired orientation from the control command
+    Rd = mrs_lib::AttitudeConverter(control_reference->orientation);
+
+    if (control_reference->use_heading) {
+      Rd = mrs_lib::AttitudeConverter(Rd).setHeadingByYaw(control_reference->heading);
+    }
+
+  } else {
+
+    Eigen::Vector3d bxd;  // desired heading vector
+
+    if (control_reference->use_heading) {
+      bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: desired heading was not specified, using current heading instead!");
+      bxd << cos(uav_heading), sin(uav_heading), 0;
+    }
+
+    // fill in the desired orientation based on the state feedback
+    Rd.col(2) = f_norm;
+    Rd.col(1) = Rd.col(2).cross(bxd);
+    Rd.col(1).normalize();
+    Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+  }
 
   // | -------------------- orientation error ------------------- |
 
