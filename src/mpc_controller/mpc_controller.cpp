@@ -13,9 +13,9 @@
 
 #include <std_srvs/SetBool.h>
 
-#include <mrs_lib/Profiler.h>
-#include <mrs_lib/ParamLoader.h>
-#include <mrs_lib/Utils.h>
+#include <mrs_lib/profiler.h>
+#include <mrs_lib/param_loader.h>
+#include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/geometry_utils.h>
 #include <mrs_lib/attitude_converter.h>
@@ -231,7 +231,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
   mrs_lib::ParamLoader param_loader(nh_, "MpcController");
 
-  param_loader.load_param("version", _version_);
+  param_loader.loadParam("version", _version_);
 
   if (_version_ != VERSION) {
 
@@ -239,78 +239,78 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
     ros::shutdown();
   }
 
-  param_loader.load_param("enable_profiler", profiler_enabled_);
+  param_loader.loadParam("enable_profiler", profiler_enabled_);
 
   // load the dynamicall model parameters
-  param_loader.load_param("mpc_model/number_of_states", _n_states_);
-  param_loader.load_param("mpc_model/dt1", _dt1_);
-  param_loader.load_param("mpc_model/dt2", _dt2_);
+  param_loader.loadParam("mpc_model/number_of_states", _n_states_);
+  param_loader.loadParam("mpc_model/dt1", _dt1_);
+  param_loader.loadParam("mpc_model/dt2", _dt2_);
 
-  param_loader.load_param("mpc_parameters/horizon_length", _horizon_length_);
+  param_loader.loadParam("mpc_parameters/horizon_length", _horizon_length_);
 
-  param_loader.load_param("mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
-  param_loader.load_param("mpc_parameters/horizontal/max_acceleration", max_acceleration_horizontal_);
-  param_loader.load_param("mpc_parameters/horizontal/max_jerk", _max_jerk_);
+  param_loader.loadParam("mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
+  param_loader.loadParam("mpc_parameters/horizontal/max_acceleration", max_acceleration_horizontal_);
+  param_loader.loadParam("mpc_parameters/horizontal/max_jerk", _max_jerk_);
 
-  param_loader.load_param("mpc_parameters/horizontal/Q", _Q_);
-  param_loader.load_param("mpc_parameters/horizontal/S", _S_);
+  param_loader.loadParam("mpc_parameters/horizontal/Q", _Q_);
+  param_loader.loadParam("mpc_parameters/horizontal/S", _S_);
 
-  param_loader.load_param("mpc_parameters/vertical/max_speed", _max_speed_vertical_);
-  param_loader.load_param("mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
-  param_loader.load_param("mpc_parameters/vertical/max_u", _max_u_vertical_);
+  param_loader.loadParam("mpc_parameters/vertical/max_speed", _max_speed_vertical_);
+  param_loader.loadParam("mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
+  param_loader.loadParam("mpc_parameters/vertical/max_u", _max_u_vertical_);
 
-  param_loader.load_param("mpc_parameters/vertical/Q", _Q_z_);
-  param_loader.load_param("mpc_parameters/vertical/S", _S_z_);
+  param_loader.loadParam("mpc_parameters/vertical/Q", _Q_z_);
+  param_loader.loadParam("mpc_parameters/vertical/S", _S_z_);
 
-  param_loader.load_param("cvx_parameters/verbose", _cvx_verbose_);
-  param_loader.load_param("cvx_parameters/max_iterations", _cvx_max_iterations_);
+  param_loader.loadParam("cvx_parameters/verbose", _cvx_verbose_);
+  param_loader.loadParam("cvx_parameters/max_iterations", _cvx_max_iterations_);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.load_param("rampup/enabled", _rampup_enabled_);
-  param_loader.load_param("rampup/speed", _rampup_speed_);
+  param_loader.loadParam("rampup/enabled", _rampup_enabled_);
+  param_loader.loadParam("rampup/speed", _rampup_speed_);
 
   // | --------------------- integral gains --------------------- |
 
-  param_loader.load_param("integral_gains/kiw", kiwxy_);
-  param_loader.load_param("integral_gains/kib", kibxy_);
+  param_loader.loadParam("integral_gains/kiw", kiwxy_);
+  param_loader.loadParam("integral_gains/kib", kibxy_);
 
   // integrator limits
-  param_loader.load_param("integral_gains/kiw_lim", kiwxy_lim_);
-  param_loader.load_param("integral_gains/kib_lim", kibxy_lim_);
+  param_loader.loadParam("integral_gains/kiw_lim", kiwxy_lim_);
+  param_loader.loadParam("integral_gains/kib_lim", kibxy_lim_);
 
   // | ------------- height and attitude controller ------------- |
 
   // attitude gains
-  param_loader.load_param("attitude_feedback/default_gains/horizontal/attitude/kq", kqxy_);
-  param_loader.load_param("attitude_feedback/default_gains/vertical/attitude/kq", kqz_);
+  param_loader.loadParam("attitude_feedback/default_gains/horizontal/attitude/kq", kqxy_);
+  param_loader.loadParam("attitude_feedback/default_gains/vertical/attitude/kq", kqz_);
 
   // attitude rate gains
-  param_loader.load_param("attitude_feedback/default_gains/horizontal/attitude/kw", kwxy_);
-  param_loader.load_param("attitude_feedback/default_gains/vertical/attitude/kw", kwz_);
+  param_loader.loadParam("attitude_feedback/default_gains/horizontal/attitude/kw", kwxy_);
+  param_loader.loadParam("attitude_feedback/default_gains/vertical/attitude/kw", kwz_);
 
   // mass estimator
-  param_loader.load_param("mass_estimator/km", km_);
-  param_loader.load_param("mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam("mass_estimator/km", km_);
+  param_loader.loadParam("mass_estimator/km_lim", km_lim_);
 
   // constraints
-  param_loader.load_param("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
-  param_loader.load_param("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
-  param_loader.load_param("constraints/thrust_saturation", _thrust_saturation_);
-  param_loader.load_param("constraints/yaw_rate_saturation", _yaw_rate_saturation_);
-  param_loader.load_param("constraints/pitch_roll_rate_saturation", _pitch_roll_rate_saturation_);
+  param_loader.loadParam("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
+  param_loader.loadParam("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
+  param_loader.loadParam("constraints/yaw_rate_saturation", _yaw_rate_saturation_);
+  param_loader.loadParam("constraints/pitch_roll_rate_saturation", _pitch_roll_rate_saturation_);
 
   // gain filtering
-  param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.load_param("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // gain muting
-  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam("gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  param_loader.load_param("output_mode", _output_mode_);
+  param_loader.loadParam("output_mode", _output_mode_);
 
-  if (!param_loader.loaded_successfully()) {
+  if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
     ros::shutdown();
   }

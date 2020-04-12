@@ -6,8 +6,8 @@
 
 #include <mrs_uav_manager/Controller.h>
 
-#include <mrs_lib/Profiler.h>
-#include <mrs_lib/ParamLoader.h>
+#include <mrs_lib/profiler.h>
+#include <mrs_lib/param_loader.h>
 #include <mrs_lib/geometry_utils.h>
 #include <mrs_lib/attitude_converter.h>
 
@@ -101,7 +101,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
 
-  param_loader.load_param("version", _version_);
+  param_loader.loadParam("version", _version_);
 
   if (_version_ != VERSION) {
 
@@ -109,11 +109,11 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
     ros::shutdown();
   }
 
-  param_loader.load_param("thrust_decrease_rate", _thrust_decrease_rate_);
-  param_loader.load_param("enable_profiler", _profiler_enabled_);
-  param_loader.load_param("initial_thrust_percentage", _initial_thrust_percentage_);
+  param_loader.loadParam("thrust_decrease_rate", _thrust_decrease_rate_);
+  param_loader.loadParam("enable_profiler", _profiler_enabled_);
+  param_loader.loadParam("initial_thrust_percentage", _initial_thrust_percentage_);
 
-  if (!param_loader.loaded_successfully()) {
+  if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[FailsafeController]: Could not load all parameters!");
     ros::shutdown();
   }

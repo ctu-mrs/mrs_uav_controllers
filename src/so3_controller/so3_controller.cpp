@@ -9,9 +9,9 @@
 #include <dynamic_reconfigure/server.h>
 #include <mrs_controllers/so3_controllerConfig.h>
 
-#include <mrs_lib/Profiler.h>
-#include <mrs_lib/ParamLoader.h>
-#include <mrs_lib/Utils.h>
+#include <mrs_lib/profiler.h>
+#include <mrs_lib/param_loader.h>
+#include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/geometry_utils.h>
 #include <mrs_lib/attitude_converter.h>
@@ -181,7 +181,7 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   mrs_lib::ParamLoader param_loader(nh_, "So3Controller");
 
-  param_loader.load_param("version", _version_);
+  param_loader.loadParam("version", _version_);
 
   if (_version_ != VERSION) {
 
@@ -189,59 +189,59 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
     ros::shutdown();
   }
 
-  param_loader.load_param("enable_profiler", _profiler_enabled_);
+  param_loader.loadParam("enable_profiler", _profiler_enabled_);
 
   // lateral gains
-  param_loader.load_param("default_gains/horizontal/kp", kpxy_);
-  param_loader.load_param("default_gains/horizontal/kv", kvxy_);
-  param_loader.load_param("default_gains/horizontal/ka", kaxy_);
+  param_loader.loadParam("default_gains/horizontal/kp", kpxy_);
+  param_loader.loadParam("default_gains/horizontal/kv", kvxy_);
+  param_loader.loadParam("default_gains/horizontal/ka", kaxy_);
 
-  param_loader.load_param("default_gains/horizontal/kiw", kiwxy_);
-  param_loader.load_param("default_gains/horizontal/kib", kibxy_);
+  param_loader.loadParam("default_gains/horizontal/kiw", kiwxy_);
+  param_loader.loadParam("default_gains/horizontal/kib", kibxy_);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.load_param("rampup/enabled", _rampup_enabled_);
-  param_loader.load_param("rampup/speed", _rampup_speed_);
+  param_loader.loadParam("rampup/enabled", _rampup_enabled_);
+  param_loader.loadParam("rampup/speed", _rampup_speed_);
 
   // height gains
-  param_loader.load_param("default_gains/vertical/kp", kpz_);
-  param_loader.load_param("default_gains/vertical/kv", kvz_);
-  param_loader.load_param("default_gains/vertical/ka", kaz_);
+  param_loader.loadParam("default_gains/vertical/kp", kpz_);
+  param_loader.loadParam("default_gains/vertical/kv", kvz_);
+  param_loader.loadParam("default_gains/vertical/ka", kaz_);
 
   // attitude gains
-  param_loader.load_param("default_gains/horizontal/attitude/kq", kqxy_);
-  param_loader.load_param("default_gains/vertical/attitude/kq", kqz_);
+  param_loader.loadParam("default_gains/horizontal/attitude/kq", kqxy_);
+  param_loader.loadParam("default_gains/vertical/attitude/kq", kqz_);
 
   // attitude rate gains
-  param_loader.load_param("default_gains/horizontal/attitude/kw", kwxy_);
-  param_loader.load_param("default_gains/vertical/attitude/kw", kwz_);
+  param_loader.loadParam("default_gains/horizontal/attitude/kw", kwxy_);
+  param_loader.loadParam("default_gains/vertical/attitude/kw", kwz_);
 
   // mass estimator
-  param_loader.load_param("default_gains/mass_estimator/km", km_);
-  param_loader.load_param("default_gains/mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam("default_gains/mass_estimator/km", km_);
+  param_loader.loadParam("default_gains/mass_estimator/km_lim", km_lim_);
 
   // integrator limits
-  param_loader.load_param("default_gains/horizontal/kiw_lim", kiwxy_lim_);
-  param_loader.load_param("default_gains/horizontal/kib_lim", kibxy_lim_);
+  param_loader.loadParam("default_gains/horizontal/kiw_lim", kiwxy_lim_);
+  param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.load_param("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
-  param_loader.load_param("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
-  param_loader.load_param("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
-  param_loader.load_param("constraints/thrust_saturation", _thrust_saturation_);
+  param_loader.loadParam("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
+  param_loader.loadParam("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
+  param_loader.loadParam("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
 
   // gain filtering
-  param_loader.load_param("gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.load_param("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // gain muting
-  param_loader.load_param("gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam("gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  param_loader.load_param("output_mode", output_mode_);
+  param_loader.loadParam("output_mode", output_mode_);
 
-  if (!param_loader.loaded_successfully()) {
+  if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[So3Controller]: could not load all parameters!");
     ros::shutdown();
   }
