@@ -18,7 +18,6 @@ find_package(catkin REQUIRED COMPONENTS
 generate_dynamic_reconfigure_options(
   cfg/nsf_controller.cfg
   cfg/so3_controller.cfg
-  cfg/attitude_controller.cfg
   cfg/mpc_controller.cfg
   cfg/acceleration_controller.cfg
   )
@@ -126,22 +125,6 @@ target_link_libraries(AccelerationController
   MpcControllerCvxgen
   )
 
-# Attitude controller
-
-add_library(AttitudeController
-  src/attitude_controller/attitude_controller.cpp
-  )
-
-add_dependencies(AttitudeController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-
-target_link_libraries(AttitudeController
-  ${catkin_LIBRARIES}
-  )
-
 # Failsafe controller
 
 add_library(FailsafeController
@@ -166,7 +149,6 @@ install(TARGETS
   So3Controller
   AccelerationController
   FailsafeController
-  AttitudeController
   NsfController
   MpcControllerCvxgen
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

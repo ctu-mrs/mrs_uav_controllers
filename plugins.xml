@@ -10,12 +10,6 @@
   </class>
 </library>
 
-<library path="lib/libAttitudeController">
-  <class name="mrs_controllers/AttitudeController" type="mrs_controllers::attitude_controller::AttitudeController" base_class_type="mrs_uav_manager::Controller">
-    <description>This is AttitudeController.</description>
-  </class>
-</library>
-
 <library path="lib/libSo3Controller">
   <class name="mrs_controllers/So3Controller" type="mrs_controllers::so3_controller::So3Controller" base_class_type="mrs_uav_manager::Controller">
     <description>This is So3Controller.</description>

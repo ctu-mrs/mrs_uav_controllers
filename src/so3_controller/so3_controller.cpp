@@ -498,14 +498,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Ra << 0, 0, 0;
   }
 
-  Eigen::Vector3d bxd;  // desired heading vector
-
-  if (control_reference->use_heading) {
-    bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
-  } else {
-    bxd << cos(uav_heading), sin(uav_heading), 0;
-  }
-
   if (control_reference->use_attitude_rate) {
     Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
   } else if (control_reference->use_heading_rate) {
@@ -588,7 +580,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     Kq << kqxy_, kqxy_, kqz_;
 
-    if (!control_reference->use_heading) {
+    if (!(control_reference->use_heading || control_reference->use_orientation)) {
       Kq[2] = 0;
     }
 
@@ -699,10 +691,32 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
   Eigen::Matrix3d Rd;
 
-  Rd.col(2) = f_norm;
-  Rd.col(1) = Rd.col(2).cross(bxd);
-  Rd.col(1).normalize();
-  Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+  if (control_reference->use_orientation) {
+
+    // fill in the desired orientation based on the desired orientation from the control command
+    Rd = mrs_lib::AttitudeConverter(control_reference->orientation);
+
+    if (control_reference->use_heading) {
+      Rd = mrs_lib::AttitudeConverter(Rd).setHeadingByYaw(control_reference->heading);
+    }
+
+  } else {
+
+    Eigen::Vector3d bxd;  // desired heading vector
+
+    if (control_reference->use_heading) {
+      bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: desired heading was not specified, using current heading instead!");
+      bxd << cos(uav_heading), sin(uav_heading), 0;
+    }
+
+    // fill in the desired orientation based on the state feedback
+    Rd.col(2) = f_norm;
+    Rd.col(1) = Rd.col(2).cross(bxd);
+    Rd.col(1).normalize();
+    Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+  }
 
   // --------------------------------------------------------------
   // |                      orientation error                     |

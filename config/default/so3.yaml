@@ -3,7 +3,7 @@ version: "0.0.5.0"
 default_gains:
 
   # Gains in this file SHOULD NOT BE CHANGED, since they are not used most of the times.
-  # Gains which are actually used are in the MavManager package under the GainManager configs
+  # Gains which are actually used are in the mrs_uav_manager package under the gain_manager configs
 
   # influences pitching and rolling
   horizontal:
