@@ -19,7 +19,6 @@ generate_dynamic_reconfigure_options(
   cfg/nsf_controller.cfg
   cfg/so3_controller.cfg
   cfg/mpc_controller.cfg
-  cfg/acceleration_controller.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color -Wall -Wextra")
@@ -108,23 +107,6 @@ target_link_libraries(MpcController
   MpcControllerCvxgen
   )
 
-# acceleration controller
-
-add_library(AccelerationController
-  src/acceleration_controller/acceleration_controller.cpp
-  )
-
-add_dependencies(AccelerationController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-
-target_link_libraries(AccelerationController
-  ${catkin_LIBRARIES}
-  MpcControllerCvxgen
-  )
-
 # Failsafe controller
 
 add_library(FailsafeController
@@ -147,7 +129,6 @@ target_link_libraries(FailsafeController
 install(TARGETS
   MpcController
   So3Controller
-  AccelerationController
   FailsafeController
   NsfController
   MpcControllerCvxgen
@@ -159,7 +140,6 @@ install(TARGETS
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
   FILES_MATCHING PATTERN "*.h"
-  PATTERN ".svn" EXCLUDE
   )
 
 install(FILES

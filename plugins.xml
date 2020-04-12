@@ -21,9 +21,3 @@
     <description>This is MpcController.</description>
   </class>
 </library>
-
-<library path="lib/libAccelerationController">
-  <class name="mrs_controllers/AccelerationController" type="mrs_controllers::acceleration_controller::AccelerationController" base_class_type="mrs_uav_manager::Controller">
-    <description>This is AccelerationController.</description>
-  </class>
-</library>

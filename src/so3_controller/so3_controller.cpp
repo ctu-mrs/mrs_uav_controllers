@@ -578,13 +578,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       Ka << 0, 0, 0;
     }
 
-    Kq << kqxy_, kqxy_, kqz_;
-
-    if (!(control_reference->use_heading || control_reference->use_orientation)) {
-      Kq[2] = 0;
+    if (control_reference->use_attitude_rate) {
+      Kw << kwxy_, kwxy_, kwz_;
+    } else if (control_reference->use_heading_rate) {
+      Kw << 0, 0, kwz_;
+    } else {
+      Kw << 0, 0, 0;
     }
 
-    Kw << kwxy_, kwxy_, kwz_;
+    // Those gains are set regardless of control_reference setting,
+    // because we need to control the attitude.
+    Kq << kqxy_, kqxy_, kqz_;
   }
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
