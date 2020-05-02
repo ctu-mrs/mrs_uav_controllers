@@ -19,13 +19,11 @@ attitude_feedback:
     horizontal:
       attitude:
         kq: 8.0
-        kw: 0.0
 
     # influences yawing
     vertical:
       attitude:
         kq: 8.0
-        kw: 0.1
 
     mass_estimator:
       km: 1.0

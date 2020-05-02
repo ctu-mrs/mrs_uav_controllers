@@ -94,8 +94,6 @@ private:
   double km_lim_;     // mass estimator limit
   double kqxy_;       // pitch/roll attitude gain
   double kqz_;        // yaw attitude gain
-  double kwxy_;       // pitch/roll attitude rate gain
-  double kwz_;        // yaw attitude rate gain
 
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
@@ -213,10 +211,6 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.loadParam("default_gains/horizontal/attitude/kq", kqxy_);
   param_loader.loadParam("default_gains/vertical/attitude/kq", kqz_);
 
-  // attitude rate gains
-  param_loader.loadParam("default_gains/horizontal/attitude/kw", kwxy_);
-  param_loader.loadParam("default_gains/vertical/attitude/kw", kwz_);
-
   // mass estimator
   param_loader.loadParam("default_gains/mass_estimator/km", km_);
   param_loader.loadParam("default_gains/mass_estimator/km_lim", km_lim_);
@@ -279,8 +273,6 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   drs_gains_.kaz         = kaz_;
   drs_gains_.kqxy        = kqxy_;
   drs_gains_.kqz         = kqz_;
-  drs_gains_.kwxy        = kwxy_;
-  drs_gains_.kwz         = kwz_;
   drs_gains_.kiwxy_lim   = kiwxy_lim_;
   drs_gains_.kibxy_lim   = kibxy_lim_;
   drs_gains_.km          = km_;
@@ -501,7 +493,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   if (control_reference->use_attitude_rate) {
     Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
   } else if (control_reference->use_heading_rate) {
-    Rw << 0, 0, control_reference->heading_rate;
+    // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
+    double desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
+    Rw << 0, 0, desired_yaw_rate;
   }
 
   // Op - position in global frame
@@ -539,7 +533,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   Eigen::Array3d  Kp = Eigen::Array3d::Zero(3);
   Eigen::Array3d  Kv = Eigen::Array3d::Zero(3);
   Eigen::Array3d  Kq = Eigen::Array3d::Zero(3);
-  Eigen::Array3d  Kw = Eigen::Array3d::Zero(3);
 
   {
     std::scoped_lock lock(mutex_gains_);
@@ -576,14 +569,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       Ka << kaxy_, kaxy_, kaz_;
     } else {
       Ka << 0, 0, 0;
-    }
-
-    if (control_reference->use_attitude_rate) {
-      Kw << kwxy_, kwxy_, kwz_;
-    } else if (control_reference->use_heading_rate) {
-      Kw << 0, 0, kwz_;
-    } else {
-      Kw << 0, 0, 0;
     }
 
     // Those gains are set regardless of control_reference setting,
@@ -701,7 +686,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Rd = mrs_lib::AttitudeConverter(control_reference->orientation);
 
     if (control_reference->use_heading) {
-      Rd = mrs_lib::AttitudeConverter(Rd).setHeadingByYaw(control_reference->heading);
+      Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
     }
 
   } else {
@@ -732,13 +717,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   Eigen::Vector3d Eq;
   Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
 
-  // --------------------------------------------------------------
-  // |                     angular rate error                     |
-  // --------------------------------------------------------------
-  //
-  Eigen::Vector3d Ew;
-  Ew = R.transpose() * (Ow - Rw);
-
   /* output */
   double thrust_force = f.dot(R.col(2));
 
@@ -767,8 +745,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     ROS_WARN_THROTTLE(1.0, "[So3Controller]: saturating thrust to 0");
   }
 
-  Eigen::Vector3d t;
-  t = -Kq * Eq.array() - Kw * Ew.array();
+  // prepare the attitude feedback
+  Eigen::Vector3d q_feedback = -Kq * Eq.array();
+
+  // angular feedback + angular rate feedforward
+  Eigen::Vector3d t = q_feedback + Rw;
 
   // --------------------------------------------------------------
   // |                      update parameters                     |
@@ -1219,8 +1200,6 @@ void So3Controller::filterGains(const bool mute_gains, const double dt) {
     kaz_   = calculateGainChange(dt, kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz", updated);
     kqxy_  = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
     kqz_   = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
-    kwxy_  = calculateGainChange(dt, kwxy_, drs_gains_.kwxy * gain_coeff, bypass_filter, "kwxy", updated);
-    kwz_   = calculateGainChange(dt, kwz_, drs_gains_.kwz * gain_coeff, bypass_filter, "kwz", updated);
     km_    = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
 
     kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim", updated);
@@ -1243,8 +1222,6 @@ void So3Controller::filterGains(const bool mute_gains, const double dt) {
       new_drs_gains.kaz         = kaz_;
       new_drs_gains.kqxy        = kqxy_;
       new_drs_gains.kqz         = kqz_;
-      new_drs_gains.kwxy        = kwxy_;
-      new_drs_gains.kwz         = kwz_;
       new_drs_gains.kiwxy_lim   = kiwxy_lim_;
       new_drs_gains.kibxy_lim   = kibxy_lim_;
       new_drs_gains.km          = km_;

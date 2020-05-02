@@ -13,7 +13,6 @@ default_gains:
 
     attitude:
       kq: 5.0
-      kw: 0.0
 
     kib: 0.1
     kib_lim: 10.0
@@ -29,7 +28,6 @@ default_gains:
 
     attitude:
       kq: 5.0
-      kw: 0.1
 
   mass_estimator:
     km: 1.0
