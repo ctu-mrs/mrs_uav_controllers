@@ -1,11 +1,11 @@
 /* author: Daniel Hert */
 
 #include <eigen3/Eigen/Eigen>
-#include <mrs_controllers/cvx_wrapper.h>
+#include <mrs_uav_controllers/cvx_wrapper.h>
 
 using namespace Eigen;
 
-namespace mrs_controllers
+namespace mrs_uav_controllers
 {
 
 namespace cvx_wrapper
@@ -217,4 +217,4 @@ void CvxWrapper::unlock(void) {
 
 }  // namespace cvx_wrapper
 
-}  // namespace mrs_controllers
+}  // namespace mrs_uav_controllers

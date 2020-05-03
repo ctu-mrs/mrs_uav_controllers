@@ -4,7 +4,7 @@
 
 #include <ros/ros.h>
 
-#include <mrs_uav_manager/Controller.h>
+#include <mrs_uav_managers/controller.h>
 
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
@@ -13,7 +13,7 @@
 
 //}
 
-namespace mrs_controllers
+namespace mrs_uav_controllers
 {
 
 namespace failsafe_controller
@@ -21,11 +21,11 @@ namespace failsafe_controller
 
 /* class FailsafeController //{ */
 
-class FailsafeController : public mrs_uav_manager::Controller {
+class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const mrs_uav_manager::MotorParams motor_params,
-                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const mrs_uav_managers::MotorParams motor_params,
+                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
@@ -42,7 +42,7 @@ private:
   bool is_initialized_ = false;
   bool is_active_      = false;
 
-  std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
+  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
 
   // | --------------------- thrust control --------------------- |
 
@@ -50,7 +50,7 @@ private:
   double uav_mass_difference_;
 
   double                       _g_;
-  mrs_uav_manager::MotorParams _motor_params_;
+  mrs_uav_managers::MotorParams _motor_params_;
   double                       hover_thrust_;
 
   double _thrust_decrease_rate_;
@@ -85,8 +85,8 @@ private:
 /* initialize() //{ */
 
 void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                                    const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
-                                    std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
+                                    const mrs_uav_managers::MotorParams motor_params, const double uav_mass, const double g,
+                                    std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
@@ -307,7 +307,7 @@ void FailsafeController::resetDisturbanceEstimators(void) {
 
 }  // namespace failsafe_controller
 
-}  // namespace mrs_controllers
+}  // namespace mrs_uav_controllers
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mrs_controllers::failsafe_controller::FailsafeController, mrs_uav_manager::Controller)
+PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::failsafe_controller::FailsafeController, mrs_uav_managers::Controller)

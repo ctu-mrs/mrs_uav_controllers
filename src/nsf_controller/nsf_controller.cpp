@@ -4,10 +4,10 @@
 
 #include <ros/ros.h>
 
-#include <mrs_uav_manager/Controller.h>
+#include <mrs_uav_managers/controller.h>
 
 #include <dynamic_reconfigure/server.h>
-#include <mrs_controllers/nsf_controllerConfig.h>
+#include <mrs_uav_controllers/nsf_controllerConfig.h>
 
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
@@ -22,7 +22,7 @@
 #define Y 1
 #define Z 2
 
-namespace mrs_controllers
+namespace mrs_uav_controllers
 {
 
 namespace nsf_controller
@@ -30,11 +30,11 @@ namespace nsf_controller
 
 /* //{ class NsfController */
 
-class NsfController : public mrs_uav_manager::Controller {
+class NsfController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, std::string name_space, const mrs_uav_manager::MotorParams motor_params,
-                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers);
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, std::string name_space, const mrs_uav_managers::MotorParams motor_params,
+                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
@@ -51,7 +51,7 @@ private:
   bool is_initialized_ = false;
   bool is_active_      = false;
 
-  std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers_;
+  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
 
   // | ------------------------ uav state ----------------------- |
 
@@ -60,20 +60,20 @@ private:
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  boost::recursive_mutex                           mutex_drs_;
-  typedef mrs_controllers::nsf_controllerConfig    DrsConfig_t;
-  typedef dynamic_reconfigure::Server<DrsConfig_t> Drs_t;
-  boost::shared_ptr<Drs_t>                         drs_;
-  void                                             callbackDrs(mrs_controllers::nsf_controllerConfig &config, uint32_t level);
-  DrsConfig_t                                      drs_gains_;
+  boost::recursive_mutex                            mutex_drs_;
+  typedef mrs_uav_controllers::nsf_controllerConfig DrsConfig_t;
+  typedef dynamic_reconfigure::Server<DrsConfig_t>  Drs_t;
+  boost::shared_ptr<Drs_t>                          drs_;
+  void                                              callbackDrs(mrs_uav_controllers::nsf_controllerConfig &config, uint32_t level);
+  DrsConfig_t                                       drs_gains_;
 
   // | ---------- thrust generation and mass estimation --------- |
 
-  double                       _uav_mass_;
-  double                       uav_mass_difference_;
-  double                       _g_;
-  mrs_uav_manager::MotorParams _motor_params_;
-  double                       hover_thrust_;
+  double                        _uav_mass_;
+  double                        uav_mass_difference_;
+  double                        _g_;
+  mrs_uav_managers::MotorParams _motor_params_;
+  double                        hover_thrust_;
 
   // | ------------------- configurable gains ------------------- |
 
@@ -142,8 +142,8 @@ private:
 /* //{ initialize() */
 
 void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                               const mrs_uav_manager::MotorParams motor_params, const double uav_mass, const double g,
-                               std::shared_ptr<mrs_uav_manager::CommonHandlers_t> common_handlers) {
+                               const mrs_uav_managers::MotorParams motor_params, const double uav_mass, const double g,
+                               std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
@@ -796,7 +796,7 @@ void NsfController::resetDisturbanceEstimators(void) {
 
 /* //{ callbackDrs() */
 
-void NsfController::callbackDrs(mrs_controllers::nsf_controllerConfig &config, [[maybe_unused]] uint32_t level) {
+void NsfController::callbackDrs(mrs_uav_controllers::nsf_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_drs_params_);
@@ -921,7 +921,7 @@ double NsfController::calculateGainChange(const double dt, const double current_
 
 }  // namespace nsf_controller
 
-}  // namespace mrs_controllers
+}  // namespace mrs_uav_controllers
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mrs_controllers::nsf_controller::NsfController, mrs_uav_manager::Controller)
+PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::nsf_controller::NsfController, mrs_uav_managers::Controller)

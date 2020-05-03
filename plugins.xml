@@ -1,23 +1,23 @@
 <library path="lib/libFailsafeController">
-  <class name="mrs_controllers/FailsafeController" type="mrs_controllers::failsafe_controller::FailsafeController" base_class_type="mrs_uav_manager::Controller">
+  <class name="mrs_uav_controllers/FailsafeController" type="mrs_uav_controllers::failsafe_controller::FailsafeController" base_class_type="mrs_uav_managers::Controller">
     <description>This is FailsafeController.</description>
   </class>
 </library>
 
 <library path="lib/libNsfController">
-  <class name="mrs_controllers/NsfController" type="mrs_controllers::nsf_controller::NsfController" base_class_type="mrs_uav_manager::Controller">
+  <class name="mrs_uav_controllers/NsfController" type="mrs_uav_controllers::nsf_controller::NsfController" base_class_type="mrs_uav_managers::Controller">
     <description>This is NsfController.</description>
   </class>
 </library>
 
 <library path="lib/libSo3Controller">
-  <class name="mrs_controllers/So3Controller" type="mrs_controllers::so3_controller::So3Controller" base_class_type="mrs_uav_manager::Controller">
+  <class name="mrs_uav_controllers/So3Controller" type="mrs_uav_controllers::so3_controller::So3Controller" base_class_type="mrs_uav_managers::Controller">
     <description>This is So3Controller.</description>
   </class>
 </library>
 
 <library path="lib/libMpcController">
-  <class name="mrs_controllers/MpcController" type="mrs_controllers::mpc_controller::MpcController" base_class_type="mrs_uav_manager::Controller">
+  <class name="mrs_uav_controllers/MpcController" type="mrs_uav_controllers::mpc_controller::MpcController" base_class_type="mrs_uav_managers::Controller">
     <description>This is MpcController.</description>
   </class>
 </library>

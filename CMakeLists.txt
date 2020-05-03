@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(mrs_controllers)
+project(mrs_uav_controllers)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -10,7 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   cmake_modules
   mrs_msgs
   dynamic_reconfigure
-  mrs_uav_manager
+  mrs_uav_managers
   mrs_lib
   tf
   )
@@ -35,7 +35,7 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES MpcControllerCvxgen
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_manager mrs_lib tf
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf
   DEPENDS Eigen
   )
 

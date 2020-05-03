@@ -7,7 +7,7 @@
 
 /* author: Daniel Hert */
 
-namespace mrs_controllers
+namespace mrs_uav_controllers
 {
 
 namespace cvx_wrapper
@@ -50,6 +50,6 @@ private:
 
 }  // namespace cvx_wrapper
 
-}  // namespace mrs_controllers
+}  // namespace mrs_uav_controllers
 
 #endif
