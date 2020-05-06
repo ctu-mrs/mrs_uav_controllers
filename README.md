@@ -1,5 +1,7 @@
 # MRS Controllers
 
+[![Build Status](https://travis-ci.com/ctu-mrs/mrs_uav_controllers.svg?branch=master)](https://travis-ci.com/ctu-mrs/mrs_uav_controllers)
+
 * *SO3 controller*
   * non-linear state feedback capable of precise reference tracking and fast manouvres
   * pros: Precise control, fast response, fast convergence
