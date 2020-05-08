@@ -2,6 +2,11 @@
 
 ![](.fig/thumbnail.jpg)
 
+## Purpose of a controller within the MRS control pipeline
+
+* receiving an all-state reference from [reference trackers](https://github.com/ctu-mrs/mrs_uav_trackers)
+* controlling the states of the UAV by outputting a **desired angular rate** (or **desired orientation**) and **desired thrust**
+
 ## Available controllers
 
 * "SO(3) controller"
@@ -23,11 +28,6 @@
   * feedforward landing routing for landing without a state estimator
   * relies on the Pixhawk's attitude controller for leveling
   * is triggers in case of emergency
-
-## Purpose of a controller within the MRS control pipeline
-
-* receiving an all-state reference from [reference trackers](https://github.com/ctu-mrs/mrs_uav_trackers)
-* controlling the states of the UAV by outputting a **desired angular rate** (or **desired orientation**) and **desired thrust**
 
 ## Controller interface
 
