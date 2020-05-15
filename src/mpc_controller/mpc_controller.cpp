@@ -377,9 +377,9 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
 /* //{ activate() */
 
-bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
+bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd) {
 
-  if (cmd == mrs_msgs::AttitudeCommand::Ptr()) {
+  if (last_attitude_cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
     ROS_WARN("[%s]: activated without getting the last controllers's command", this->name_.c_str());
 
@@ -387,16 +387,16 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
 
   } else {
 
-    activation_attitude_cmd_ = *cmd;
-    uav_mass_difference_     = cmd->mass_difference;
+    activation_attitude_cmd_ = *last_attitude_cmd;
+    uav_mass_difference_     = last_attitude_cmd->mass_difference;
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    Ib_b_[0] = -cmd->disturbance_bx_b;
-    Ib_b_[1] = -cmd->disturbance_by_b;
+    Ib_b_[0] = -last_attitude_cmd->disturbance_bx_b;
+    Ib_b_[1] = -last_attitude_cmd->disturbance_by_b;
 
-    Iw_w_[0] = -cmd->disturbance_wx_w;
-    Iw_w_[1] = -cmd->disturbance_wy_w;
+    Iw_w_[0] = -last_attitude_cmd->disturbance_wx_w;
+    Iw_w_[1] = -last_attitude_cmd->disturbance_wy_w;
 
     ROS_INFO("[%s]: setting the mass difference and integrals from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: %.2f, %.2f N",
              this->name_.c_str(), uav_mass_difference_, Ib_b_[0], Ib_b_[1], Iw_w_[0], Iw_w_[1]);
@@ -407,8 +407,8 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
   // rampup check
   if (_rampup_enabled_) {
 
-    double hover_thrust_     = sqrt(cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
-    double thrust_difference = hover_thrust_ - cmd->thrust;
+    double hover_thrust_     = sqrt(last_attitude_cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
+    double thrust_difference = hover_thrust_ - last_attitude_cmd->thrust;
 
     if (thrust_difference > 0) {
       rampup_direction_ = 1;
@@ -418,12 +418,12 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &cmd) {
       rampup_direction_ = 0;
     }
 
-    ROS_INFO("[MpcController]: activating rampup with initial thrust: %.4f, target: %.4f", cmd->thrust, hover_thrust_);
+    ROS_INFO("[MpcController]: activating rampup with initial thrust: %.4f, target: %.4f", last_attitude_cmd->thrust, hover_thrust_);
 
     rampup_active_     = true;
     rampup_start_time_ = ros::Time::now();
     rampup_last_time_  = ros::Time::now();
-    rampup_thrust_     = cmd->thrust;
+    rampup_thrust_     = last_attitude_cmd->thrust;
 
     rampup_duration_ = fabs(thrust_difference) / _rampup_speed_;
   }
