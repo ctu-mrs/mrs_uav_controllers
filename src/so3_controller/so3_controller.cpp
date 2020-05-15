@@ -521,7 +521,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // velocity control error
   Eigen::Vector3d Ev = Eigen::Vector3d::Zero(3);
 
-  if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical) {
+  if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
+      control_reference->use_position_vertical) {  // even wehn use_position_vertical to provide dampening
     Ev = Ov - Rv;
   }
 
@@ -560,6 +561,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     }
 
     if (control_reference->use_velocity_vertical) {
+      Kv[2] = kvz_;
+    } else if (control_reference->use_position_vertical) {  // special case: want to control z-pos but not the velocity => at least provide z dampening
       Kv[2] = kvz_;
     } else {
       Kv[2] = 0;
