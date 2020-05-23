@@ -2,8 +2,8 @@ pull_request_rules:
   - name: automatic merge
     conditions:
       - status-success=Travis CI - Pull Request
-      - label=ready-to-merge
-      - label!=squash-merge
+      - label=auto-merge
+      - label!=auto-squash-merge
       - base=master
     actions:
       merge:
@@ -11,8 +11,8 @@ pull_request_rules:
   - name: automatic squash merge
     conditions:
       - status-success=Travis CI - Pull Request
-      - label=ready-to-merge
-      - label=squash-merge
+      - label=auto-merge
+      - label=auto-squash-merge
       - base=master
     actions:
       merge:
@@ -20,6 +20,6 @@ pull_request_rules:
   - name: branch deletion after merge
     conditions:
       - merged
-      - label=delete-branch
+      - label=auto-delete-branch
     actions:
       delete_head_branch: {}
