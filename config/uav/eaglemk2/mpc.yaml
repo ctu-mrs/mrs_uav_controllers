@@ -1,8 +1,3 @@
-rampup:
-
-  enabled: true
-  speed: 0.5 # [1/s]
-
 integral_gains:
 
   kiw: 0.5
@@ -10,6 +5,11 @@ integral_gains:
 
   kiw_lim: 10.0
   kib_lim: 10.0
+
+rampup:
+
+  enabled: true
+  speed: 0.5 # [1/s]
 
 attitude_feedback:
 
@@ -25,6 +25,6 @@ attitude_feedback:
       attitude:
         kq: 8.0
 
-    mass_estimator:
-      km: 1.0
-      km_lim: 10.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+mass_estimator:
+  km: 1.0
+  km_lim: 10.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
