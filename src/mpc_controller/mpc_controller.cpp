@@ -1113,16 +1113,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   double desired_z_accel = 0;
 
   {
-    Eigen::Quaterniond des_quater = mrs_lib::AttitudeConverter(Rd);
-
-    // rotate the drone's z axis
-    Eigen::Vector3d uav_z_in_world = des_quater * Eigen::Vector3d(0, 0, 1);
-
-    Eigen::Vector3d thrust_vector = thrust_force * uav_z_in_world;
+    Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
+    Eigen::Vector3d thrust_vector = thrust_force * des_orientation.col(2);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = control_reference->acceleration.z;
+    double world_accel_z = (thrust_vector[2] / total_mass) - _g_;
 
     geometry_msgs::Vector3Stamped world_accel;
     world_accel.header.stamp    = ros::Time::now();
