@@ -1114,11 +1114,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   {
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d thrust_vector = thrust_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector   = thrust_force * des_orientation.col(2);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = (thrust_vector[2] / total_mass) - _g_;
+    /* double world_accel_z = (thrust_vector[2] / total_mass) - _g_; */
+    double world_accel_z = control_reference->acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;
     world_accel.header.stamp    = ros::Time::now();
