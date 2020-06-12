@@ -6,7 +6,7 @@
 
 #include <mrs_uav_managers/controller.h>
 
-#include <mrs_uav_controllers/cvx_wrapper.h>
+#include <mpc_controller_solver.h>
 
 #include <dynamic_reconfigure/server.h>
 #include <mrs_uav_controllers/mpc_controllerConfig.h>
@@ -150,9 +150,9 @@ private:
   double _dt2_;  // all the other steps
 
   // the last control input
-  double cvx_x_u = 0;
-  double cvx_y_u = 0;
-  double cvx_z_u = 0;
+  double mpc_solver_x_u_ = 0;
+  double mpc_solver_y_u_ = 0;
+  double mpc_solver_z_u_ = 0;
 
   int _horizon_length_;
 
@@ -166,14 +166,14 @@ private:
   // Q and S matrix diagonals for vertical
   std::vector<double> _Q_z_, _S_z_;
 
-  // CVXGen handlers
-  std::unique_ptr<mrs_uav_controllers::cvx_wrapper::CvxWrapper> cvx_x_;
-  std::unique_ptr<mrs_uav_controllers::cvx_wrapper::CvxWrapper> cvx_y_;
-  std::unique_ptr<mrs_uav_controllers::cvx_wrapper::CvxWrapper> cvx_z_;
+  // MPC solver handlers
+  std::unique_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_x_;
+  std::unique_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_y_;
+  std::unique_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_z_;
 
-  // CVXGen params
-  bool _cvx_verbose_ = false;
-  int  _cvx_max_iterations_;
+  // MPC solver params
+  bool _mpc_solver_verbose_ = false;
+  int  _mpc_solver_max_iterations_;
 
   // | ------------------------ profiler ------------------------ |
 
@@ -260,8 +260,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   param_loader.loadParam("mpc_parameters/vertical/Q", _Q_z_);
   param_loader.loadParam("mpc_parameters/vertical/S", _S_z_);
 
-  param_loader.loadParam("cvx_parameters/verbose", _cvx_verbose_);
-  param_loader.loadParam("cvx_parameters/max_iterations", _cvx_max_iterations_);
+  param_loader.loadParam("mpc_solver/verbose", _mpc_solver_verbose_);
+  param_loader.loadParam("mpc_solver/max_iterations", _mpc_solver_max_iterations_);
 
   // | ------------------------- rampup ------------------------- |
 
@@ -333,14 +333,14 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   Iw_w_                = Eigen::Vector2d::Zero(2);
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
-  // | ------------------- prepare the CVXGen ------------------- |
+  // | ----------------- prepare the MPC solver ----------------- |
 
-  cvx_x_ = std::make_unique<mrs_uav_controllers::cvx_wrapper::CvxWrapper>(
-      mrs_uav_controllers::cvx_wrapper::CvxWrapper(_cvx_verbose_, _cvx_max_iterations_, _Q_, _S_, _dt1_, _dt2_, 0, 1.0));
-  cvx_y_ = std::make_unique<mrs_uav_controllers::cvx_wrapper::CvxWrapper>(
-      mrs_uav_controllers::cvx_wrapper::CvxWrapper(_cvx_verbose_, _cvx_max_iterations_, _Q_, _S_, _dt1_, _dt2_, 0, 1.0));
-  cvx_z_ = std::make_unique<mrs_uav_controllers::cvx_wrapper::CvxWrapper>(
-      mrs_uav_controllers::cvx_wrapper::CvxWrapper(_cvx_verbose_, _cvx_max_iterations_, _Q_z_, _S_z_, _dt1_, _dt2_, 0.5, 0.5));
+  mpc_solver_x_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
+      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _Q_, _S_, _dt1_, _dt2_, 0, 1.0));
+  mpc_solver_y_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
+      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _Q_, _S_, _dt1_, _dt2_, 0, 1.0));
+  mpc_solver_z_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
+      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _Q_z_, _S_z_, _dt1_, _dt2_, 0.5, 0.5));
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -627,47 +627,47 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | ------------------------ optimize ------------------------ |
 
-  cvx_x_->lock();
-  cvx_x_->setQ(temp_Q_horizontal);
-  cvx_x_->setS(temp_S_horizontal);
-  cvx_x_->setParams();
-  cvx_x_->setLastInput(cvx_x_u);
-  cvx_x_->loadReference(mpc_reference_x);
-  cvx_x_->setLimits(_max_speed_horizontal_, 999, max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
-  cvx_x_->setInitialState(initial_x);
-  [[maybe_unused]] int iters_x = cvx_x_->solveCvx();
-  cvx_x_u                      = cvx_x_->getFirstControlInput();
-  cvx_x_->unlock();
+  mpc_solver_x_->lock();
+  mpc_solver_x_->setQ(temp_Q_horizontal);
+  mpc_solver_x_->setS(temp_S_horizontal);
+  mpc_solver_x_->setParams();
+  mpc_solver_x_->setLastInput(mpc_solver_x_u_);
+  mpc_solver_x_->loadReference(mpc_reference_x);
+  mpc_solver_x_->setLimits(_max_speed_horizontal_, 999, max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
+  mpc_solver_x_->setInitialState(initial_x);
+  [[maybe_unused]] int iters_x = mpc_solver_x_->solveMPC();
+  mpc_solver_x_u_              = mpc_solver_x_->getFirstControlInput();
+  mpc_solver_x_->unlock();
 
-  cvx_y_->lock();
-  cvx_y_->setQ(temp_Q_horizontal);
-  cvx_y_->setS(temp_S_horizontal);
-  cvx_y_->setParams();
-  cvx_y_->setLastInput(cvx_y_u);
-  cvx_y_->loadReference(mpc_reference_y);
-  cvx_y_->setLimits(_max_speed_horizontal_, 999, max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
-  cvx_y_->setInitialState(initial_y);
-  [[maybe_unused]] int iters_y = cvx_y_->solveCvx();
-  cvx_y_u                      = cvx_y_->getFirstControlInput();
-  cvx_y_->unlock();
+  mpc_solver_y_->lock();
+  mpc_solver_y_->setQ(temp_Q_horizontal);
+  mpc_solver_y_->setS(temp_S_horizontal);
+  mpc_solver_y_->setParams();
+  mpc_solver_y_->setLastInput(mpc_solver_y_u_);
+  mpc_solver_y_->loadReference(mpc_reference_y);
+  mpc_solver_y_->setLimits(_max_speed_horizontal_, 999, max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
+  mpc_solver_y_->setInitialState(initial_y);
+  [[maybe_unused]] int iters_y = mpc_solver_y_->solveMPC();
+  mpc_solver_y_u_              = mpc_solver_y_->getFirstControlInput();
+  mpc_solver_y_->unlock();
 
-  cvx_z_->lock();
-  cvx_z_->setQ(temp_Q_vertical);
-  cvx_z_->setS(temp_S_vertical);
-  cvx_z_->setParams();
-  cvx_z_->setLastInput(cvx_z_u);
-  cvx_z_->loadReference(mpc_reference_z);
-  cvx_z_->setLimits(_max_speed_vertical_, _max_acceleration_vertical_, _max_u_vertical_, 999.0, _dt1_, _dt2_);
-  cvx_z_->setInitialState(initial_z);
-  [[maybe_unused]] int iters_z = cvx_z_->solveCvx();
-  cvx_z_u                      = cvx_z_->getFirstControlInput();
-  cvx_z_->unlock();
+  mpc_solver_z_->lock();
+  mpc_solver_z_->setQ(temp_Q_vertical);
+  mpc_solver_z_->setS(temp_S_vertical);
+  mpc_solver_z_->setParams();
+  mpc_solver_z_->setLastInput(mpc_solver_z_u_);
+  mpc_solver_z_->loadReference(mpc_reference_z);
+  mpc_solver_z_->setLimits(_max_speed_vertical_, _max_acceleration_vertical_, _max_u_vertical_, 999.0, _dt1_, _dt2_);
+  mpc_solver_z_->setInitialState(initial_z);
+  [[maybe_unused]] int iters_z = mpc_solver_z_->solveMPC();
+  mpc_solver_z_u_              = mpc_solver_z_->getFirstControlInput();
+  mpc_solver_z_->unlock();
 
   // | ----------- disable lateral feedback if needed ----------- |
 
   if (control_reference->disable_position_gains) {
-    cvx_x_u = 0;
-    cvx_y_u = 0;
+    mpc_solver_x_u_ = 0;
+    mpc_solver_y_u_ = 0;
   }
 
   // | --------------- calculate the control erros -------------- |
@@ -721,9 +721,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // construct the desired force vector
 
   if (control_reference->use_acceleration) {
-    Ra << control_reference->acceleration.x + cvx_x_u, control_reference->acceleration.y + cvx_y_u, control_reference->acceleration.z + cvx_z_u;
+    Ra << control_reference->acceleration.x + mpc_solver_x_u_, control_reference->acceleration.y + mpc_solver_y_u_,
+        control_reference->acceleration.z + mpc_solver_z_u_;
   } else {
-    Ra << cvx_x_u, cvx_y_u, cvx_z_u;
+    Ra << mpc_solver_x_u_, mpc_solver_y_u_, mpc_solver_z_u_;
   }
 
   double total_mass = _uav_mass_ + uav_mass_difference_;

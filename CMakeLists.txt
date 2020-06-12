@@ -34,7 +34,6 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES MpcControllerCvxgen
   CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf
   DEPENDS Eigen
   )
@@ -49,14 +48,30 @@ include_directories(
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
 
-# CVX wrapper
+# Mpc Solver Library
 
-add_library(MpcControllerCvxgen src/cvx_wrapper/cvx_wrapper.cpp
-  src/cvx_wrapper/cvxgen/ldl.c
-  src/cvx_wrapper/cvxgen/matrix_support.c
-  src/cvx_wrapper/cvxgen/solver.c
-  src/cvx_wrapper/cvxgen/util.c
+# Store in CMAKE_DEB_HOST_ARCH var the current build architecture
+execute_process(COMMAND
+  dpkg-architecture
+  -qDEB_HOST_ARCH
+  OUTPUT_VARIABLE
+  CMAKE_DEB_HOST_ARCH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
   )
+
+# Choose the timepix library based on the system architectur
+if(${CMAKE_DEB_HOST_ARCH} MATCHES "armhf")
+  MESSAGE(FATAL_ERROR "Mising MpcControllerSolver.so for armhf")
+elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "i386")
+  MESSAGE(FATAL_ERROR "Mising MpcControllerSolver.so for i386")
+elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "x64")
+  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/x64/libMpcControllerSolver.so)
+elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "amd64")
+  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/x64/libMpcControllerSolver.so)
+else()
+  MESSAGE(FATAL_ERROR ${CMAKE_DEB_HOST_ARCH})
+  MESSAGE(FATAL_ERROR "MpcControllerSolver.so has not been selected, check CMakeLists.txt.")
+endif()
 
 # NSF controller
 
@@ -104,7 +119,7 @@ add_dependencies(MpcController
 
 target_link_libraries(MpcController
   ${catkin_LIBRARIES}
-  MpcControllerCvxgen
+  ${MPC_CONTROLLER_SOLVER_BIN}
   )
 
 # Failsafe controller
@@ -131,7 +146,6 @@ install(TARGETS
   So3Controller
   FailsafeController
   NsfController
-  MpcControllerCvxgen
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

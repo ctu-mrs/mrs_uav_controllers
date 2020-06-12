@@ -29,7 +29,7 @@ mpc_parameters:
     max_acceleration: 2.0
     max_u: 50.0
 
-cvx_parameters:
+mpc_solver:
 
   verbose: false
   max_iterations: 30

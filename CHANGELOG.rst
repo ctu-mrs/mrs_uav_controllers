@@ -59,15 +59,14 @@ Changelog for package mrs_controllers
 * updated prints of integral terms
 * refactored controllers' dynamic reconfigure
 * added missing mutex for MPC
-* fixed cvxwrapper inclusion in cmakelists
-* updated cvx wrapper
+* updated mpc solver
 * fixed deactivation bug in controllers
 * added integrals of MPC controller to DRS
-* added loadReference method in cvx_wrapper
+* added loadReference method in mpc solver
 * added odometry switch routine to SO3, MPC and NSF controllers
 * re-setting Q and S in mpc tracker before every iteration
 * added acceleration controller
-* moved cvx_wrapper from mpc_controller to its own namespace and folder
+* moved mpc solver from mpc_controller to its own namespace and folder
 * Contributors: Tomas Baca
 
 0.0.2 (2019-07-01)
