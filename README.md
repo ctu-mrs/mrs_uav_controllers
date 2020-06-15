@@ -16,8 +16,8 @@
   * originally published in: `Lee, et al., "Geometric tracking control of a quadrotor UAV on SE(3)", CDC 2010`, [link](https://ieeexplore.ieee.org/abstract/document/5717652)
 * "MPC controller"
   * SO(3) force tracking + Linear MPC for acceleration feedforward
-  * pros: robust control, immune to measurement noise and reference infeasibilities
-  * cons: slow convergence, only for slow speeds (< 2 m/s), may have large control errors while tracking motion
+  * **pros**: robust control, immune to measurement noise and reference infeasibilities
+  * **cons**: slow convergence, only for slow speeds (< 2 m/s), may have large control errors while tracking motion
   * briefly described in: `Petrlik, et al., "A Robust UAV System for Operations in a Constrained Environment", RA-L 2020`, [link](https://ieeexplore.ieee.org/abstract/document/8979150)
 * "NSF controller"
   * nonlinear state feedback, obsolete 
@@ -25,9 +25,10 @@
   * is kept for testing and educational purposes
   * outputs *desired attitude* only
 * "Failsafe controller"
-  * feedforward landing routing for landing without a state estimator
+  * feedforward controller for landing without a state estimator
   * relies on the Pixhawk's attitude controller for leveling
   * is triggers in case of emergency
+  * gradually decreeses thrust while keeping the UAV leveled
 
 ## Controller interface
 
