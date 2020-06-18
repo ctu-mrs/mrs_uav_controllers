@@ -278,7 +278,6 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   drs_params_.km                           = km_;
   drs_params_.km_lim                       = km_lim_;
   drs_params_.output_mode                  = output_mode_;
-  drs_params_.rp_heading_rate_compensation = true;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
@@ -496,10 +495,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   if (control_reference->use_attitude_rate) {
     Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
   } else if (control_reference->use_heading_rate) {
-    // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
+    // to fill in the feed forward yaw rate
     double desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
     Rw << 0, 0, desired_yaw_rate;
-    /* ROS_INFO("[So3Controller]: desired_yaw_rate: %.2f", desired_yaw_rate); */
   }
 
   // Op - position in global frame
@@ -759,12 +757,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // compensate for the parasitic heading rate created by the desired pitch and roll rate
   Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
 
-  if (drs_params_.rp_heading_rate_compensation) {
-    Eigen::Vector3d q_feedback_yawless = q_feedback;
-    q_feedback_yawless(2)              = 0;
-    double parasitic_heading_rate      = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
-    rp_heading_rate_compensation(2)    = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
-  }
+  Eigen::Vector3d q_feedback_yawless = q_feedback;
+  q_feedback_yawless(2)              = 0; // nullyfy the effect of the original yaw feedback
+
+  double parasitic_heading_rate      = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+  rp_heading_rate_compensation(2)    = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
 
   // angular feedback + angular rate feedforward
   Eigen::Vector3d t = q_feedback + Rw + rp_heading_rate_compensation;
