@@ -763,7 +763,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Eigen::Vector3d q_feedback_yawless = q_feedback;
     q_feedback_yawless(2)              = 0;
     double parasitic_heading_rate      = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
-    rp_heading_rate_compensation(2)    = -parasitic_heading_rate;
+    rp_heading_rate_compensation(2)    = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
   }
 
   // angular feedback + angular rate feedforward
