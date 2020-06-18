@@ -78,7 +78,7 @@ private:
   typedef dynamic_reconfigure::Server<DrsConfig_t>  Drs_t;
   boost::shared_ptr<Drs_t>                          drs_;
   void                                              callbackDrs(mrs_uav_controllers::mpc_controllerConfig &config, uint32_t level);
-  DrsConfig_t                                       drs_gains_;
+  DrsConfig_t                                       drs_params_;
 
   // | ---------- thrust generation and mass estimation --------- |
 
@@ -344,17 +344,17 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_gains_.kiwxy     = kiwxy_;
-  drs_gains_.kibxy     = kibxy_;
-  drs_gains_.kqxy      = kqxy_;
-  drs_gains_.kqz       = kqz_;
-  drs_gains_.km        = km_;
-  drs_gains_.km_lim    = km_lim_;
-  drs_gains_.kiwxy_lim = kiwxy_lim_;
-  drs_gains_.kibxy_lim = kibxy_lim_;
+  drs_params_.kiwxy     = kiwxy_;
+  drs_params_.kibxy     = kibxy_;
+  drs_params_.kqxy      = kqxy_;
+  drs_params_.kqz       = kqz_;
+  drs_params_.km        = km_;
+  drs_params_.km_lim    = km_lim_;
+  drs_params_.kiwxy_lim = kiwxy_lim_;
+  drs_params_.kibxy_lim = kibxy_lim_;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
-  drs_->updateConfig(drs_gains_);
+  drs_->updateConfig(drs_params_);
   Drs_t::CallbackType f = boost::bind(&MpcController::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
 
@@ -1311,7 +1311,7 @@ void MpcController::callbackDrs(mrs_uav_controllers::mpc_controllerConfig &confi
   {
     std::scoped_lock lock(mutex_drs_params_);
 
-    drs_gains_ = config;
+    drs_params_ = config;
   }
 
   ROS_INFO("[%s]: DRS updated gains", this->name_.c_str());
@@ -1363,32 +1363,32 @@ void MpcController::filterGains(const bool mute_gains, const double dt) {
 
     bool updated = false;
 
-    kqxy_  = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
-    kqz_   = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
-    km_    = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
-    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
-    kibxy_ = calculateGainChange(dt, kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+    kqxy_  = calculateGainChange(dt, kqxy_, drs_params_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_   = calculateGainChange(dt, kqz_, drs_params_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    km_    = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
+    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+    kibxy_ = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
 
-    km_lim_    = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);
-    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim", updated);
-    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim", updated);
+    km_lim_    = calculateGainChange(dt, km_lim_, drs_params_.km_lim, false, "km_lim", updated);
+    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_params_.kiwxy_lim, false, "kiwxy_lim", updated);
+    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_params_.kibxy_lim, false, "kibxy_lim", updated);
 
     // set the gains back to dynamic reconfigure
     // and only do it when some filtering occurs
     if (updated) {
 
-      DrsConfig_t new_drs_gains;
+      DrsConfig_t new_drs_params_;
 
-      new_drs_gains.kiwxy     = kiwxy_;
-      new_drs_gains.kibxy     = kibxy_;
-      new_drs_gains.kqxy      = kqxy_;
-      new_drs_gains.kqz       = kqz_;
-      new_drs_gains.km        = km_;
-      new_drs_gains.km_lim    = km_lim_;
-      new_drs_gains.kiwxy_lim = kiwxy_lim_;
-      new_drs_gains.kibxy_lim = kibxy_lim_;
+      new_drs_params_.kiwxy     = kiwxy_;
+      new_drs_params_.kibxy     = kibxy_;
+      new_drs_params_.kqxy      = kqxy_;
+      new_drs_params_.kqz       = kqz_;
+      new_drs_params_.km        = km_;
+      new_drs_params_.km_lim    = km_lim_;
+      new_drs_params_.kiwxy_lim = kiwxy_lim_;
+      new_drs_params_.kibxy_lim = kibxy_lim_;
 
-      drs_->updateConfig(new_drs_gains);
+      drs_->updateConfig(new_drs_params_);
     }
   }
 }
