@@ -70,7 +70,7 @@ private:
   typedef dynamic_reconfigure::Server<DrsConfig_t>  Drs_t;
   boost::shared_ptr<Drs_t>                          drs_;
   void                                              callbackDrs(mrs_uav_controllers::so3_controllerConfig& config, uint32_t level);
-  DrsConfig_t                                       drs_gains_;
+  DrsConfig_t                                       drs_params_;
 
   // | ---------- thrust generation and mass estimation --------- |
 
@@ -135,7 +135,7 @@ private:
   mrs_lib::Profiler profiler_;
   bool              _profiler_enabled_ = false;
 
-  // | ------------------------ integrals ----------------------- |
+  // | ------------------------ iparasitic_heading_ratentegrals ----------------------- |
 
   Eigen::Vector2d Ib_b_;  // body error integral in the body frame
   Eigen::Vector2d Iw_w_;  // world error integral in the world_frame
@@ -263,24 +263,25 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_gains_.kpxy        = kpxy_;
-  drs_gains_.kvxy        = kvxy_;
-  drs_gains_.kaxy        = kaxy_;
-  drs_gains_.kiwxy       = kiwxy_;
-  drs_gains_.kibxy       = kibxy_;
-  drs_gains_.kpz         = kpz_;
-  drs_gains_.kvz         = kvz_;
-  drs_gains_.kaz         = kaz_;
-  drs_gains_.kqxy        = kqxy_;
-  drs_gains_.kqz         = kqz_;
-  drs_gains_.kiwxy_lim   = kiwxy_lim_;
-  drs_gains_.kibxy_lim   = kibxy_lim_;
-  drs_gains_.km          = km_;
-  drs_gains_.km_lim      = km_lim_;
-  drs_gains_.output_mode = output_mode_;
+  drs_params_.kpxy                         = kpxy_;
+  drs_params_.kvxy                         = kvxy_;
+  drs_params_.kaxy                         = kaxy_;
+  drs_params_.kiwxy                        = kiwxy_;
+  drs_params_.kibxy                        = kibxy_;
+  drs_params_.kpz                          = kpz_;
+  drs_params_.kvz                          = kvz_;
+  drs_params_.kaz                          = kaz_;
+  drs_params_.kqxy                         = kqxy_;
+  drs_params_.kqz                          = kqz_;
+  drs_params_.kiwxy_lim                    = kiwxy_lim_;
+  drs_params_.kibxy_lim                    = kibxy_lim_;
+  drs_params_.km                           = km_;
+  drs_params_.km_lim                       = km_lim_;
+  drs_params_.output_mode                  = output_mode_;
+  drs_params_.rp_heading_rate_compensation = true;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
-  drs_->updateConfig(drs_gains_);
+  drs_->updateConfig(drs_params_);
   Drs_t::CallbackType f = boost::bind(&So3Controller::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
 
@@ -390,6 +391,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     uav_state_ = *uav_state;
   }
 
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+
   if (!is_active_) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -496,6 +499,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
     double desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
     Rw << 0, 0, desired_yaw_rate;
+    /* ROS_INFO("[So3Controller]: desired_yaw_rate: %.2f", desired_yaw_rate); */
   }
 
   // Op - position in global frame
@@ -708,6 +712,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Rd.col(1) = Rd.col(2).cross(bxd);
     Rd.col(1).normalize();
     Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+    Rd.col(0).normalize();
   }
 
   // --------------------------------------------------------------
@@ -751,8 +756,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // prepare the attitude feedback
   Eigen::Vector3d q_feedback = -Kq * Eq.array();
 
+  // compensate for the parasitic heading rate created by the desired pitch and roll rate
+  Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
+
+  if (drs_params_.rp_heading_rate_compensation) {
+    Eigen::Vector3d q_feedback_yawless = q_feedback;
+    q_feedback_yawless(2)              = 0;
+    double parasitic_heading_rate      = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+    rp_heading_rate_compensation(2)    = -parasitic_heading_rate;
+  }
+
   // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw;
+  Eigen::Vector3d t = q_feedback + Rw + rp_heading_rate_compensation;
 
   // --------------------------------------------------------------
   // |                      update parameters                     |
@@ -959,7 +974,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   {
 
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d thrust_vector = thrust_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector   = thrust_force * des_orientation.col(2);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
@@ -1159,7 +1174,7 @@ void So3Controller::callbackDrs(mrs_uav_controllers::so3_controllerConfig& confi
   {
     std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
 
-    drs_gains_ = config;
+    drs_params_ = config;
 
     output_mode_ = config.output_mode;
   }
@@ -1190,45 +1205,45 @@ void So3Controller::filterGains(const bool mute_gains, const double dt) {
 
     bool updated = false;
 
-    kpxy_  = calculateGainChange(dt, kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
-    kvxy_  = calculateGainChange(dt, kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
-    kaxy_  = calculateGainChange(dt, kaxy_, drs_gains_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
-    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
-    kibxy_ = calculateGainChange(dt, kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
-    kpz_   = calculateGainChange(dt, kpz_, drs_gains_.kpz * gain_coeff, bypass_filter, "kpz", updated);
-    kvz_   = calculateGainChange(dt, kvz_, drs_gains_.kvz * gain_coeff, bypass_filter, "kvz", updated);
-    kaz_   = calculateGainChange(dt, kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz", updated);
-    kqxy_  = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
-    kqz_   = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
-    km_    = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+    kpxy_  = calculateGainChange(dt, kpxy_, drs_params_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
+    kvxy_  = calculateGainChange(dt, kvxy_, drs_params_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
+    kaxy_  = calculateGainChange(dt, kaxy_, drs_params_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
+    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+    kibxy_ = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+    kpz_   = calculateGainChange(dt, kpz_, drs_params_.kpz * gain_coeff, bypass_filter, "kpz", updated);
+    kvz_   = calculateGainChange(dt, kvz_, drs_params_.kvz * gain_coeff, bypass_filter, "kvz", updated);
+    kaz_   = calculateGainChange(dt, kaz_, drs_params_.kaz * gain_coeff, bypass_filter, "kaz", updated);
+    kqxy_  = calculateGainChange(dt, kqxy_, drs_params_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_   = calculateGainChange(dt, kqz_, drs_params_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    km_    = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
 
-    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim", updated);
-    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim", updated);
-    km_lim_    = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);
+    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_params_.kiwxy_lim, false, "kiwxy_lim", updated);
+    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_params_.kibxy_lim, false, "kibxy_lim", updated);
+    km_lim_    = calculateGainChange(dt, km_lim_, drs_params_.km_lim, false, "km_lim", updated);
 
     // set the gains back to dynamic reconfigure
     // and only do it when some filtering occurs
     if (updated) {
 
-      DrsConfig_t new_drs_gains;
+      DrsConfig_t new_drs_params;
 
-      new_drs_gains.kpxy        = kpxy_;
-      new_drs_gains.kvxy        = kvxy_;
-      new_drs_gains.kaxy        = kaxy_;
-      new_drs_gains.kiwxy       = kiwxy_;
-      new_drs_gains.kibxy       = kibxy_;
-      new_drs_gains.kpz         = kpz_;
-      new_drs_gains.kvz         = kvz_;
-      new_drs_gains.kaz         = kaz_;
-      new_drs_gains.kqxy        = kqxy_;
-      new_drs_gains.kqz         = kqz_;
-      new_drs_gains.kiwxy_lim   = kiwxy_lim_;
-      new_drs_gains.kibxy_lim   = kibxy_lim_;
-      new_drs_gains.km          = km_;
-      new_drs_gains.km_lim      = km_lim_;
-      new_drs_gains.output_mode = output_mode_;
+      new_drs_params.kpxy        = kpxy_;
+      new_drs_params.kvxy        = kvxy_;
+      new_drs_params.kaxy        = kaxy_;
+      new_drs_params.kiwxy       = kiwxy_;
+      new_drs_params.kibxy       = kibxy_;
+      new_drs_params.kpz         = kpz_;
+      new_drs_params.kvz         = kvz_;
+      new_drs_params.kaz         = kaz_;
+      new_drs_params.kqxy        = kqxy_;
+      new_drs_params.kqz         = kqz_;
+      new_drs_params.kiwxy_lim   = kiwxy_lim_;
+      new_drs_params.kibxy_lim   = kibxy_lim_;
+      new_drs_params.km          = km_;
+      new_drs_params.km_lim      = km_lim_;
+      new_drs_params.output_mode = output_mode_;
 
-      drs_->updateConfig(new_drs_gains);
+      drs_->updateConfig(new_drs_params);
     }
   }
 }
