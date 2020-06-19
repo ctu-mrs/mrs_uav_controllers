@@ -24,8 +24,8 @@
 #define Y 1
 #define Z 2
 
-#define OUTPUT_ATTITUDE_RATE 1
-#define OUTPUT_ATTITUDE_QUATERNION 2
+#define OUTPUT_ATTITUDE_RATE 0
+#define OUTPUT_ATTITUDE_QUATERNION 1
 
 namespace mrs_uav_controllers
 {
@@ -127,7 +127,9 @@ private:
   ros::Time last_update_time_;
   bool      first_iteration_ = true;
 
-  int        output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
+  // | ----------------------- output mode ---------------------- |
+
+  int        output_mode_;  // attitude_rate / acceleration
   std::mutex mutex_output_mode_;
 
   // | ------------------------ profiler_ ------------------------ |
@@ -243,7 +245,7 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   // | ---------------- prepare stuff from params --------------- |
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[So3Controller]: output mode has to be {1, 2}!");
+    ROS_ERROR("[So3Controller]: output mode has to be {0, 1}!");
     ros::shutdown();
   }
 
@@ -263,21 +265,21 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_params_.kpxy                         = kpxy_;
-  drs_params_.kvxy                         = kvxy_;
-  drs_params_.kaxy                         = kaxy_;
-  drs_params_.kiwxy                        = kiwxy_;
-  drs_params_.kibxy                        = kibxy_;
-  drs_params_.kpz                          = kpz_;
-  drs_params_.kvz                          = kvz_;
-  drs_params_.kaz                          = kaz_;
-  drs_params_.kqxy                         = kqxy_;
-  drs_params_.kqz                          = kqz_;
-  drs_params_.kiwxy_lim                    = kiwxy_lim_;
-  drs_params_.kibxy_lim                    = kibxy_lim_;
-  drs_params_.km                           = km_;
-  drs_params_.km_lim                       = km_lim_;
-  drs_params_.output_mode                  = output_mode_;
+  drs_params_.kpxy        = kpxy_;
+  drs_params_.kvxy        = kvxy_;
+  drs_params_.kaxy        = kaxy_;
+  drs_params_.kiwxy       = kiwxy_;
+  drs_params_.kibxy       = kibxy_;
+  drs_params_.kpz         = kpz_;
+  drs_params_.kvz         = kvz_;
+  drs_params_.kaz         = kaz_;
+  drs_params_.kqxy        = kqxy_;
+  drs_params_.kqz         = kqz_;
+  drs_params_.kiwxy_lim   = kiwxy_lim_;
+  drs_params_.kibxy_lim   = kibxy_lim_;
+  drs_params_.km          = km_;
+  drs_params_.km_lim      = km_lim_;
+  drs_params_.output_mode = output_mode_;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
@@ -758,10 +760,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
 
   Eigen::Vector3d q_feedback_yawless = q_feedback;
-  q_feedback_yawless(2)              = 0; // nullyfy the effect of the original yaw feedback
+  q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
 
-  double parasitic_heading_rate      = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
-  rp_heading_rate_compensation(2)    = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+  double parasitic_heading_rate   = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+  rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
 
   // angular feedback + angular rate feedforward
   Eigen::Vector3d t = q_feedback + Rw + rp_heading_rate_compensation;
@@ -1035,7 +1037,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     output_command->mode_mask = output_command->MODE_ATTITUDE;
 
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting attitude quaternion (this is not normal)");
+    ROS_WARN_THROTTLE(1.0, "[So3Controller]: outputting desired orientation (this is not normal)");
   }
 
   output_command->desired_acceleration.x = desired_x_accel;

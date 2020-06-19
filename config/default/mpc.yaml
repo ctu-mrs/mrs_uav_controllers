@@ -89,4 +89,4 @@ constraints:
 gain_mute_coefficient: 0.5
 
 # output mode to PixHawk
-output_mode: 1 # {1 = attitude_rate, 2 = attitude quaternion}
+output_mode: 0 # {0 = attitude_rate, 1 = attitude quaternion}
