@@ -182,7 +182,7 @@ private:
 
   // | ----------------------- output mode ---------------------- |
 
-  int        output_mode_;  // attitude_rate / acceleration
+  int        _output_mode_;  // attitude_rate / acceleration
   std::mutex mutex_output_mode_;
 
   // | ------------------------ integrals ----------------------- |
@@ -303,7 +303,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   param_loader.loadParam("gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  param_loader.loadParam("output_mode", output_mode_);
+  param_loader.loadParam("output_mode", _output_mode_);
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
@@ -322,7 +322,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
     _pitch_roll_rate_saturation_ = std::numeric_limits<double>::max();
   }
 
-  if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
+  if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[%s]: output mode has to be {0, 1}!", this->name_.c_str());
     ros::shutdown();
   }
@@ -345,15 +345,14 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_params_.kiwxy       = kiwxy_;
-  drs_params_.kibxy       = kibxy_;
-  drs_params_.kqxy        = kqxy_;
-  drs_params_.kqz         = kqz_;
-  drs_params_.km          = km_;
-  drs_params_.km_lim      = km_lim_;
-  drs_params_.kiwxy_lim   = kiwxy_lim_;
-  drs_params_.kibxy_lim   = kibxy_lim_;
-  drs_params_.output_mode = output_mode_;
+  drs_params_.kiwxy     = kiwxy_;
+  drs_params_.kibxy     = kibxy_;
+  drs_params_.kqxy      = kqxy_;
+  drs_params_.kqz       = kqz_;
+  drs_params_.km        = km_;
+  drs_params_.km_lim    = km_lim_;
+  drs_params_.kiwxy_lim = kiwxy_lim_;
+  drs_params_.kibxy_lim = kibxy_lim_;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
@@ -1155,7 +1154,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // fill the attitude anyway, since we know it
   output_command->attitude = mrs_lib::AttitudeConverter(Rd);
 
-  if (output_mode_ == OUTPUT_ATTITUDE_RATE) {
+  if (_output_mode_ == OUTPUT_ATTITUDE_RATE) {
 
     // output the desired attitude rate
     output_command->attitude_rate.x = t[0];
@@ -1164,7 +1163,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 
-  } else if (output_mode_ == OUTPUT_ATTITUDE_QUATERNION) {
+  } else if (_output_mode_ == OUTPUT_ATTITUDE_QUATERNION) {
 
     output_command->mode_mask = output_command->MODE_ATTITUDE;
 
@@ -1314,8 +1313,6 @@ void MpcController::callbackDrs(mrs_uav_controllers::mpc_controllerConfig &confi
     std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
 
     drs_params_ = config;
-
-    output_mode_ = config.output_mode;
   }
 
   ROS_INFO("[%s]: DRS updated gains", this->name_.c_str());
