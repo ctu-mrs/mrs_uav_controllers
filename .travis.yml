@@ -1,17 +1,28 @@
-sudo: required
-os:
-- linux
-dist: bionic
+language: generic
+
+matrix:
+  fast_finish: true
+  include:
+    - os: linux
+      dist: bionic
+      env: BADGE=bionic
+    - os: linux
+      dist: focal
+      env: BADGE=focal
+  allow_failures:
+    - env: BADGE=focal
 
 branches:
   only:
     - master
 
-jobs:
-  include:
-    - stage: build
-      before_install:
-        - ./.ci/ci_before_install.sh
-      before_script: 
-      script:
-        - ./.ci/ci_test_build.sh
+compiler:
+- gcc
+
+before_install:
+- ./.ci/ci_before_install.sh
+
+before_script: 
+
+script:
+- ./.ci/ci_test_build.sh
