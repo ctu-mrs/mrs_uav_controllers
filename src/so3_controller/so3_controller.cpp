@@ -265,21 +265,22 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_params_.kpxy        = kpxy_;
-  drs_params_.kvxy        = kvxy_;
-  drs_params_.kaxy        = kaxy_;
-  drs_params_.kiwxy       = kiwxy_;
-  drs_params_.kibxy       = kibxy_;
-  drs_params_.kpz         = kpz_;
-  drs_params_.kvz         = kvz_;
-  drs_params_.kaz         = kaz_;
-  drs_params_.kqxy        = kqxy_;
-  drs_params_.kqz         = kqz_;
-  drs_params_.kiwxy_lim   = kiwxy_lim_;
-  drs_params_.kibxy_lim   = kibxy_lim_;
-  drs_params_.km          = km_;
-  drs_params_.km_lim      = km_lim_;
-  drs_params_.output_mode = output_mode_;
+  drs_params_.kpxy             = kpxy_;
+  drs_params_.kvxy             = kvxy_;
+  drs_params_.kaxy             = kaxy_;
+  drs_params_.kiwxy            = kiwxy_;
+  drs_params_.kibxy            = kibxy_;
+  drs_params_.kpz              = kpz_;
+  drs_params_.kvz              = kvz_;
+  drs_params_.kaz              = kaz_;
+  drs_params_.kqxy             = kqxy_;
+  drs_params_.kqz              = kqz_;
+  drs_params_.kiwxy_lim        = kiwxy_lim_;
+  drs_params_.kibxy_lim        = kibxy_lim_;
+  drs_params_.km               = km_;
+  drs_params_.km_lim           = km_lim_;
+  drs_params_.output_mode      = output_mode_;
+  drs_params_.jerk_feedforward = true;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
@@ -765,8 +766,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   double parasitic_heading_rate   = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
   rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
 
+  // feedforward angular acceleration
+
+  Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
+
+  if (drs_params.jerk_feedforward) {
+    Eigen::Matrix3d I;
+    I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
+    Eigen::Vector3d desired_jerk = Eigen::Vector3d(control_reference->jerk.x, control_reference->jerk.y, control_reference->jerk.z);
+    q_feedforward                = (I.transpose() * R.transpose() * desired_jerk) / (thrust_force / total_mass);
+  }
+
   // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw + rp_heading_rate_compensation;
+  Eigen::Vector3d t = q_feedback + Rw + rp_heading_rate_compensation + q_feedforward;
 
   // --------------------------------------------------------------
   // |                      update parameters                     |
