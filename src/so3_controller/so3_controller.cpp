@@ -743,6 +743,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       Rd.col(0) = oblique_projector * bxd;
       Rd.col(0).normalize();
 
+      // | ------------------------- body y ------------------------- |
+
       Rd.col(1) = Rd.col(2).cross(Rd.col(0));
       Rd.col(1).normalize();
     }
