@@ -237,6 +237,12 @@ void So3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   // output mode
   param_loader.loadParam("output_mode", output_mode_);
 
+  param_loader.loadParam("rotation_matrix", drs_params_.rotation_type);
+
+  // angular rate feed forward
+  param_loader.loadParam("angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
+  param_loader.loadParam("angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[So3Controller]: could not load all parameters!");
     ros::shutdown();
@@ -495,14 +501,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Ra << 0, 0, 0;
   }
 
-  if (control_reference->use_attitude_rate) {
-    Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
-  } else if (control_reference->use_heading_rate) {
-    // to fill in the feed forward yaw rate
-    double desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
-    Rw << 0, 0, desired_yaw_rate;
-  }
-
   // Op - position in global frame
   // Ov - velocity in global frame
   Eigen::Vector3d Op(uav_state->pose.position.x, uav_state->pose.position.y, uav_state->pose.position.z);
@@ -633,12 +631,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
 
   // if the downwards part of the force is close to counter-act the gravity acceleration
-  if (f[2] < 0) {
+  /* if (f[2] < 0) { */
 
-    ROS_WARN_THROTTLE(1.0, "[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
+  /*   ROS_WARN_THROTTLE(1.0, "[So3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]); */
 
-    f << 0, 0, 1;
-  }
+  /*   f << 0, 0, 1; */
+  /* } */
 
   // | ------------------ limit the tilt angle ------------------ |
 
@@ -708,12 +706,46 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
+    ROS_INFO_STREAM("[So3Controller]: bxd " << bxd);
+
     // fill in the desired orientation based on the state feedback
-    Rd.col(2) = f_norm;
-    Rd.col(1) = Rd.col(2).cross(bxd);
-    Rd.col(1).normalize();
-    Rd.col(0) = Rd.col(1).cross(Rd.col(2));
-    Rd.col(0).normalize();
+    if (drs_params.rotation_type == 0) {
+      Rd.col(2) = f_norm;
+      Rd.col(1) = Rd.col(2).cross(bxd);
+      Rd.col(1).normalize();
+      Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+      Rd.col(0).normalize();
+    } else {
+
+      // | ------------------------- body z ------------------------- |
+      Rd.col(2) = f_norm;
+
+      // | ------------------------- body x ------------------------- |
+
+      // construct the oblique projection
+      Eigen::Matrix3d projector_body_z_compl = (Eigen::Matrix3d::Identity(3, 3) - f_norm * f_norm.transpose());
+
+      // create a basis of the body-z complement subspace
+      Eigen::Vector3d b1 = projector_body_z_compl * bxd;
+      Eigen::Vector3d b2 = f_norm.cross(b1);
+      Eigen::MatrixXd A  = Eigen::MatrixXd(3, 2);
+      A.col(0)           = b1;
+      A.col(1)           = b2;
+
+      // create the basis of the projection null-space complement
+      Eigen::MatrixXd B = Eigen::MatrixXd(3, 2);
+      B.col(0)          = Eigen::Vector3d(1, 0, 0);
+      B.col(1)          = Eigen::Vector3d(0, 1, 0);
+
+      // oblique projector to <range_basis>
+      Eigen::MatrixXd oblique_projector = A * (B.transpose() * A).inverse() * B.transpose();
+
+      Rd.col(0) = oblique_projector * bxd;
+      Rd.col(0).normalize();
+
+      Rd.col(1) = Rd.col(2).cross(Rd.col(0));
+      Rd.col(1).normalize();
+    }
   }
 
   // --------------------------------------------------------------
@@ -757,28 +789,39 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   // prepare the attitude feedback
   Eigen::Vector3d q_feedback = -Kq * Eq.array();
 
-  // compensate for the parasitic heading rate created by the desired pitch and roll rate
-  Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
-
-  Eigen::Vector3d q_feedback_yawless = q_feedback;
-  q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
-
-  double parasitic_heading_rate   = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
-  rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+  if (control_reference->use_attitude_rate) {
+    Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
+  } else if (control_reference->use_heading_rate) {
+    // to fill in the feed forward yaw rate
+    double desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(control_reference->heading_rate);
+    Rw << 0, 0, desired_yaw_rate;
+  }
 
   // feedforward angular acceleration
-
   Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
 
   if (drs_params.jerk_feedforward) {
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
     Eigen::Vector3d desired_jerk = Eigen::Vector3d(control_reference->jerk.x, control_reference->jerk.y, control_reference->jerk.z);
-    q_feedforward                = (I.transpose() * R.transpose() * desired_jerk) / (thrust_force / total_mass);
+    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force / total_mass);
   }
 
   // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw + rp_heading_rate_compensation + q_feedforward;
+  Eigen::Vector3d t = q_feedback + Rw + q_feedforward;
+
+  // compensate for the parasitic heading rate created by the desired pitch and roll rate
+  Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
+
+  if (drs_params.pitch_roll_heading_rate_compensation) {
+    Eigen::Vector3d q_feedback_yawless = t;
+    q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
+
+    double parasitic_heading_rate   = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+    rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+  }
+
+  t += rp_heading_rate_compensation;
 
   // --------------------------------------------------------------
   // |                      update parameters                     |
@@ -1236,7 +1279,7 @@ void So3Controller::filterGains(const bool mute_gains, const double dt) {
     // and only do it when some filtering occurs
     if (updated) {
 
-      DrsConfig_t new_drs_params;
+      DrsConfig_t new_drs_params = drs_params_;
 
       new_drs_params.kpxy        = kpxy_;
       new_drs_params.kvxy        = kvxy_;

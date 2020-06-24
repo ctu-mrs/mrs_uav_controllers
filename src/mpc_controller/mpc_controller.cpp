@@ -865,17 +865,27 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // prepare the attitude feedback
   Eigen::Vector3d q_feedback = -Kq * Eq.array();
 
+  // feedforward angular acceleration
+  Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
+
+  Eigen::Matrix3d I;
+  I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
+  Eigen::Vector3d desired_jerk = Eigen::Vector3d(control_reference->jerk.x, control_reference->jerk.y, control_reference->jerk.z);
+  q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force / total_mass);
+
+  // angular feedback + angular rate feedforward
+  Eigen::Vector3d t = q_feedback + Rw + q_feedforward;
+
   // compensate for the parasitic heading rate created by the desired pitch and roll rate
   Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
 
-  Eigen::Vector3d q_feedback_yawless = q_feedback;
+  Eigen::Vector3d q_feedback_yawless = t;
   q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
 
   double parasitic_heading_rate   = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
   rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
 
-  // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw + rp_heading_rate_compensation;
+  t += rp_heading_rate_compensation;
 
   // --------------------------------------------------------------
   // |                 integrators and estimators                 |
@@ -1378,7 +1388,7 @@ void MpcController::filterGains(const bool mute_gains, const double dt) {
     // and only do it when some filtering occurs
     if (updated) {
 
-      DrsConfig_t new_drs_params_;
+      DrsConfig_t new_drs_params_ = drs_params_;
 
       new_drs_params_.kiwxy     = kiwxy_;
       new_drs_params_.kibxy     = kibxy_;
