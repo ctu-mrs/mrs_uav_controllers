@@ -706,8 +706,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
-    ROS_INFO_STREAM("[So3Controller]: bxd " << bxd);
-
     // fill in the desired orientation based on the state feedback
     if (drs_params.rotation_type == 0) {
       Rd.col(2) = f_norm;
@@ -727,7 +725,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
       // create a basis of the body-z complement subspace
       Eigen::Vector3d b1 = projector_body_z_compl * bxd;
+      b1.normalize();
+
       Eigen::Vector3d b2 = f_norm.cross(b1);
+      b2.normalize();
+
       Eigen::MatrixXd A  = Eigen::MatrixXd(3, 2);
       A.col(0)           = b1;
       A.col(1)           = b2;
@@ -738,7 +740,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       B.col(1)          = Eigen::Vector3d(0, 1, 0);
 
       // oblique projector to <range_basis>
-      Eigen::MatrixXd oblique_projector = A * (B.transpose() * A).inverse() * B.transpose();
+      Eigen::MatrixXd Bt_A = B.transpose() * A;
+      Eigen::MatrixXd Bt_A_pseudoinverse = ((Bt_A.transpose()*Bt_A).inverse())*Bt_A.transpose();
+      Eigen::MatrixXd oblique_projector = A * Bt_A_pseudoinverse * B.transpose();
 
       Rd.col(0) = oblique_projector * bxd;
       Rd.col(0).normalize();
