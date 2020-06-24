@@ -528,7 +528,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
 
   // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
-  double desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
+  double desired_yaw_rate = 0;
+  try {
+    desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
+  }
+  catch (...) {
+    ROS_ERROR("[MpcController]: exception caught while calculating the desired_yaw_rate feedforward");
+  }
   Rw << 0, 0, desired_yaw_rate;
 
   // Op - position in global frame
@@ -816,7 +822,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     if (control_reference->use_heading) {
       bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: desired heading was not specified, using current heading instead!");
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: desired heading was not specified, using current heading instead!");
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
@@ -882,8 +888,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Eigen::Vector3d q_feedback_yawless = t;
   q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
 
-  double parasitic_heading_rate   = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
-  rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+  double parasitic_heading_rate = 0;
+
+  try {
+    parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+  }
+  catch (...) {
+    ROS_ERROR("[MpcController]: exception caught while calculating the parasitic heading rate");
+  }
+
+  try {
+    rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+  }
+  catch (...) {
+    ROS_ERROR("[MpcController]: exception caught while calculating the parasitic heading rate compensation");
+  }
 
   t += rp_heading_rate_compensation;
 

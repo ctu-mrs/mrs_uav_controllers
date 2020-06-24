@@ -708,11 +708,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
     // fill in the desired orientation based on the state feedback
     if (drs_params.rotation_type == 0) {
+
       Rd.col(2) = f_norm;
       Rd.col(1) = Rd.col(2).cross(bxd);
       Rd.col(1).normalize();
       Rd.col(0) = Rd.col(1).cross(Rd.col(2));
       Rd.col(0).normalize();
+
     } else {
 
       // | ------------------------- body z ------------------------- |
@@ -745,21 +747,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
       Rd.col(1) = Rd.col(2).cross(Rd.col(0));
       Rd.col(1).normalize();
-
-      for (int i = 0; i < 0; i++) {
-        if (!std::isfinite(Rd(i))) {
-          ROS_ERROR("[So3Controller]: NaN detected in variable Rd!!!");
-          ROS_ERROR("[So3Controller]: Using fallback to Lee's Rd");
-
-          Rd.col(2) = f_norm;
-          Rd.col(1) = Rd.col(2).cross(bxd);
-          Rd.col(1).normalize();
-          Rd.col(0) = Rd.col(1).cross(Rd.col(2));
-          Rd.col(0).normalize();
-
-          break;
-        }
-      }
     }
   }
 
@@ -807,8 +794,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
   if (control_reference->use_attitude_rate) {
     Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
   } else if (control_reference->use_heading_rate) {
+
     // to fill in the feed forward yaw rate
-    double desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(control_reference->heading_rate);
+    double desired_yaw_rate = 0;
+
+    try {
+      desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(control_reference->heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[So3Controller]: exception caught while calculating the desired_yaw_rate feedforward");
+    }
+
     Rw << 0, 0, desired_yaw_rate;
   }
 
@@ -832,8 +828,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
     Eigen::Vector3d q_feedback_yawless = t;
     q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
 
-    double parasitic_heading_rate   = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
-    rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+    double parasitic_heading_rate = 0;
+
+    try {
+      mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+    }
+    catch (...) {
+      ROS_ERROR("[So3Controller]: exception caught while calculating the parasitic heading rate!");
+    }
+
+    try {
+      rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[So3Controller]: exception caught while calculating the parasitic heading rate compensation!");
+    }
   }
 
   t += rp_heading_rate_compensation;
