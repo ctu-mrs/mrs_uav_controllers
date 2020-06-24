@@ -724,15 +724,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       Eigen::Matrix3d projector_body_z_compl = (Eigen::Matrix3d::Identity(3, 3) - f_norm * f_norm.transpose());
 
       // create a basis of the body-z complement subspace
-      Eigen::Vector3d b1 = projector_body_z_compl * bxd;
-      b1.normalize();
-
-      Eigen::Vector3d b2 = f_norm.cross(b1);
-      b2.normalize();
-
-      Eigen::MatrixXd A  = Eigen::MatrixXd(3, 2);
-      A.col(0)           = b1;
-      A.col(1)           = b2;
+      Eigen::MatrixXd A = Eigen::MatrixXd(3, 2);
+      A.col(0)          = projector_body_z_compl.col(0);
+      A.col(1)          = projector_body_z_compl.col(1);
 
       // create the basis of the projection null-space complement
       Eigen::MatrixXd B = Eigen::MatrixXd(3, 2);
@@ -740,9 +734,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
       B.col(1)          = Eigen::Vector3d(0, 1, 0);
 
       // oblique projector to <range_basis>
-      Eigen::MatrixXd Bt_A = B.transpose() * A;
-      Eigen::MatrixXd Bt_A_pseudoinverse = ((Bt_A.transpose()*Bt_A).inverse())*Bt_A.transpose();
-      Eigen::MatrixXd oblique_projector = A * Bt_A_pseudoinverse * B.transpose();
+      Eigen::MatrixXd Bt_A               = B.transpose() * A;
+      Eigen::MatrixXd Bt_A_pseudoinverse = ((Bt_A.transpose() * Bt_A).inverse()) * Bt_A.transpose();
+      Eigen::MatrixXd oblique_projector  = A * Bt_A_pseudoinverse * B.transpose();
 
       Rd.col(0) = oblique_projector * bxd;
       Rd.col(0).normalize();
@@ -751,6 +745,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3Controller::update(const mrs_msgs::
 
       Rd.col(1) = Rd.col(2).cross(Rd.col(0));
       Rd.col(1).normalize();
+
+      for (int i = 0; i < 0; i++) {
+        if (!std::isfinite(Rd(i))) {
+          ROS_ERROR("[So3Controller]: NaN detected in variable Rd!!!");
+          ROS_ERROR("[So3Controller]: Using fallback to Lee's Rd");
+
+          Rd.col(2) = f_norm;
+          Rd.col(1) = Rd.col(2).cross(bxd);
+          Rd.col(1).normalize();
+          Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+          Rd.col(0).normalize();
+
+          break;
+        }
+      }
     }
   }
 
