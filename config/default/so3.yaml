@@ -58,5 +58,15 @@ gains_filter:
   perc_change_rate: 1.0
   min_change_rate: 0.1 # perc of the difference
 
+angular_rate_feedforward:
+
+  # compensation of a parasitic heading rate due to pitch and roll rate
+  parasitic_pitch_roll: true
+
+  # jerk feed forward
+  jerk: true
+
+rotation_matrix: 1 # {0 = lee, 1 = baca (oblique projection}
+
 # output mode to PixHawk
 output_mode: 0 # {0 = attitude_rate, 1 = orientation}
