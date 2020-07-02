@@ -10,9 +10,9 @@
   </class>
 </library>
 
-<library path="lib/libSo3Controller">
-  <class name="mrs_uav_controllers/So3Controller" type="mrs_uav_controllers::so3_controller::So3Controller" base_class_type="mrs_uav_managers::Controller">
-    <description>This is So3Controller.</description>
+<library path="lib/libSe3Controller">
+  <class name="mrs_uav_controllers/Se3Controller" type="mrs_uav_controllers::se3_controller::Se3Controller" base_class_type="mrs_uav_managers::Controller">
+    <description>This is Se3Controller.</description>
   </class>
 </library>
 

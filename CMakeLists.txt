@@ -17,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 generate_dynamic_reconfigure_options(
   cfg/nsf_controller.cfg
-  cfg/so3_controller.cfg
+  cfg/se3_controller.cfg
   cfg/mpc_controller.cfg
   )
 
@@ -91,19 +91,19 @@ target_link_libraries(NsfController
   ${catkin_LIBRARIES}
   )
 
-# SO3 controller
+# SE3 controller
 
-add_library(So3Controller
-  src/so3_controller/so3_controller.cpp
+add_library(Se3Controller
+  src/se3_controller/se3_controller.cpp
   )
 
-add_dependencies(So3Controller
+add_dependencies(Se3Controller
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(So3Controller
+target_link_libraries(Se3Controller
   ${catkin_LIBRARIES}
   )
 
@@ -145,7 +145,7 @@ target_link_libraries(FailsafeController
 
 install(TARGETS
   MpcController
-  So3Controller
+  Se3Controller
   FailsafeController
   NsfController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

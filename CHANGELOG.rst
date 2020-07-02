@@ -33,10 +33,10 @@ Changelog for package mrs_controllers
 * increased t650 mpc integral gains
 * set emergency controller's integral gains to 0
 * updated flip mitigation
-* added rampup to mpc and so3
+* added rampup to mpc and se3
 * updated the flip mitigation
 * updated nsf gains
-* added the option for speed controller integrals to so3 and mpc
+* added the option for speed controller integrals to se3 and mpc
 * updated controller's interface
 * updated to new attitude cmd flags
 * Contributors: Tomas Baca
@@ -63,7 +63,7 @@ Changelog for package mrs_controllers
 * fixed deactivation bug in controllers
 * added integrals of MPC controller to DRS
 * added loadReference method in mpc solver
-* added odometry switch routine to SO3, MPC and NSF controllers
+* added odometry switch routine to SE3, MPC and NSF controllers
 * re-setting Q and S in mpc tracker before every iteration
 * added acceleration controller
 * moved mpc solver from mpc_controller to its own namespace and folder
@@ -78,8 +78,8 @@ Changelog for package mrs_controllers
 * constraints are passed to controllers
 * mpc now controls the z axis
 * added negative z-force detection and flip mitigation
-* fixed body integral in so3, cleaned configs
-* upgraded so3's max tilt saturation and failsafe (Naki's accident)
+* fixed body integral in se3, cleaned configs
+* upgraded se3's max tilt saturation and failsafe (Naki's accident)
 * fixed body rate orientation for new Mavros
 * + Mpc controller
 * fixed attitude rate reference frame

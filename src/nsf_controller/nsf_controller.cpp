@@ -690,7 +690,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
       feedback_b[0] = res.value().vector.x;
       feedback_b[1] = res.value().vector.y;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[So3Controller]: could not transform the feedback to fcu_untilted");
+      ROS_ERROR_THROTTLE(1.0, "[NsfController]: could not transform the feedback to fcu_untilted");
     }
   }
 
