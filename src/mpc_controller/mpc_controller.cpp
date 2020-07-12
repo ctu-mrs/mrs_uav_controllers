@@ -592,16 +592,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   for (int i = 0; i < _horizon_length_; i++) {
 
     mpc_reference_x((i * _n_states_) + 0, 0) = control_reference->position.x;
-    mpc_reference_x((i * _n_states_) + 1, 0) = control_reference->velocity.x;
-    mpc_reference_x((i * _n_states_) + 2, 0) = control_reference->acceleration.x;
-
     mpc_reference_y((i * _n_states_) + 0, 0) = control_reference->position.y;
-    mpc_reference_y((i * _n_states_) + 1, 0) = control_reference->velocity.y;
-    mpc_reference_y((i * _n_states_) + 2, 0) = control_reference->acceleration.y;
-
     mpc_reference_z((i * _n_states_) + 0, 0) = control_reference->position.z;
-    mpc_reference_z((i * _n_states_) + 1, 0) = control_reference->velocity.z;
-    mpc_reference_z((i * _n_states_) + 2, 0) = control_reference->acceleration.z;
   }
 
   // | ------------------ set the penalizations ----------------- |
