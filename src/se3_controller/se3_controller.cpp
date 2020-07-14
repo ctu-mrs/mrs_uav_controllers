@@ -631,12 +631,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
 
   // if the downwards part of the force is close to counter-act the gravity acceleration
-  /* if (f[2] < 0) { */
+  if (f[2] < 0) {
 
-  /*   ROS_WARN_THROTTLE(1.0, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]); */
+    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
 
-  /*   f << 0, 0, 1; */
-  /* } */
+    f << 0, 0, 1;
+  }
 
   // | ------------------ limit the tilt angle ------------------ |
 
