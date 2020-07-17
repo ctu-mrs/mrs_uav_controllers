@@ -50,6 +50,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
+
 private:
   std::string _version_;
 
@@ -71,6 +73,12 @@ private:
   boost::shared_ptr<Drs_t>                          drs_;
   void                                              callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, uint32_t level);
   DrsConfig_t                                       drs_params_;
+
+  // | ----------------------- constraints ---------------------- |
+
+  mrs_msgs::DynamicsConstraints constraints_;
+  std::mutex                    mutex_constraints_;
+  bool                          got_constraints_ = false;
 
   // | ---------- thrust generation and mass estimation --------- |
 
@@ -114,8 +122,6 @@ private:
 
   // | ------------ controller limits and saturations ----------- |
 
-  double _attitude_rate_saturation_;
-  double _tilt_angle_saturation_;
   double _tilt_angle_failsafe_;
   double _thrust_saturation_;
 
@@ -222,8 +228,6 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.loadParam("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
-  param_loader.loadParam("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
   param_loader.loadParam("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
 
@@ -256,13 +260,7 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   }
 
   // convert to radians
-  _tilt_angle_saturation_ = (_tilt_angle_saturation_ / 180.0) * M_PI;
-  _tilt_angle_failsafe_   = (_tilt_angle_failsafe_ / 180.0) * M_PI;
-
-  // if _attitude_rate_saturation_ is 0 (or close), set it to something very high, so its inactive
-  if (_attitude_rate_saturation_ <= 1e-3) {
-    _attitude_rate_saturation_ = std::numeric_limits<double>::max();
-  }
+  _tilt_angle_failsafe_ = (_tilt_angle_failsafe_ / 180.0) * M_PI;
 
   // initialize the integrals
   uav_mass_difference_ = 0;
@@ -671,10 +669,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   }
 
   // saturate the angle
-  if (_tilt_angle_saturation_ > 1e-3 && theta > _tilt_angle_saturation_) {
+
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+
+  if (theta > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[Se3Controller]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
-                      (_tilt_angle_saturation_ / M_PI) * 180.0);
-    theta = _tilt_angle_saturation_;
+                      (constraints.tilt / M_PI) * 180.0);
+    theta = constraints.tilt;
   }
 
   // reconstruct the vector
@@ -1078,22 +1079,29 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
 
   // | --------------- saturate the attitude rate --------------- |
 
-  if (t[0] > _attitude_rate_saturation_) {
-    t[0] = _attitude_rate_saturation_;
-  } else if (t[0] < -_attitude_rate_saturation_) {
-    t[0] = -_attitude_rate_saturation_;
-  }
+  if (got_constraints_) {
 
-  if (t[1] > _attitude_rate_saturation_) {
-    t[1] = _attitude_rate_saturation_;
-  } else if (t[1] < -_attitude_rate_saturation_) {
-    t[1] = -_attitude_rate_saturation_;
-  }
+    auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-  if (t[2] > _attitude_rate_saturation_) {
-    t[2] = _attitude_rate_saturation_;
-  } else if (t[2] < -_attitude_rate_saturation_) {
-    t[2] = -_attitude_rate_saturation_;
+    if (t[0] > constraints.roll_rate) {
+      t[0] = constraints.roll_rate;
+    } else if (t[0] < -constraints.roll_rate) {
+      t[0] = -constraints.roll_rate;
+    }
+
+    if (t[1] > constraints.pitch_rate) {
+      t[1] = constraints.pitch_rate;
+    } else if (t[1] < -constraints.pitch_rate) {
+      t[1] = -constraints.pitch_rate;
+    }
+
+    if (t[2] > constraints.yaw_rate) {
+      t[2] = constraints.yaw_rate;
+    } else if (t[2] < -constraints.yaw_rate) {
+      t[2] = -constraints.yaw_rate;
+    }
+  } else {
+    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: missing dynamics constraints");
   }
 
   // | --------------- fill the resulting command --------------- |
@@ -1237,6 +1245,30 @@ void Se3Controller::resetDisturbanceEstimators(void) {
 
   Iw_w_ = Eigen::Vector2d::Zero(2);
   Ib_b_ = Eigen::Vector2d::Zero(2);
+}
+
+//}
+
+/* setConstraints() //{ */
+
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3Controller::setConstraints([
+    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+
+  if (!is_initialized_) {
+    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  }
+
+  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
+
+  got_constraints_ = true;
+
+  ROS_INFO("[Se3Controller]: updating constraints");
+
+  mrs_msgs::DynamicsConstraintsSrvResponse res;
+  res.success = true;
+  res.message = "constraints updated";
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
 }
 
 //}

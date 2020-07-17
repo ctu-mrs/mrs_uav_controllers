@@ -36,6 +36,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
+
 private:
   std::string _version_;
 
@@ -301,6 +303,15 @@ void FailsafeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::U
 /* resetDisturbanceEstimators() //{ */
 
 void FailsafeController::resetDisturbanceEstimators(void) {
+}
+
+//}
+
+/* setConstraints() //{ */
+
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr FailsafeController::setConstraints([[maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
 }
 
 //}

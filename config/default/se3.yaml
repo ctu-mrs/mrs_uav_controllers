@@ -39,10 +39,6 @@ gain_mute_coefficient: 0.5
 
 constraints:
 
-  tilt_angle_saturation: 60.0 # [deg], disabled when 0.0
-
-  attitude_rate_saturation: 10.0 # [rad/s]
-
   thrust_saturation: 0.9 # [-], range from 0 to 1
 
   # When the controller wants to output tilt larger than this,

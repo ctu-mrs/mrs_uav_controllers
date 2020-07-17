@@ -56,11 +56,13 @@ public:
 
   void resetDisturbanceEstimators(void);
 
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
+
 private:
   std::string _version_;
 
-  bool is_initialized = false;
-  bool is_active      = false;
+  bool is_initialized_ = false;
+  bool is_active_      = false;
 
   std::string name_;
 
@@ -79,6 +81,12 @@ private:
   boost::shared_ptr<Drs_t>                          drs_;
   void                                              callbackDrs(mrs_uav_controllers::mpc_controllerConfig &config, uint32_t level);
   DrsConfig_t                                       drs_params_;
+
+  // | ----------------------- constraints ---------------------- |
+
+  mrs_msgs::DynamicsConstraints constraints_;
+  std::mutex                    mutex_constraints_;
+  bool                          got_constraints_ = false;
 
   // | ---------- thrust generation and mass estimation --------- |
 
@@ -119,12 +127,8 @@ private:
 
   // | ------------ controller limits and saturations ----------- |
 
-  double _tilt_angle_saturation_;
   double _tilt_angle_failsafe_;
   double _thrust_saturation_;
-  double _yaw_rate_saturation_;
-  double _pitch_roll_rate_saturation_;
-  double _max_tilt_angle_;
 
   // | ------------------ activation and output ----------------- |
 
@@ -289,11 +293,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   param_loader.loadParam("mass_estimator/km_lim", km_lim_);
 
   // constraints
-  param_loader.loadParam("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
   param_loader.loadParam("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
-  param_loader.loadParam("constraints/yaw_rate_saturation", _yaw_rate_saturation_);
-  param_loader.loadParam("constraints/pitch_roll_rate_saturation", _pitch_roll_rate_saturation_);
 
   // gain filtering
   param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
@@ -312,23 +313,10 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
   // | ---------------- prepare stuff from params --------------- |
 
-  // if yaw_rate_saturation is 0 (or close), set it to something very high, so its inactive
-  if (_yaw_rate_saturation_ <= 1e-3) {
-    _yaw_rate_saturation_ = std::numeric_limits<double>::max();
-  }
-
-  // if _pitch_roll_rate_saturation_ is 0 (or close), set it to something very high, so its inactive
-  if (_pitch_roll_rate_saturation_ <= 1e-3) {
-    _pitch_roll_rate_saturation_ = std::numeric_limits<double>::max();
-  }
-
   if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[%s]: output mode has to be {0, 1}!", this->name_.c_str());
     ros::shutdown();
   }
-
-  // convert to radians
-  _max_tilt_angle_ = (_max_tilt_angle_ / 180) * M_PI;
 
   uav_mass_difference_ = 0;
   Iw_w_                = Eigen::Vector2d::Zero(2);
@@ -371,7 +359,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
   ROS_INFO("[%s]: initialized, version %s", this->name_.c_str(), VERSION);
 
-  is_initialized = true;
+  is_initialized_ = true;
 }
 
 //}
@@ -434,7 +422,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_att
 
   ROS_INFO("[%s]: activated", this->name_.c_str());
 
-  is_active = true;
+  is_active_ = true;
 
   return true;
 }
@@ -445,7 +433,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_att
 
 void MpcController::deactivate(void) {
 
-  is_active            = false;
+  is_active_           = false;
   first_iteration_     = false;
   uav_mass_difference_ = 0;
 
@@ -467,7 +455,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     uav_state_ = *uav_state;
   }
 
-  if (!is_active) {
+  if (!is_active_) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
@@ -783,10 +771,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   }
 
   // saturate the angle
-  if (_tilt_angle_saturation_ > 1e-3 && theta > _tilt_angle_saturation_) {
+
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+
+  if (theta > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[%s]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", this->name_.c_str(), (theta / M_PI) * 180.0,
-                      (_tilt_angle_saturation_ / M_PI) * 180.0);
-    theta = _tilt_angle_saturation_;
+                      (constraints.tilt / M_PI) * 180.0);
+    theta = constraints.tilt;
   }
 
   // reconstruct the vector
@@ -1120,22 +1111,29 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | --------------- saturate the attitude rate --------------- |
 
-  if (t[0] > _pitch_roll_rate_saturation_) {
-    t[0] = _pitch_roll_rate_saturation_;
-  } else if (t[0] < -_pitch_roll_rate_saturation_) {
-    t[0] = -_pitch_roll_rate_saturation_;
-  }
+  if (got_constraints_) {
 
-  if (t[1] > _pitch_roll_rate_saturation_) {
-    t[1] = _pitch_roll_rate_saturation_;
-  } else if (t[1] < -_pitch_roll_rate_saturation_) {
-    t[1] = -_pitch_roll_rate_saturation_;
-  }
+    auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-  if (t[2] > _yaw_rate_saturation_) {
-    t[2] = _yaw_rate_saturation_;
-  } else if (t[2] < -_yaw_rate_saturation_) {
-    t[2] = -_yaw_rate_saturation_;
+    if (t[0] > constraints.roll_rate) {
+      t[0] = constraints.roll_rate;
+    } else if (t[0] < -constraints.roll_rate) {
+      t[0] = -constraints.roll_rate;
+    }
+
+    if (t[1] > constraints.pitch_rate) {
+      t[1] = constraints.pitch_rate;
+    } else if (t[1] < -constraints.pitch_rate) {
+      t[1] = -constraints.pitch_rate;
+    }
+
+    if (t[2] > constraints.yaw_rate) {
+      t[2] = constraints.yaw_rate;
+    } else if (t[2] < -constraints.yaw_rate) {
+      t[2] = -constraints.yaw_rate;
+    }
+  } else {
+    ROS_WARN_THROTTLE(1.0, "[%s]: missing dynamics constraints", this->name_.c_str());
   }
 
   // | ------------ compensated desired acceleration ------------ |
@@ -1263,7 +1261,7 @@ const mrs_msgs::ControllerStatus MpcController::getStatus() {
 
   mrs_msgs::ControllerStatus controller_status;
 
-  controller_status.active = is_active;
+  controller_status.active = is_active_;
 
   return controller_status;
 }
@@ -1322,6 +1320,30 @@ void MpcController::resetDisturbanceEstimators(void) {
 
 //}
 
+/* setConstraints() //{ */
+
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr MpcController::setConstraints([
+    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
+
+  if (!is_initialized_) {
+    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  }
+
+  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
+
+  got_constraints_ = true;
+
+  ROS_INFO("[%s]: updating constraints", this->name_.c_str());
+
+  mrs_msgs::DynamicsConstraintsSrvResponse res;
+  res.success = true;
+  res.message = "constraints updated";
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+}
+
+//}
+
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
@@ -1345,7 +1367,7 @@ void MpcController::callbackDrs(mrs_uav_controllers::mpc_controllerConfig &confi
 
 bool MpcController::callbackSetIntegralTerms(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res) {
 
-  if (!is_initialized)
+  if (!is_initialized_)
     return false;
 
   integral_terms_enabled_ = req.data;

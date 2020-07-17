@@ -45,6 +45,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
+
 private:
   std::string _version_;
 
@@ -786,6 +788,15 @@ void NsfController::resetDisturbanceEstimators(void) {
 
   Iw_w_ = Eigen::Vector2d::Zero(2);
   Ib_b_ = Eigen::Vector2d::Zero(2);
+}
+
+//}
+
+/* setConstraints() //{ */
+
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr NsfController::setConstraints([[maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
 }
 
 //}
