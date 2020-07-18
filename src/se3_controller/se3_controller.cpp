@@ -759,7 +759,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   Eigen::Matrix3d E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
 
   Eigen::Vector3d Eq;
-  Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
+
+  // clang-format off
+  Eq << (E(2, 1) - E(1, 2)) / 2.0,
+        (E(0, 2) - E(2, 0)) / 2.0,
+        (E(1, 0) - E(0, 1)) / 2.0;
+  // clang-format on
 
   /* output */
   double thrust_force = f.dot(R.col(2));
