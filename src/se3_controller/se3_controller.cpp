@@ -813,6 +813,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
 
   if (drs_params.jerk_feedforward) {
+
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
     Eigen::Vector3d desired_jerk = Eigen::Vector3d(control_reference->jerk.x, control_reference->jerk.y, control_reference->jerk.z);
@@ -826,13 +827,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
 
   if (drs_params.pitch_roll_heading_rate_compensation) {
+
     Eigen::Vector3d q_feedback_yawless = t;
     q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
 
     double parasitic_heading_rate = 0;
 
     try {
-      mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+      parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
     }
     catch (...) {
       ROS_ERROR("[Se3Controller]: exception caught while calculating the parasitic heading rate!");
