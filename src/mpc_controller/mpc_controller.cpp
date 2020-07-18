@@ -810,10 +810,37 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     }
 
     // fill in the desired orientation based on the state feedback
+
+    // | ------------------------- body z ------------------------- |
     Rd.col(2) = f_norm;
-    Rd.col(1) = Rd.col(2).cross(bxd);
+
+    // | ------------------------- body x ------------------------- |
+
+    // construct the oblique projection
+    Eigen::Matrix3d projector_body_z_compl = (Eigen::Matrix3d::Identity(3, 3) - f_norm * f_norm.transpose());
+
+    // create a basis of the body-z complement subspace
+    Eigen::MatrixXd A = Eigen::MatrixXd(3, 2);
+    A.col(0)          = projector_body_z_compl.col(0);
+    A.col(1)          = projector_body_z_compl.col(1);
+
+    // create the basis of the projection null-space complement
+    Eigen::MatrixXd B = Eigen::MatrixXd(3, 2);
+    B.col(0)          = Eigen::Vector3d(1, 0, 0);
+    B.col(1)          = Eigen::Vector3d(0, 1, 0);
+
+    // oblique projector to <range_basis>
+    Eigen::MatrixXd Bt_A               = B.transpose() * A;
+    Eigen::MatrixXd Bt_A_pseudoinverse = ((Bt_A.transpose() * Bt_A).inverse()) * Bt_A.transpose();
+    Eigen::MatrixXd oblique_projector  = A * Bt_A_pseudoinverse * B.transpose();
+
+    Rd.col(0) = oblique_projector * bxd;
+    Rd.col(0).normalize();
+
+    // | ------------------------- body y ------------------------- |
+
+    Rd.col(1) = Rd.col(2).cross(Rd.col(0));
     Rd.col(1).normalize();
-    Rd.col(0) = Rd.col(1).cross(Rd.col(2));
   }
 
   // | -------------------- orientation error ------------------- |
