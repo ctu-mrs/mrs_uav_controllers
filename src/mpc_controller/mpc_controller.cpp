@@ -795,7 +795,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     Rd = mrs_lib::AttitudeConverter(control_reference->orientation);
 
     if (control_reference->use_heading) {
-      Rd = mrs_lib::AttitudeConverter(Rd).setHeadingByYaw(control_reference->heading);
+      try {
+        Rd = mrs_lib::AttitudeConverter(Rd).setHeadingByYaw(control_reference->heading);
+      } catch (...) {
+        ROS_WARN_THROTTLE(1.0, "[%s]: failed to add heading to the desired orientation matrix", this->name_.c_str());
+      }
     }
 
   } else {
@@ -805,7 +809,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     if (control_reference->use_heading) {
       bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: desired heading was not specified, using current heading instead!");
+      ROS_ERROR_THROTTLE(1.0, "[%s]: desired heading was not specified, using current heading instead!", this->name_.c_str());
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
