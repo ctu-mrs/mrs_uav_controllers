@@ -554,7 +554,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
                        fabs(uav_state->velocity.linear.x), _max_speed_horizontal_);
   }
 
-  if (fabs(uav_state->velocity.linear.x) < _max_speed_horizontal_) {
+  if (fabs(uav_state->velocity.linear.y) < _max_speed_horizontal_) {
     initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, control_reference->acceleration.y;
   } else {
     initial_y << uav_state->pose.position.y, control_reference->velocity.y, control_reference->acceleration.y;
