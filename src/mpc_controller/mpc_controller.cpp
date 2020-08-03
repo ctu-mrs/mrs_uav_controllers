@@ -161,7 +161,7 @@ private:
   int _horizon_length_;
 
   // constraints
-  double _max_speed_horizontal_, max_acceleration_horizontal_, _max_jerk_;
+  double _max_speed_horizontal_, _max_acceleration_horizontal_, _max_jerk_;
   double _max_speed_vertical_, _max_acceleration_vertical_, _max_u_vertical_;
 
   // Q and S matrix diagonals for horizontal
@@ -252,7 +252,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   param_loader.loadParam("mpc_parameters/horizon_length", _horizon_length_);
 
   param_loader.loadParam("mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
-  param_loader.loadParam("mpc_parameters/horizontal/max_acceleration", max_acceleration_horizontal_);
+  param_loader.loadParam("mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
   param_loader.loadParam("mpc_parameters/horizontal/max_jerk", _max_jerk_);
 
   param_loader.loadParam("mpc_parameters/horizontal/Q", _Q_);
@@ -540,34 +540,48 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // |                     MPC lateral control                    |
   // --------------------------------------------------------------
 
+  // | --------------- calculate the control erros -------------- |
+
+  Eigen::Vector3d Ep = Op - Rp;
+  Eigen::Vector3d Ev = Ov - Rv;
+
   // | ------------------- initial conditions ------------------- |
 
   Eigen::MatrixXd initial_x = Eigen::MatrixXd::Zero(3, 1);
   Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
 
-  if (fabs(uav_state->velocity.linear.x) < _max_speed_horizontal_) {
-    initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, control_reference->acceleration.x;
-  } else {
+  if (fabs(Ep[0]) < 1.5 &&
+      (fabs(uav_state->acceleration.linear.x) > _max_acceleration_horizontal_ || fabs(uav_state->velocity.linear.x) > _max_speed_horizontal_)) {
+
     initial_x << uav_state->pose.position.x, control_reference->velocity.x, control_reference->acceleration.x;
     ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.x), _max_speed_horizontal_);
+
+  } else {
+    initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, control_reference->acceleration.x;
   }
 
-  if (fabs(uav_state->velocity.linear.y) < _max_speed_horizontal_) {
-    initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, control_reference->acceleration.y;
-  } else {
+  if (fabs(Ep[1]) < 1.5 &&
+      (fabs(uav_state->acceleration.linear.y) > _max_acceleration_horizontal_ || fabs(uav_state->velocity.linear.y) > _max_speed_horizontal_)) {
+
     initial_y << uav_state->pose.position.y, control_reference->velocity.y, control_reference->acceleration.y;
     ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.y), _max_speed_horizontal_);
+
+  } else {
+    initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, control_reference->acceleration.y;
   }
 
-  if (fabs(uav_state->velocity.linear.z) < _max_speed_vertical_) {
-    initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, control_reference->acceleration.z;
-  } else {
+  if (fabs(Ep[2]) < 1.5 &&
+      (fabs(uav_state->acceleration.linear.z) > _max_acceleration_horizontal_ || fabs(uav_state->velocity.linear.z) > _max_speed_horizontal_)) {
+
     initial_z << uav_state->pose.position.z, control_reference->velocity.z, control_reference->acceleration.z;
     ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
                        fabs(uav_state->velocity.linear.z), _max_speed_vertical_);
+
+  } else {
+    initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, control_reference->acceleration.z;
   }
 
   // | ---------------------- set reference --------------------- |
@@ -620,7 +634,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   mpc_solver_x_->setParams();
   mpc_solver_x_->setLastInput(mpc_solver_x_u_);
   mpc_solver_x_->loadReference(mpc_reference_x);
-  mpc_solver_x_->setLimits(_max_speed_horizontal_, 999, max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
+  mpc_solver_x_->setLimits(_max_speed_horizontal_, 999, _max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
   mpc_solver_x_->setInitialState(initial_x);
   [[maybe_unused]] int iters_x = mpc_solver_x_->solveMPC();
   mpc_solver_x_u_              = mpc_solver_x_->getFirstControlInput();
@@ -632,7 +646,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   mpc_solver_y_->setParams();
   mpc_solver_y_->setLastInput(mpc_solver_y_u_);
   mpc_solver_y_->loadReference(mpc_reference_y);
-  mpc_solver_y_->setLimits(_max_speed_horizontal_, 999, max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
+  mpc_solver_y_->setLimits(_max_speed_horizontal_, 999, _max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
   mpc_solver_y_->setInitialState(initial_y);
   [[maybe_unused]] int iters_y = mpc_solver_y_->solveMPC();
   mpc_solver_y_u_              = mpc_solver_y_->getFirstControlInput();
@@ -656,11 +670,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     mpc_solver_x_u_ = 0;
     mpc_solver_y_u_ = 0;
   }
-
-  // | --------------- calculate the control erros -------------- |
-
-  Eigen::Vector3d Ep = Op - Rp;
-  Eigen::Vector3d Ev = Ov - Rv;
 
   // | --------------------- load the gains --------------------- |
 
@@ -797,7 +806,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     if (control_reference->use_heading) {
       try {
         Rd = mrs_lib::AttitudeConverter(Rd).setHeadingByYaw(control_reference->heading);
-      } catch (...) {
+      }
+      catch (...) {
         ROS_WARN_THROTTLE(1.0, "[%s]: failed to add heading to the desired orientation matrix", this->name_.c_str());
       }
     }
@@ -1274,7 +1284,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   output_command->controller_enforcing_constraints = true;
 
   output_command->horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
-  output_command->horizontal_acc_constraint   = 0.5 * max_acceleration_horizontal_;
+  output_command->horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
 
   output_command->vertical_asc_speed_constraint = 0.5 * _max_speed_vertical_;
   output_command->vertical_asc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
