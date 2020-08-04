@@ -551,38 +551,95 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Eigen::MatrixXd initial_y = Eigen::MatrixXd::Zero(3, 1);
   Eigen::MatrixXd initial_z = Eigen::MatrixXd::Zero(3, 1);
 
-  if (fabs(Ep[0]) < 1.5 &&
-      (fabs(uav_state->acceleration.linear.x) > _max_acceleration_horizontal_ || fabs(uav_state->velocity.linear.x) > _max_speed_horizontal_)) {
+  /* initial x //{ */
 
-    initial_x << uav_state->pose.position.x, control_reference->velocity.x, control_reference->acceleration.x;
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
-                       fabs(uav_state->velocity.linear.x), _max_speed_horizontal_);
+  {
+    double acceleration;
+    double velocity;
+    double coef = 1.5;
 
-  } else {
-    initial_x << uav_state->pose.position.x, uav_state->velocity.linear.x, control_reference->acceleration.x;
+    if (fabs(uav_state->acceleration.linear.x) < coef * _max_acceleration_horizontal_) {
+      acceleration = uav_state->acceleration.linear.x;
+    } else {
+      acceleration = control_reference->acceleration.x;
+
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition",
+                         fabs(uav_state->acceleration.linear.x), coef, _max_acceleration_horizontal_);
+    }
+
+    if (fabs(uav_state->velocity.linear.x) < coef * _max_speed_horizontal_) {
+      velocity = uav_state->velocity.linear.x;
+    } else {
+      velocity = control_reference->velocity.x;
+
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition",
+                         fabs(uav_state->velocity.linear.x), coef, _max_speed_horizontal_);
+    }
+
+    initial_x << uav_state->pose.position.x, velocity, acceleration;
   }
 
-  if (fabs(Ep[1]) < 1.5 &&
-      (fabs(uav_state->acceleration.linear.y) > _max_acceleration_horizontal_ || fabs(uav_state->velocity.linear.y) > _max_speed_horizontal_)) {
+  //}
 
-    initial_y << uav_state->pose.position.y, control_reference->velocity.y, control_reference->acceleration.y;
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
-                       fabs(uav_state->velocity.linear.y), _max_speed_horizontal_);
+  /* initial y //{ */
 
-  } else {
-    initial_y << uav_state->pose.position.y, uav_state->velocity.linear.y, control_reference->acceleration.y;
+  {
+    double acceleration;
+    double velocity;
+    double coef = 1.5;
+
+    if (fabs(uav_state->acceleration.linear.y) < coef * _max_acceleration_horizontal_) {
+      acceleration = uav_state->acceleration.linear.y;
+    } else {
+      acceleration = control_reference->acceleration.y;
+
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition",
+                         fabs(uav_state->acceleration.linear.y), coef, _max_acceleration_horizontal_);
+    }
+
+    if (fabs(uav_state->velocity.linear.y) < coef * _max_speed_horizontal_) {
+      velocity = uav_state->velocity.linear.y;
+    } else {
+      velocity = control_reference->velocity.y;
+
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition",
+                         fabs(uav_state->velocity.linear.y), coef, _max_speed_horizontal_);
+    }
+
+    initial_y << uav_state->pose.position.y, velocity, acceleration;
   }
 
-  if (fabs(Ep[2]) < 1.5 &&
-      (fabs(uav_state->acceleration.linear.z) > _max_acceleration_horizontal_ || fabs(uav_state->velocity.linear.z) > _max_speed_horizontal_)) {
+  //}
 
-    initial_z << uav_state->pose.position.z, control_reference->velocity.z, control_reference->acceleration.z;
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceeds constraints (%.2f > %.2f m), using reference for initial condition",
-                       fabs(uav_state->velocity.linear.z), _max_speed_vertical_);
+  /* initial z //{ */
 
-  } else {
-    initial_z << uav_state->pose.position.z, uav_state->velocity.linear.z, control_reference->acceleration.z;
+  {
+    double acceleration;
+    double velocity;
+    double coef = 1.5;
+
+    if (fabs(uav_state->acceleration.linear.z) < coef * _max_acceleration_horizontal_) {
+      acceleration = uav_state->acceleration.linear.z;
+    } else {
+      acceleration = control_reference->acceleration.z;
+
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition",
+                         fabs(uav_state->acceleration.linear.z), coef, _max_acceleration_horizontal_);
+    }
+
+    if (fabs(uav_state->velocity.linear.z) < coef * _max_speed_vertical_) {
+      velocity = uav_state->velocity.linear.z;
+    } else {
+      velocity = control_reference->velocity.z;
+
+      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition",
+                         fabs(uav_state->velocity.linear.z), coef, _max_speed_vertical_);
+    }
+
+    initial_z << uav_state->pose.position.z, velocity, acceleration;
   }
+
+  //}
 
   // | ---------------------- set reference --------------------- |
 
