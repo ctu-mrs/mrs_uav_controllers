@@ -502,6 +502,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not calculate the UAV heading");
   }
 
+  if (control_reference->disable_antiwindups) {
+    ROS_INFO_THROTTLE(1.0, "[MpcController]: antiwindups disabled by tracker");
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -1049,9 +1053,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     // antiwindup
     double temp_gain = kibxy_;
-    if (rampup_active_ || sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
-      temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
+    if (!control_reference->disable_antiwindups) {
+      if (rampup_active_ || sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
+        temp_gain = 0;
+        ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
+      }
     }
 
     if (integral_terms_enabled_) {
@@ -1114,9 +1120,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     // antiwindup
     double temp_gain = kiwxy_;
-    if (rampup_active_ || sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
-      temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
+    if (!control_reference->disable_antiwindups) {
+      if (rampup_active_ || sqrt(pow(uav_state->velocity.linear.x, 2) + pow(uav_state->velocity.linear.y, 2)) > 0.3) {
+        temp_gain = 0;
+        ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
+      }
     }
 
     if (integral_terms_enabled_) {
@@ -1175,10 +1183,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     // antiwindup
     double temp_gain = km_;
-    if (rampup_active_ ||
-        (fabs(uav_state->velocity.linear.z) > 0.3 && ((Ep[2] < 0 && uav_state->velocity.linear.z > 0) || (Ep[2] > 0 && uav_state->velocity.linear.z < 0)))) {
-      temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
+    if (!control_reference->disable_antiwindups) {
+      if (rampup_active_ ||
+          (fabs(uav_state->velocity.linear.z) > 0.3 && ((Ep[2] < 0 && uav_state->velocity.linear.z > 0) || (Ep[2] > 0 && uav_state->velocity.linear.z < 0)))) {
+        temp_gain = 0;
+        ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
+      }
     }
 
     if (control_reference->use_position_vertical) {
