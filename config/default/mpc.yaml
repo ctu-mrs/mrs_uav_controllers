@@ -62,7 +62,7 @@ attitude_feedback:
         kq: 5.0
 
 mass_estimator:
-  km: 1.0
+  km: 0.5
   km_lim: 5.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
 gains_filter:
