@@ -143,7 +143,7 @@ private:
   mrs_lib::Profiler profiler_;
   bool              _profiler_enabled_ = false;
 
-  // | ------------------------ iparasitic_heading_ratentegrals ----------------------- |
+  // | ------------------------ integrals ----------------------- |
 
   Eigen::Vector2d Ib_b_;  // body error integral in the body frame
   Eigen::Vector2d Iw_w_;  // world error integral in the world_frame

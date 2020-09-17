@@ -519,15 +519,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   Rp << control_reference->position.x, control_reference->position.y, control_reference->position.z;  // fill the desired position
   Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
 
-  // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
-  double desired_yaw_rate = 0;
-  try {
-    desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
+  if (control_reference->use_heading_rate) {
+
+    // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
+    double desired_yaw_rate = 0;
+    try {
+      desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[MpcController]: exception caught while calculating the desired_yaw_rate feedforward");
+    }
+    Rw << 0, 0, desired_yaw_rate;
   }
-  catch (...) {
-    ROS_ERROR("[MpcController]: exception caught while calculating the desired_yaw_rate feedforward");
-  }
-  Rw << 0, 0, desired_yaw_rate;
 
   // Op - position in global frame
   // Ov - velocity in global frame
