@@ -23,7 +23,7 @@ sudo apt-mark hold openssh-server
 
 sudo apt-get -y upgrade --fix-missing
 
-sudo apt-get -y install dpkg git python-setuptools python3-setuptools python3-pip
+sudo apt-get -y install dpkg git
 
 echo "clone uav_core"
 cd
