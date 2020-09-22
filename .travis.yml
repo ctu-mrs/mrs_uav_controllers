@@ -9,8 +9,8 @@ matrix:
     - os: linux
       dist: focal
       env: BADGE=focal
-  allow_failures:
-    - env: BADGE=focal
+  # allow_failures:
+  #   - env: BADGE=focal
 
 branches:
   only:

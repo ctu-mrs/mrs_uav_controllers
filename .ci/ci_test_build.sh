@@ -9,5 +9,5 @@ distro=`lsb_release -r | awk '{ print $2 }'`
 echo "Starting test build" 
 cd ~/catkin_ws
 source /opt/ros/$ROS_DISTRO/setup.bash
-catkin build --no-status
+catkin build --limit-status-rate 0.2 --summarize
 echo "Ended test build"
