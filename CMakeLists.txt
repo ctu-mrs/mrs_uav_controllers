@@ -21,7 +21,7 @@ generate_dynamic_reconfigure_options(
   cfg/mpc_controller.cfg
   )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 # include Eigen3
 find_package(Eigen3 REQUIRED)
