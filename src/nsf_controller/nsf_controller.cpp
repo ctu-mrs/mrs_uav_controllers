@@ -13,7 +13,6 @@
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
-#include <mrs_lib/geometry_utils.h>
 #include <mrs_lib/attitude_converter.h>
 
 //}
@@ -45,7 +44,7 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
 
 private:
   std::string _version_;
@@ -521,11 +520,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
     Eigen::Vector3d integration_switch(1, 1, 0);
 
-    if (x_saturated && mrs_lib::sign(feedback_w[X]) == mrs_lib::sign(Ep[X])) {
+    if (x_saturated && mrs_lib::signum(feedback_w[X]) == mrs_lib::signum(Ep[X])) {
       integration_switch[X] = 0;
     }
 
-    if (y_saturated && mrs_lib::sign(feedback_w[Y]) == mrs_lib::sign(Ep[Y])) {
+    if (y_saturated && mrs_lib::signum(feedback_w[Y]) == mrs_lib::signum(Ep[Y])) {
       integration_switch[Y] = 0;
     }
 
@@ -794,7 +793,8 @@ void NsfController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr NsfController::setConstraints([[maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr NsfController::setConstraints([
+    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
 
   return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
 }

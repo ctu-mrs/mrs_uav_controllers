@@ -17,21 +17,14 @@
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
-#include <mrs_lib/geometry_utils.h>
 #include <mrs_lib/attitude_converter.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
 
 //}
 
-#define X 0
-#define Y 1
-#define Z 2
-
 #define OUTPUT_ATTITUDE_RATE 0
 #define OUTPUT_ATTITUDE_QUATERNION 1
-
-#define STRING_EQUAL 0
 
 namespace mrs_uav_controllers
 {
