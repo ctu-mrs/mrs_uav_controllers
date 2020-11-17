@@ -231,7 +231,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
   if (_version_ != VERSION) {
 
-    ROS_ERROR("[MpcController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
+    ROS_ERROR("[%s]: the version of the binary (%s) does not match the config file (%s), please build me!", name_.c_str(), VERSION, _version_.c_str());
     ros::shutdown();
   }
 
@@ -400,7 +400,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_att
       rampup_direction_ = 0;
     }
 
-    ROS_INFO("[MpcController]: activating rampup with initial thrust: %.4f, target: %.4f", last_attitude_cmd->thrust, hover_thrust_);
+    ROS_INFO("[%s]: activating rampup with initial thrust: %.4f, target: %.4f", name_.c_str(), last_attitude_cmd->thrust, hover_thrust_);
 
     rampup_active_     = true;
     rampup_start_time_ = ros::Time::now();
@@ -492,11 +492,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
   }
   catch (...) {
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not calculate the UAV heading");
+    ROS_ERROR_THROTTLE(1.0, "[%s]: could not calculate the UAV heading", name_.c_str());
   }
 
   if (control_reference->disable_antiwindups) {
-    ROS_INFO_THROTTLE(1.0, "[MpcController]: antiwindups disabled by tracker");
+    ROS_INFO_THROTTLE(1.0, "[%s]: antiwindups disabled by tracker", name_.c_str());
   }
 
   // --------------------------------------------------------------
@@ -520,7 +520,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
     }
     catch (...) {
-      ROS_ERROR("[MpcController]: exception caught while calculating the desired_yaw_rate feedforward");
+      ROS_ERROR("[%s]: exception caught while calculating the desired_yaw_rate feedforward", name_.c_str());
     }
     Rw << 0, 0, desired_yaw_rate;
   }
@@ -563,7 +563,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     } else {
       acceleration = control_reference->acceleration.x;
 
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition",
+      ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state->acceleration.linear.x), coef, _max_acceleration_horizontal_);
     }
 
@@ -572,7 +572,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     } else {
       velocity = control_reference->velocity.x;
 
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition",
+      ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state->velocity.linear.x), coef, _max_speed_horizontal_);
     }
 
@@ -593,7 +593,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     } else {
       acceleration = control_reference->acceleration.y;
 
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition",
+      ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state->acceleration.linear.y), coef, _max_acceleration_horizontal_);
     }
 
@@ -602,7 +602,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     } else {
       velocity = control_reference->velocity.y;
 
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition",
+      ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state->velocity.linear.y), coef, _max_speed_horizontal_);
     }
 
@@ -623,7 +623,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     } else {
       acceleration = control_reference->acceleration.z;
 
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition",
+      ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state->acceleration.linear.z), coef, _max_acceleration_horizontal_);
     }
 
@@ -632,7 +632,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     } else {
       velocity = control_reference->velocity.z;
 
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition",
+      ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state->velocity.linear.z), coef, _max_speed_vertical_);
     }
 
@@ -767,7 +767,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
       Ib_w[0] = res.value().vector.x;
       Ib_w[1] = res.value().vector.y;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not transform the Ib_b_ to the world frame");
+      ROS_ERROR_THROTTLE(1.0, "[%s]: could not transform the Ib_b_ to the world frame", name_.c_str());
     }
   }
 
@@ -980,14 +980,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
   }
   catch (...) {
-    ROS_ERROR("[MpcController]: exception caught while calculating the parasitic heading rate");
+    ROS_ERROR("[%s]: exception caught while calculating the parasitic heading rate", name_.c_str());
   }
 
   try {
     rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
   }
   catch (...) {
-    ROS_ERROR("[MpcController]: exception caught while calculating the parasitic heading rate compensation");
+    ROS_ERROR("[%s]: exception caught while calculating the parasitic heading rate compensation", name_.c_str());
   }
 
   t += rp_heading_rate_compensation;
@@ -1021,7 +1021,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
         Ep_fcu_untilted[0] = res.value().vector.x;
         Ep_fcu_untilted[1] = res.value().vector.y;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not transform the position error to fcu_untilted");
+        ROS_ERROR_THROTTLE(1.0, "[%s]: could not transform the position error to fcu_untilted", name_.c_str());
       }
     }
 
@@ -1041,7 +1041,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
         Ev_fcu_untilted[0] = res.value().vector.x;
         Ev_fcu_untilted[1] = res.value().vector.x;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[MpcController]: could not transform the velocity error to fcu_untilted");
+        ROS_ERROR_THROTTLE(1.0, "[%s]: could not transform the velocity error to fcu_untilted", name_.c_str());
       }
     }
 
@@ -1483,7 +1483,7 @@ bool MpcController::callbackSetIntegralTerms(std_srvs::SetBool::Request &req, st
 
   ss << "integral terms %s" << (integral_terms_enabled_ ? "enabled" : "disabled");
 
-  ROS_INFO_STREAM_THROTTLE(1.0, "[MpcController]: " << ss.str());
+  ROS_INFO_STREAM_THROTTLE(1.0, "[" << name_.c_str() << "]: " << ss.str());
 
   res.message = ss.str();
   res.success = true;
@@ -1585,7 +1585,7 @@ double MpcController::calculateGainChange(const double dt, const double current_
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[MpcController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[%s]: changing gain '%s' from %.2f to %.2f", name_.c_str(), name.c_str(), current_value, desired_value);
     updated = true;
   }
 
