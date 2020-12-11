@@ -688,7 +688,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
     Rd = mrs_lib::AttitudeConverter(control_reference->orientation);
 
     if (control_reference->use_heading) {
-      Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
+      try {
+        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
+      } catch (...) {
+        ROS_ERROR("[Se3Controller]: could not set the desired heading");
+      }
     }
 
   } else {
