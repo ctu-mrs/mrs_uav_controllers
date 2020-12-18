@@ -1,0 +1,43 @@
+name: Noetic
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - '**/README.md'
+  pull_request:
+    branches: [ master ]
+
+  schedule:
+    - cron:  '0 0 * * *' # at the end of every day
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+
+  cancel:
+
+    name: Cancel Previous Runs
+    runs-on: ubuntu-latest
+    steps:
+      - name: cancel running workflows
+        uses: everphone-gmbh/cancel-previous-workflows@v5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # fetch the whole history
+
+      - name: Install
+        run: ./.ci/install.sh
+
+      - name: Build
+        run: ./.ci/build.sh

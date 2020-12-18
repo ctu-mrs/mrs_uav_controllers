@@ -1,6 +1,9 @@
-# MRS UAV Controllers [![Build Status](https://github.com/ctu-mrs/mrs_uav_controllers/workflows/CI/badge.svg)](https://github.com/ctu-mrs/mrs_uav_controllers/actions)
+# MRS UAV Controllers
 
 ![](.fig/thumbnail.jpg)
+
+| Build status | [![Build Status](https://github.com/ctu-mrs/mrs_uav_controllers/workflows/Melodic/badge.svg)](https://github.com/ctu-mrs/mrs_uav_controllers/actions) | [![Build Status](https://github.com/ctu-mrs/mrs_uav_controllers/workflows/Noetic/badge.svg)](https://github.com/ctu-mrs/mrs_simulation/actions) |
+|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
 
 ## Purpose of a controller within the MRS control pipeline
 

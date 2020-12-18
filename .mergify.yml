@@ -1,7 +1,8 @@
 pull_request_rules:
   - name: automatic merge
     conditions:
-      - check-success=Build
+      - check-success=Melodic
+      - check-success=Noetic
       - label=auto-merge
       - label!=auto-squash-merge
       - base=master
@@ -10,7 +11,8 @@ pull_request_rules:
         method: merge
   - name: automatic squash merge
     conditions:
-      - check-success=Build
+      - check-success=Melodic
+      - check-success=Noetic
       - label=auto-merge
       - label=auto-squash-merge
       - base=master
