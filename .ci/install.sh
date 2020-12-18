@@ -5,7 +5,7 @@ distro=`lsb_release -r | awk '{ print $2 }'`
 [ "$distro" = "18.04" ] && ROS_DISTRO="melodic"
 [ "$distro" = "20.04" ] && ROS_DISTRO="noetic"
 
-echo "Starting install" 
+echo "Starting install"
 
 # get the current commit SHA
 SHA=`git rev-parse HEAD`
