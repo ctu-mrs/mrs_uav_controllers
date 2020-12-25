@@ -37,8 +37,8 @@ namespace mpc_controller
 class MpcController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const mrs_uav_managers::MotorParams motor_params,
-                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
+                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
@@ -83,11 +83,9 @@ private:
 
   // | ---------- thrust generation and mass estimation --------- |
 
-  double                        _uav_mass_;
-  double                        uav_mass_difference_;
-  double                        _g_;
-  mrs_uav_managers::MotorParams _motor_params_;
-  double                        hover_thrust_;
+  double _uav_mass_;
+  double uav_mass_difference_;
+  double hover_thrust_;
 
   // | ------------------- configurable gains ------------------- |
 
@@ -209,17 +207,14 @@ private:
 
 /* //{ initialize() */
 
-void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
-                               const mrs_uav_managers::MotorParams motor_params, const double uav_mass, const double g,
+void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
                                std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
   name_            = name;
-  _motor_params_   = motor_params;
   _uav_mass_       = uav_mass;
-  _g_              = g;
 
   ros::Time::waitForValid();
 
@@ -389,7 +384,7 @@ bool MpcController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_att
   // rampup check
   if (_rampup_enabled_) {
 
-    double hover_thrust_     = sqrt(last_attitude_cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
+    hover_thrust_ = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, last_attitude_cmd->total_mass * common_handlers_->g);
     double thrust_difference = hover_thrust_ - last_attitude_cmd->thrust;
 
     if (thrust_difference > 0) {
@@ -743,7 +738,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | -------------- recalculate the hover thrust -------------- |
 
-  hover_thrust_ = sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.A + _motor_params_.B;
+  hover_thrust_ = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
 
   // | ---------- desired orientation matrix and force ---------- |
 
@@ -782,7 +777,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
-  Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra);
+  Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
 
   Eigen::Vector3d integral_feedback;
 
@@ -932,7 +927,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   double thrust       = 0;
 
   if (thrust_force >= 0) {
-    thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
+    thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
   } else {
     ROS_WARN_THROTTLE(1.0, "[%s]: just so you know, the desired thrust force is negative (%.2f)", this->name_.c_str(), thrust_force);
   }
@@ -1255,7 +1250,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    /* double world_accel_z = (thrust_vector[2] / total_mass) - _g_; */
+    /* double world_accel_z = (thrust_vector[2] / total_mass) - common_handlers_->g; */
     double world_accel_z = control_reference->acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;

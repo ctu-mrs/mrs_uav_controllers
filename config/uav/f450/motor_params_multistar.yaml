@@ -1,3 +1,4 @@
-hover_thrust:
-  a: 0.17403
+motor_params:
+  n_motors: 4
+  a: 0.34806
   b: -0.25104

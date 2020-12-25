@@ -23,8 +23,8 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const mrs_uav_managers::MotorParams motor_params,
-                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
+                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
@@ -35,7 +35,7 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
 
 private:
   std::string _version_;
@@ -50,9 +50,7 @@ private:
   double _uav_mass_;
   double uav_mass_difference_;
 
-  double                       _g_;
-  mrs_uav_managers::MotorParams _motor_params_;
-  double                       hover_thrust_;
+  double hover_thrust_;
 
   double _thrust_decrease_rate_;
   double _initial_thrust_percentage_;
@@ -86,15 +84,12 @@ private:
 /* initialize() //{ */
 
 void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                                    const mrs_uav_managers::MotorParams motor_params, const double uav_mass, const double g,
-                                    std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
+                                    const double uav_mass, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
-  _motor_params_   = motor_params;
   _uav_mass_       = uav_mass;
-  _g_              = g;
 
   ros::Time::waitForValid();
 
@@ -123,7 +118,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   // | ----------- calculate the default hover thrust ----------- |
 
-  hover_thrust_ = sqrt(_uav_mass_ * _g_) * motor_params.A + motor_params.B;
+  hover_thrust_ = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, _uav_mass_ * common_handlers_->g);
 
   // | ------------------------ profiler ------------------------ |
 
@@ -163,7 +158,8 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &las
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    hover_thrust_ = _initial_thrust_percentage_ * sqrt((_uav_mass_ + uav_mass_difference_) * _g_) * _motor_params_.A + _motor_params_.B;
+    hover_thrust_ = _initial_thrust_percentage_ *
+                    mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
 
     ROS_INFO("[FailsafeController]: activated with uav_mass_difference %.2f kg.", uav_mass_difference_);
   }
@@ -308,7 +304,8 @@ void FailsafeController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr FailsafeController::setConstraints([[maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr FailsafeController::setConstraints([
+    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
 
   return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
 }

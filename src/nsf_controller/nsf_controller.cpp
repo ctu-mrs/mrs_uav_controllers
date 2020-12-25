@@ -32,8 +32,8 @@ namespace nsf_controller
 class NsfController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, std::string name_space, const mrs_uav_managers::MotorParams motor_params,
-                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
+                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
@@ -70,11 +70,9 @@ private:
 
   // | ---------- thrust generation and mass estimation --------- |
 
-  double                        _uav_mass_;
-  double                        uav_mass_difference_;
-  double                        _g_;
-  mrs_uav_managers::MotorParams _motor_params_;
-  double                        hover_thrust_;
+  double _uav_mass_;
+  double uav_mass_difference_;
+  double hover_thrust_;
 
   // | ------------------- configurable gains ------------------- |
 
@@ -142,8 +140,7 @@ private:
 
 /* //{ initialize() */
 
-void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                               const mrs_uav_managers::MotorParams motor_params, const double uav_mass, const double g,
+void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
                                std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
@@ -152,9 +149,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   ros::Time::waitForValid();
 
-  this->_motor_params_ = motor_params;
-  this->_uav_mass_     = uav_mass;
-  this->_g_            = g;
+  _uav_mass_ = uav_mass;
 
   // | ------------------- loading parameters ------------------- |
 
@@ -218,7 +213,7 @@ void NsfController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   // | ----------- calculate the default hover thrust ----------- |
 
-  hover_thrust_ = sqrt(_uav_mass_ * _g_) * _motor_params_.A + _motor_params_.B;
+  hover_thrust_ = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, _uav_mass_ * common_handlers_->g);
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -270,11 +265,11 @@ bool NsfController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_att
 
     activation_attitude_cmd_.controller_enforcing_constraints = false;
 
-    Ib_b_[0] = asin(-last_attitude_cmd->disturbance_bx_b / (_g_ * last_attitude_cmd->total_mass));
-    Ib_b_[1] = asin(-last_attitude_cmd->disturbance_by_b / (_g_ * last_attitude_cmd->total_mass));
+    Ib_b_[0] = asin(-last_attitude_cmd->disturbance_bx_b / (common_handlers_->g * last_attitude_cmd->total_mass));
+    Ib_b_[1] = asin(-last_attitude_cmd->disturbance_by_b / (common_handlers_->g * last_attitude_cmd->total_mass));
 
-    Iw_w_[0] = asin(-last_attitude_cmd->disturbance_wx_w / (_g_ * last_attitude_cmd->total_mass));
-    Iw_w_[1] = asin(-last_attitude_cmd->disturbance_wy_w / (_g_ * last_attitude_cmd->total_mass));
+    Iw_w_[0] = asin(-last_attitude_cmd->disturbance_wx_w / (common_handlers_->g * last_attitude_cmd->total_mass));
+    Iw_w_[1] = asin(-last_attitude_cmd->disturbance_wy_w / (common_handlers_->g * last_attitude_cmd->total_mass));
 
     ROS_INFO(
         "[NsfController]: setting the mass difference and disturbances from the last AttitudeCmd: mass difference: %.2f kg, Db_b: %.2f, %.2f N, Dw_w: %.2f, "
@@ -388,7 +383,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
-  hover_thrust_ = sqrt(total_mass * _g_) * _motor_params_.A + _motor_params_.B;
+  hover_thrust_ = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, total_mass * common_handlers_->g);
 
   // --------------------------------------------------------------
   // |                   calculate the feedback                   |
@@ -431,9 +426,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   }
 
   // calculate the feed forwared acceleration
-  Eigen::Vector3d feed_forward(asin((control_reference->acceleration.x * cos(pitch) * cos(roll)) / _g_),
-                               asin((-control_reference->acceleration.y * cos(pitch) * cos(roll)) / _g_),
-                               control_reference->acceleration.z * (hover_thrust_ / _g_));
+  Eigen::Vector3d feed_forward(asin((control_reference->acceleration.x * cos(pitch) * cos(roll)) / common_handlers_->g),
+                               asin((-control_reference->acceleration.y * cos(pitch) * cos(roll)) / common_handlers_->g),
+                               control_reference->acceleration.z * (hover_thrust_ / common_handlers_->g));
 
   // | -------- calculate the componentes of our feedback ------- |
   Eigen::Vector3d p_component, v_component, a_component, i_component;
@@ -706,14 +701,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr NsfController::update(const mrs_msgs::
   output_command->mass_difference = uav_mass_difference_;
   output_command->total_mass      = total_mass;
 
-  output_command->disturbance_bx_b = -_g_ * total_mass * sin(Ib_b_[0]);
-  output_command->disturbance_by_b = -_g_ * total_mass * sin(Ib_b_[1]);
+  output_command->disturbance_bx_b = -common_handlers_->g * total_mass * sin(Ib_b_[0]);
+  output_command->disturbance_by_b = -common_handlers_->g * total_mass * sin(Ib_b_[1]);
 
-  output_command->disturbance_bx_w = -_g_ * total_mass * sin(Ib_w[0]);
-  output_command->disturbance_by_w = -_g_ * total_mass * sin(Ib_w[1]);
+  output_command->disturbance_bx_w = -common_handlers_->g * total_mass * sin(Ib_w[0]);
+  output_command->disturbance_by_w = -common_handlers_->g * total_mass * sin(Ib_w[1]);
 
-  output_command->disturbance_wx_w = -_g_ * total_mass * sin(Iw_w_[0]);
-  output_command->disturbance_wy_w = -_g_ * total_mass * sin(Iw_w_[1]);
+  output_command->disturbance_wx_w = -common_handlers_->g * total_mass * sin(Iw_w_[0]);
+  output_command->disturbance_wy_w = -common_handlers_->g * total_mass * sin(Iw_w_[1]);
 
   output_command->controller_enforcing_constraints = false;
 

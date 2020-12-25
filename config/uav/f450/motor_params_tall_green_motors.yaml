@@ -1,4 +1,4 @@
-# swarms
-hover_thrust:
-  a: 0.1140
-  b: -0.0602
+motor_params:
+  n_motors: 4
+  a: 0.30655
+  b: -0.22970
