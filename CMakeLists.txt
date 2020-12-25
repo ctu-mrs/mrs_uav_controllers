@@ -16,7 +16,6 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/nsf_controller.cfg
   cfg/se3_controller.cfg
   cfg/mpc_controller.cfg
   )
@@ -75,22 +74,6 @@ else()
   MESSAGE(FATAL_ERROR "MpcControllerSolver.so has not been selected, check CMakeLists.txt.")
 endif()
 
-# NSF controller
-
-add_library(NsfController
-  src/nsf_controller/nsf_controller.cpp
-  )
-
-add_dependencies(NsfController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-
-target_link_libraries(NsfController
-  ${catkin_LIBRARIES}
-  )
-
 # SE3 controller
 
 add_library(Se3Controller
@@ -147,7 +130,6 @@ install(TARGETS
   MpcController
   Se3Controller
   FailsafeController
-  NsfController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

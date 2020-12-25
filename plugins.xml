@@ -4,12 +4,6 @@
   </class>
 </library>
 
-<library path="lib/libNsfController">
-  <class name="mrs_uav_controllers/NsfController" type="mrs_uav_controllers::nsf_controller::NsfController" base_class_type="mrs_uav_managers::Controller">
-    <description>This is NsfController.</description>
-  </class>
-</library>
-
 <library path="lib/libSe3Controller">
   <class name="mrs_uav_controllers/Se3Controller" type="mrs_uav_controllers::se3_controller::Se3Controller" base_class_type="mrs_uav_managers::Controller">
     <description>This is Se3Controller.</description>
