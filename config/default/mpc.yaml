@@ -77,7 +77,9 @@ constraints:
   # When the controller wants to output tilt larger than this,
   # it will return an empty command instead, which should trigger
   # a failsafe in the control manager.
-  tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
+  tilt_angle_failsafe:
+    enabled: true
+    limit: deg(90.0)
 
 # gains can be muted by the tracker by this factor
 # gains are also muting just after activation

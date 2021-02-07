@@ -118,7 +118,9 @@ private:
 
   // | ------------ controller limits and saturations ----------- |
 
+  bool   _tilt_angle_failsafe_enabled_;
   double _tilt_angle_failsafe_;
+
   double _thrust_saturation_;
 
   // | ------------------ activation and output ----------------- |
@@ -281,7 +283,13 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   param_loader.loadParam("mass_estimator/km_lim", km_lim_);
 
   // constraints
-  param_loader.loadParam("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
+    ROS_ERROR("[MpcController]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
+    ros::shutdown();
+  }
+
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
 
   // gain filtering
@@ -816,7 +824,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (_tilt_angle_failsafe_ > 1e-3 && theta > _tilt_angle_failsafe_) {
+  if (_tilt_angle_failsafe_enabled_ && theta > _tilt_angle_failsafe_) {
 
     ROS_ERROR("[%s]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", this->name_.c_str(),
               (180.0 / M_PI) * theta, (180.0 / M_PI) * _tilt_angle_failsafe_);
@@ -835,7 +843,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-  if (theta > constraints.tilt) {
+  if (fabs(constraints.tilt) > 1e-3 && theta > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[%s]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", this->name_.c_str(), (theta / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
     theta = constraints.tilt;
