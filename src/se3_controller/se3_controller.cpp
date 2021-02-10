@@ -766,15 +766,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
         (E(1, 0) - E(0, 1)) / 2.0;
   // clang-format on
 
-  /* output */
   double thrust_force = f.dot(R.col(2));
+  double thrust       = 0;
 
-  double thrust = 0;
-
-  if (thrust_force >= 0) {
-    thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
+  if (!control_reference->use_thrust) {
+    if (thrust_force >= 0) {
+      thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
+    } else {
+      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+    }
   } else {
-    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+    // the thrust is overriden from the tracker command
+    thrust = control_reference->thrust;
   }
 
   // saturate the thrust
