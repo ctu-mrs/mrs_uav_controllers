@@ -2,8 +2,8 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.0.6 (2021-03-16)
+------------------
 * Major SE(3) controller overhaul, new heading control approach
 * Major MpcController overhaul, new heading control approach
 * Minor FailsafeController bug fixes
