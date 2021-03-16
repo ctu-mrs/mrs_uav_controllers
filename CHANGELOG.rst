@@ -2,6 +2,14 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Major SE(3) controller overhaul, new heading control approach
+* Major MpcController overhaul, new heading control approach
+* Minor FailsafeController bug fixes
+* Noetic-compatible
+* Contributors: Matej Petrlik, Robert Penicka, Tomas Baca, Tomáš Báča
+
 0.0.5 (2020-02-26)
 ------------------
 * allowed emergency ctrl to have non-zero integrals
