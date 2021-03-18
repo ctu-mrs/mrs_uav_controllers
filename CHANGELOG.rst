@@ -2,8 +2,8 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.0 (2021-03-18)
+------------------
 * Major release
 
 0.0.6 (2021-03-16)
