@@ -678,7 +678,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   f_norm[1] = sin(theta) * sin(phi);
   f_norm[2] = cos(theta);
 
-  // | ------------- construct the rotational matrix ------------ |
+  // | --------- construct the desired rotational matrix -------- |
 
   Eigen::Matrix3d Rd;
 
@@ -755,8 +755,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   // |                      orientation error                     |
   // --------------------------------------------------------------
 
-  /* orientation error */
-  Eigen::Matrix3d E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
+  // orientation error
+  Eigen::Matrix3d E = Eigen::Matrix3d::Zero();
+
+  if (!control_reference->use_attitude_rate) {
+    E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
+  }
 
   Eigen::Vector3d Eq;
 
