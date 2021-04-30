@@ -158,10 +158,10 @@ private:
   double _max_speed_vertical_, _max_acceleration_vertical_, _max_u_vertical_;
 
   // Q and S matrix diagonals for horizontal
-  std::vector<double> _Q_, _S_;
+  std::vector<double> _mat_Q_, _mat_S_;
 
   // Q and S matrix diagonals for vertical
-  std::vector<double> _Q_z_, _S_z_;
+  std::vector<double> _mat_Q_z_, _mat_S_z_;
 
   // MPC solver handlers
   std::unique_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_x_;
@@ -245,15 +245,15 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   param_loader.loadParam("mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
   param_loader.loadParam("mpc_parameters/horizontal/max_jerk", _max_jerk_);
 
-  param_loader.loadParam("mpc_parameters/horizontal/Q", _Q_);
-  param_loader.loadParam("mpc_parameters/horizontal/S", _S_);
+  param_loader.loadParam("mpc_parameters/horizontal/Q", _mat_Q_);
+  param_loader.loadParam("mpc_parameters/horizontal/S", _mat_S_);
 
   param_loader.loadParam("mpc_parameters/vertical/max_speed", _max_speed_vertical_);
   param_loader.loadParam("mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
   param_loader.loadParam("mpc_parameters/vertical/max_u", _max_u_vertical_);
 
-  param_loader.loadParam("mpc_parameters/vertical/Q", _Q_z_);
-  param_loader.loadParam("mpc_parameters/vertical/S", _S_z_);
+  param_loader.loadParam("mpc_parameters/vertical/Q", _mat_Q_z_);
+  param_loader.loadParam("mpc_parameters/vertical/S", _mat_S_z_);
 
   param_loader.loadParam("mpc_solver/verbose", _mpc_solver_verbose_);
   param_loader.loadParam("mpc_solver/max_iterations", _mpc_solver_max_iterations_);
@@ -321,11 +321,11 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   // | ----------------- prepare the MPC solver ----------------- |
 
   mpc_solver_x_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
-      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _Q_, _S_, _dt1_, _dt2_, 0, 1.0));
+      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_, _dt2_, 0, 1.0));
   mpc_solver_y_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
-      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _Q_, _S_, _dt1_, _dt2_, 0, 1.0));
+      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_, _dt2_, 0, 1.0));
   mpc_solver_z_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
-      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _Q_z_, _S_z_, _dt1_, _dt2_, 0.5, 0.5));
+      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_z_, _mat_S_z_, _dt1_, _dt2_, 0.5, 0.5));
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -660,11 +660,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
   // | ------------------ set the penalizations ----------------- |
 
-  std::vector<double> temp_Q_horizontal = _Q_;
-  std::vector<double> temp_Q_vertical   = _Q_z_;
+  std::vector<double> temp_Q_horizontal = _mat_Q_;
+  std::vector<double> temp_Q_vertical   = _mat_Q_z_;
 
-  std::vector<double> temp_S_horizontal = _S_;
-  std::vector<double> temp_S_vertical   = _S_z_;
+  std::vector<double> temp_S_horizontal = _mat_S_;
+  std::vector<double> temp_S_vertical   = _mat_S_z_;
 
   if (!control_reference->use_position_horizontal) {
     temp_Q_horizontal[0] = 0;

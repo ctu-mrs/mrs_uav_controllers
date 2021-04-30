@@ -556,9 +556,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
       Kv[1] = 0;
     }
 
-    if (control_reference->use_velocity_vertical) {
-      Kv[2] = kvz_;
-    } else if (control_reference->use_position_vertical) {  // special case: want to control z-pos but not the velocity => at least provide z dampening
+    // special case: if want to control z-pos but not the velocity => at least provide z dampening, therefore kvz_
+    if (control_reference->use_velocity_vertical || control_reference->use_position_vertical) {
       Kv[2] = kvz_;
     } else {
       Kv[2] = 0;
