@@ -2,8 +2,8 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.1 (2021-05-07)
+------------------
 * linted
 * updated thrust curves
 * SE3: not calculating orient. error when using rate reference
