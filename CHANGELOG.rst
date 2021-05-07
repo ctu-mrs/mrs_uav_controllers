@@ -2,6 +2,15 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* linted
+* updated thrust curves
+* SE3: not calculating orient. error when using rate reference
+* updated compilation flags
+* fixed double -> bool variables
+* Contributors: Tomas Baca
+
 1.0.0 (2021-03-18)
 ------------------
 * Major release
