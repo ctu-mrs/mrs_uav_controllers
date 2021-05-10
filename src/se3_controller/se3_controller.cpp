@@ -184,7 +184,7 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   if (_version_ != VERSION) {
 
     ROS_ERROR("[Se3Controller]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   param_loader.loadParam("enable_profiler", _profiler_enabled_);
@@ -224,7 +224,7 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[Se3Controller]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
@@ -247,14 +247,14 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[Se3Controller]: could not load all parameters!");
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   // | ---------------- prepare stuff from params --------------- |
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[Se3Controller]: output mode has to be {0, 1}!");
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   // initialize the integrals

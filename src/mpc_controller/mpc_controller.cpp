@@ -229,7 +229,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   if (_version_ != VERSION) {
 
     ROS_ERROR("[%s]: the version of the binary (%s) does not match the config file (%s), please build me!", name_.c_str(), VERSION, _version_.c_str());
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   param_loader.loadParam("enable_profiler", profiler_enabled_);
@@ -287,7 +287,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
   param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[MpcController]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
@@ -304,14 +304,14 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, const std::stri
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   // | ---------------- prepare stuff from params --------------- |
 
   if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
     ROS_ERROR("[%s]: output mode has to be {0, 1}!", this->name_.c_str());
-    ros::shutdown();
+    ros::requestShutdown();
   }
 
   uav_mass_difference_ = 0;
