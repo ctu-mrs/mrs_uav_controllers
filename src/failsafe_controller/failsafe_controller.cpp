@@ -221,7 +221,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
 
     if (dt <= 0.001) {
 
-      ROS_WARN("[FailsafeController]: the update was called with too small dt!");
+      ROS_WARN_THROTTLE(0.1, "[FailsafeController]: the update was called with too small dt (%.3f s)!", dt);
+
       if (last_attitude_cmd_ != mrs_msgs::AttitudeCommand::Ptr()) {
 
         return last_attitude_cmd_;
