@@ -1,0 +1,30 @@
+integral_gains:
+
+  kiw: 0.5
+  kib: 0.1
+
+  kiw_lim: 10.0
+  kib_lim: 10.0
+
+rampup:
+
+  enabled: true
+  speed: 0.5 # [1/s]
+
+attitude_feedback:
+
+  default_gains:
+
+    # influences pitching and rolling
+    horizontal:
+      attitude:
+        kq: 4.0
+
+    # influences yawing
+    vertical:
+      attitude:
+        kq: 8.0
+
+mass_estimator:
+  km: 2.0
+  km_lim: 15.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
