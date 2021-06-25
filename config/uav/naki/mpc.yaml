@@ -13,7 +13,7 @@ attitude_feedback:
     # influences pitching and rolling
     horizontal:
       attitude:
-        kq: 8.0
+        kq: 5.0
 
     # influences yawing
     vertical:
