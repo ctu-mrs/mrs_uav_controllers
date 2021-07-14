@@ -3,4 +3,4 @@ version: "1.0.1.0"
 thrust_decrease_rate: 0.015 # [1/s]
 
 # how much thrust (of the nominal+estimated offset) to apply after activation
-initial_thrust_percentage: 0.97 # [-]
+initial_thrust_percentage: 1.0 # [-]
