@@ -102,7 +102,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   if (_version_ != VERSION) {
 
     ROS_ERROR("[FailsafeController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
-    ros::requestShutdown();
+    ros::shutdown();
   }
 
   param_loader.loadParam("thrust_decrease_rate", _thrust_decrease_rate_);
@@ -111,7 +111,7 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[FailsafeController]: Could not load all parameters!");
-    ros::requestShutdown();
+    ros::shutdown();
   }
 
   uav_mass_difference_ = 0;
