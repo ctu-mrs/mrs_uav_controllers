@@ -23,6 +23,8 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
+  ~FailsafeController(){};
+
   void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
