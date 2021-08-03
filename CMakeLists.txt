@@ -116,10 +116,26 @@ target_link_libraries(FailsafeController
   ${catkin_LIBRARIES}
   )
 
+# Midair Activation Controller
+
+add_library(MidairActivationController
+  src/midair_activation_controller/midair_activation_controller.cpp
+  )
+
+add_dependencies(MidairActivationController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  )
+
+target_link_libraries(MidairActivationController
+  ${catkin_LIBRARIES}
+  )
+
 install(TARGETS
   MpcController
   Se3Controller
   FailsafeController
+  MidairActivationController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

@@ -400,6 +400,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
+  if (control_reference == mrs_msgs::PositionCommand::Ptr()) {
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
+
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
