@@ -1294,8 +1294,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    /* double world_accel_z = (thrust_vector[2] / total_mass) - common_handlers_->g; */
-    double world_accel_z = control_reference->acceleration.z;
+    double world_accel_z = (thrust_vector[2] / total_mass) - common_handlers_->g;
+    /* double world_accel_z = control_reference->acceleration.z; */
 
     geometry_msgs::Vector3Stamped world_accel;
     world_accel.header.stamp    = ros::Time::now();
