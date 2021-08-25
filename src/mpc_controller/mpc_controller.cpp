@@ -516,7 +516,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
   // Rv - velocity reference in global frame
   // Ra - velocity reference in global frame
   // Rw - angular velocity reference
-  Eigen::Vector3d Rp, Rv, Ra, Rw;
+
+  Eigen::Vector3d Rp = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Ra = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Rw = Eigen::Vector3d::Zero(3);
 
   Rp << control_reference->position.x, control_reference->position.y, control_reference->position.z;  // fill the desired position
   Rv << control_reference->velocity.x, control_reference->velocity.y, control_reference->velocity.z;
@@ -531,6 +535,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     catch (...) {
       ROS_ERROR("[%s]: exception caught while calculating the desired_yaw_rate feedforward", name_.c_str());
     }
+
     Rw << 0, 0, desired_yaw_rate;
   }
 
