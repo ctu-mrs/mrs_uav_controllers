@@ -2,6 +2,29 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fixed landing detection, again
+* increase linear velocity in z-axis to 0.3 in the anti-windup check
+* MpcController: fixed uninitialized reference variables
+* updated the acceleration output of the MpcController
+* added brus configs
+* added midair activation
+* added brus simulation configs
+* added destructor implementation to controllers
+* updated initial failsafe thrust
+* added dofec uav config
+* increased the inital thrust of failsafe
+* updated f450 configs
+* updated naki mpc gains
+* lowered down failsafe landing aggressivity
+* updated naki mpc config
+* add motor_params_naki_v2.yaml config for Dronument drone
+* added t18 configs
+* updated debug prints
+* updated ros::shutdown
+* Contributors: Matej Petrlik, Pavel Petracek, Tomas Baca
+
 1.0.1 (2021-05-07)
 ------------------
 * linted
