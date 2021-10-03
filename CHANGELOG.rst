@@ -2,8 +2,8 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.2 (2021-10-03)
+------------------
 * fixed landing detection, again
 * increase linear velocity in z-axis to 0.3 in the anti-windup check
 * MpcController: fixed uninitialized reference variables
