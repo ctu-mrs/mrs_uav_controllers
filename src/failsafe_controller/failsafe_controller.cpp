@@ -199,7 +199,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
   // is getting deactivated
   std::scoped_lock lock(mutex_hover_thrust_);
 
-  mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
+  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
+  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   if (!is_active_) {
     return mrs_msgs::AttitudeCommand::ConstPtr();

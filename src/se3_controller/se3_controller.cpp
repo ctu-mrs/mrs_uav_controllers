@@ -386,7 +386,8 @@ void Se3Controller::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr& control_reference) {
 
-  mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
+  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
+  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   {
     std::scoped_lock lock(mutex_uav_state_);

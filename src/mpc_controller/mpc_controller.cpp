@@ -445,7 +445,8 @@ void MpcController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
 
-  mrs_lib::Routine profiler_routine = profiler.createRoutine("update");
+  mrs_lib::Routine    profiler_routine = profiler.createRoutine("update");
+  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("MpcController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   {
     std::scoped_lock lock(mutex_uav_state_);

@@ -165,7 +165,9 @@ void MidairActivationController::deactivate(void) {
 const mrs_msgs::AttitudeCommand::ConstPtr MidairActivationController::update([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &       uav_state,
                                                                              [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
 
-  mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
+  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer("MidairActivationController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   mrs_lib::set_mutexed(mutex_uav_state_, *uav_state, uav_state_);
 
