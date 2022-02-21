@@ -292,6 +292,32 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   profiler_ = mrs_lib::Profiler(nh_, "Se3Controller", _profiler_enabled_);
 
+  {
+    Eigen::Matrix3d mat = Eigen::Matrix3d::Identity();
+
+    mat = mrs_lib::AttitudeConverter(0, 0.3, 1.57, mrs_lib::RPY_EXTRINSIC);
+
+    ROS_INFO_STREAM("[Se3Controller]: extrinsic z " << mat.col(2).transpose());
+
+    auto [r, p, y] = mrs_lib::AttitudeConverter(mat).getExtrinsicRPY();
+
+    ROS_INFO("[Se3Controller]: r = %.2f, p = %.2f, y = %.2f", r, p, y);
+  }
+
+  {
+    Eigen::Matrix3d mat = Eigen::Matrix3d::Identity();
+
+    mat = mrs_lib::AttitudeConverter(0, 0, 0, mrs_lib::RPY_INTRINSIC);
+
+    ROS_INFO_STREAM("[Se3Controller]: intrinsic z " << mat.row(0));
+    ROS_INFO_STREAM("[Se3Controller]: intrinsic z " << mat.row(1));
+    ROS_INFO_STREAM("[Se3Controller]: intrinsic z " << mat.row(2));
+
+    auto [r, p, y] = mrs_lib::AttitudeConverter(mat).getIntrinsicRPY();
+
+    ROS_INFO("[Se3Controller]: r = %.2f, p = %.2f, y = %.2f", r, p, y);
+  }
+
   // | ----------------------- finish init ---------------------- |
 
   ROS_INFO("[Se3Controller]: initialized, version %s", VERSION);
@@ -714,6 +740,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
     }
 
     // fill in the desired orientation based on the state feedback
+    // lee's orthogonal projection
     if (drs_params.rotation_type == 0) {
 
       Rd.col(2) = f_norm;
@@ -722,7 +749,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
       Rd.col(0) = Rd.col(1).cross(Rd.col(2));
       Rd.col(0).normalize();
 
-    } else {
+      // baca's oblique projection
+    } else if (drs_params.rotation_type == 1) {
 
       // | ------------------------- body z ------------------------- |
       Rd.col(2) = f_norm;
@@ -754,6 +782,40 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
 
       Rd.col(1) = Rd.col(2).cross(Rd.col(0));
       Rd.col(1).normalize();
+
+    } else if (drs_params.rotation_type == 2) {
+
+      bxd << 1, 0, 0;
+
+      Rd.col(2) = f_norm;
+      Rd.col(1) = Rd.col(2).cross(bxd);
+      Rd.col(1).normalize();
+      Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+      Rd.col(0).normalize();
+
+      auto [roll, pitch, yaw] = mrs_lib::AttitudeConverter(Rd).getExtrinsicRPY();
+
+      yaw = control_reference->heading;
+
+      Rd = mrs_lib::AttitudeConverter(roll, pitch, yaw, mrs_lib::RPY_EXTRINSIC);
+
+    } else if (drs_params.rotation_type == 3) {
+
+      bxd << 1, 0, 0;
+
+      Rd.col(2) = f_norm;
+      Rd.col(1) = Rd.col(2).cross(bxd);
+      Rd.col(1).normalize();
+      Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+      Rd.col(0).normalize();
+
+      auto [roll, pitch, yaw] = mrs_lib::AttitudeConverter(Rd).getIntrinsicRPY();
+
+      ROS_INFO("[Se3Controller]: r = %.2f, p = %.2f, y = %.2f", roll, pitch, yaw);
+
+      yaw = control_reference->heading;
+
+      Rd = mrs_lib::AttitudeConverter(roll, pitch, yaw, mrs_lib::RPY_INTRINSIC);
     }
   }
 
