@@ -811,8 +811,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
 
       auto [roll, pitch, yaw] = mrs_lib::AttitudeConverter(Rd).getIntrinsicRPY();
 
-      ROS_INFO("[Se3Controller]: r = %.2f, p = %.2f, y = %.2f", roll, pitch, yaw);
-
       yaw = control_reference->heading;
 
       Rd = mrs_lib::AttitudeConverter(roll, pitch, yaw, mrs_lib::RPY_INTRINSIC);
