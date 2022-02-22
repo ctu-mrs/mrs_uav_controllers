@@ -877,7 +877,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     if (control_reference->use_heading) {
       try {
-        Rd = mrs_lib::AttitudeConverter(Rd).setHeadingByYaw(control_reference->heading);
+        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
       }
       catch (...) {
         ROS_WARN_THROTTLE(1.0, "[%s]: failed to add heading to the desired orientation matrix", this->name_.c_str());
