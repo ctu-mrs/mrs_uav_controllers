@@ -21,6 +21,7 @@
 
 #define OUTPUT_ATTITUDE_RATE 0
 #define OUTPUT_ATTITUDE_QUATERNION 1
+#define OUTPUT_ACTUATOR_CONTROL 2
 
 namespace mrs_uav_controllers
 {
@@ -254,8 +255,8 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   // | ---------------- prepare stuff from params --------------- |
 
-  if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[Se3Controller]: output mode has to be {0, 1}!");
+  if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION || output_mode_ == OUTPUT_ACTUATOR_CONTROL)) {
+    ROS_ERROR("[Se3Controller]: output mode has to be {0, 1, 2}!");
     ros::shutdown();
   }
 
@@ -459,10 +460,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   // Ra - velocity reference in global frame
   // Rw - angular velocity reference
 
-  Eigen::Vector3d Rp = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d Ra = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d Rw = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Rp      = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Rv      = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Ra      = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d rate_ff = Eigen::Vector3d::Zero(3);
 
   if (control_reference->use_position_vertical || control_reference->use_position_horizontal) {
 
@@ -762,18 +763,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   // --------------------------------------------------------------
 
   // orientation error
-  Eigen::Matrix3d E = Eigen::Matrix3d::Zero();
+  Eigen::Matrix3d Er = Eigen::Matrix3d::Zero();
 
   if (!control_reference->use_attitude_rate) {
-    E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
+    Er = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
   }
 
   Eigen::Vector3d Eq;
 
   // clang-format off
-  Eq << (E(2, 1) - E(1, 2)) / 2.0,
-        (E(0, 2) - E(2, 0)) / 2.0,
-        (E(1, 0) - E(0, 1)) / 2.0;
+  Eq << (Er(2, 1) - Er(1, 2)) / 2.0,
+        (Er(0, 2) - Er(2, 0)) / 2.0,
+        (Er(1, 0) - Er(0, 1)) / 2.0;
   // clang-format on
 
   double thrust_force = f.dot(R.col(2));
@@ -841,7 +842,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   Eigen::Vector3d q_feedback = -Kq * Eq.array();
 
   if (control_reference->use_attitude_rate) {
-    Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
+    rate_ff << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
   } else if (control_reference->use_heading_rate) {
 
     // to fill in the feed forward yaw rate
@@ -854,29 +855,29 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
       ROS_ERROR("[Se3Controller]: exception caught while calculating the desired_yaw_rate feedforward");
     }
 
-    Rw << 0, 0, desired_yaw_rate;
+    rate_ff << 0, 0, desired_yaw_rate;
   }
 
   // feedforward angular acceleration
-  Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
+  Eigen::Vector3d jerk_ff = Eigen::Vector3d(0, 0, 0);
 
   if (drs_params.jerk_feedforward) {
 
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
     Eigen::Vector3d desired_jerk = Eigen::Vector3d(control_reference->jerk.x, control_reference->jerk.y, control_reference->jerk.z);
-    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force / total_mass);
+    jerk_ff                      = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force / total_mass);
   }
 
   // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw + q_feedforward;
+  Eigen::Vector3d rate_action = q_feedback + rate_ff + jerk_ff;
 
   // compensate for the parasitic heading rate created by the desired pitch and roll rate
   Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
 
   if (drs_params.pitch_roll_heading_rate_compensation) {
 
-    Eigen::Vector3d q_feedback_yawless = t;
+    Eigen::Vector3d q_feedback_yawless = rate_action;
     q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
 
     double parasitic_heading_rate = 0;
@@ -896,7 +897,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
     }
   }
 
-  t += rp_heading_rate_compensation;
+  rate_action += rp_heading_rate_compensation;
 
   // --------------------------------------------------------------
   // |                      update parameters                     |
@@ -1133,26 +1134,34 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
 
     auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-    if (t[0] > constraints.roll_rate) {
-      t[0] = constraints.roll_rate;
-    } else if (t[0] < -constraints.roll_rate) {
-      t[0] = -constraints.roll_rate;
+    if (rate_action[0] > constraints.roll_rate) {
+      rate_action[0] = constraints.roll_rate;
+    } else if (rate_action[0] < -constraints.roll_rate) {
+      rate_action[0] = -constraints.roll_rate;
     }
 
-    if (t[1] > constraints.pitch_rate) {
-      t[1] = constraints.pitch_rate;
-    } else if (t[1] < -constraints.pitch_rate) {
-      t[1] = -constraints.pitch_rate;
+    if (rate_action[1] > constraints.pitch_rate) {
+      rate_action[1] = constraints.pitch_rate;
+    } else if (rate_action[1] < -constraints.pitch_rate) {
+      rate_action[1] = -constraints.pitch_rate;
     }
 
-    if (t[2] > constraints.yaw_rate) {
-      t[2] = constraints.yaw_rate;
-    } else if (t[2] < -constraints.yaw_rate) {
-      t[2] = -constraints.yaw_rate;
+    if (rate_action[2] > constraints.yaw_rate) {
+      rate_action[2] = constraints.yaw_rate;
+    } else if (rate_action[2] < -constraints.yaw_rate) {
+      rate_action[2] = -constraints.yaw_rate;
     }
   } else {
     ROS_WARN_THROTTLE(1.0, "[Se3Controller]: missing dynamics constraints");
   }
+
+  // | --------------------- actuator action -------------------- |
+
+  Eigen::Vector3d actuator_action;
+
+  Eigen::Vector3d wr = Ow - rate_action;
+
+  actuator_action = 0.05 * wr;
 
   // | --------------- fill the resulting command --------------- |
 
@@ -1161,21 +1170,42 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   // fill in the desired attitude anyway, since we know it
   output_command->attitude = mrs_lib::AttitudeConverter(Rd);
 
-  if (output_mode == OUTPUT_ATTITUDE_RATE) {
+  switch (output_mode) {
+    case OUTPUT_ATTITUDE_RATE: {
 
-    // output the desired attitude rate
-    output_command->attitude_rate.x = t[0];
-    output_command->attitude_rate.y = t[1];
-    output_command->attitude_rate.z = t[2];
+      // output the desired attitude rate
+      output_command->attitude_rate.x = rate_action[0];
+      output_command->attitude_rate.y = rate_action[1];
+      output_command->attitude_rate.z = rate_action[2];
 
-    output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
+      output_command->mode_mask = output_command->MODE_ATTITUDE_RATE;
 
-  } else if (output_mode == OUTPUT_ATTITUDE_QUATERNION) {
+      break;
+    }
 
-    output_command->mode_mask = output_command->MODE_ATTITUDE;
+    case OUTPUT_ATTITUDE_QUATERNION: {
 
-    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: outputting desired orientation (this is not normal)");
+      output_command->mode_mask = output_command->MODE_ATTITUDE;
+
+      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: outputting desired orientation (this is not normal)");
+
+      break;
+    }
+
+    case OUTPUT_ACTUATOR_CONTROL: {
+
+      // output the desired attitude rate
+      output_command->actuator_control.x = -actuator_action[0];
+      output_command->actuator_control.y = actuator_action[1];
+      output_command->actuator_control.z = actuator_action[2];
+
+      output_command->mode_mask = output_command->MODE_ACTUATORS;
+
+      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: outputting actuator control (this is not normal)");
+      break;
+    }
   }
+
 
   output_command->desired_acceleration.x = desired_x_accel;
   output_command->desired_acceleration.y = desired_y_accel;
@@ -1229,7 +1259,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
   last_attitude_cmd_ = output_command;
 
   return output_command;
-}
+}  // namespace se3_controller
 
 //}
 
