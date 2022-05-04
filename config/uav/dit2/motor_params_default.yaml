@@ -1,0 +1,4 @@
+hover_thrust:
+  n_motors: 8
+  a: 0.14534
+  b: -0.59161
