@@ -2,8 +2,8 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.3 (2022-05-09)
+------------------
 * added dit2 motor params
 * updated debug prints
 * refactored agains the new transformer
