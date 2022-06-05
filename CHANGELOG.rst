@@ -2,6 +2,18 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.0.3 (2022-05-09)
+------------------
+* added dit2 motor params
+* updated debug prints
+* refactored agains the new transformer
+* MpcController: fixed the use of setHeading()
+* + install in cmakelists
+* add configs: simulation/naki
+* add ScopeTimer and its logger to all controllers
+* updated brus params
+* Contributors: Dan Hert, Pavel Petracek, Tomas Baca
+
 1.0.2 (2021-10-03)
 ------------------
 * fixed landing detection, again

@@ -1,4 +1,4 @@
-#define VERSION "1.0.2.0"
+#define VERSION "1.0.3.0"
 
 /* includes //{ */
 
@@ -962,41 +962,41 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
 
     thrust = _thrust_saturation_;
     ROS_WARN_THROTTLE(1.0, "[%s]: saturating thrust to %.2f", this->name_.c_str(), _thrust_saturation_);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->position.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->position.x,
                       control_reference->position.y, control_reference->position.z, control_reference->heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->velocity.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->velocity.x,
                       control_reference->velocity.y, control_reference->velocity.z, control_reference->heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->acceleration.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->acceleration.x,
                       control_reference->acceleration.y, control_reference->acceleration.z, control_reference->heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->jerk.x, control_reference->jerk.y,
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->jerk.x, control_reference->jerk.y,
                       control_reference->jerk.z, control_reference->heading_jerk);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state->pose.position.x, uav_state->pose.position.y,
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
+    ROS_WARN_THROTTLE(0.1, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
                       uav_state->pose.position.z, uav_heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state->velocity.linear.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", this->name_.c_str(), uav_state->velocity.linear.x,
                       uav_state->velocity.linear.y, uav_state->velocity.linear.z, uav_state->velocity.angular.z);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
 
   } else if (thrust < 0.0) {
 
     thrust = 0.0;
     ROS_WARN_THROTTLE(1.0, "[%s]: saturating thrust to %.2f", this->name_.c_str(), 0.0);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->position.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->position.x,
                       control_reference->position.y, control_reference->position.z, control_reference->heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->velocity.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->velocity.x,
                       control_reference->velocity.y, control_reference->velocity.z, control_reference->heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->acceleration.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->acceleration.x,
                       control_reference->acceleration.y, control_reference->acceleration.z, control_reference->heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", control_reference->jerk.x, control_reference->jerk.y,
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), control_reference->jerk.x, control_reference->jerk.y,
                       control_reference->jerk.z, control_reference->heading_jerk);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state->pose.position.x, uav_state->pose.position.y,
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
+    ROS_WARN_THROTTLE(0.1, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
                       uav_state->pose.position.z, uav_heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state->velocity.linear.x,
+    ROS_WARN_THROTTLE(0.1, "[%s]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", this->name_.c_str(), uav_state->velocity.linear.x,
                       uav_state->velocity.linear.y, uav_state->velocity.linear.z, uav_state->velocity.angular.z);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
   }
 
   // prepare the attitude feedback
