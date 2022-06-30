@@ -30,7 +30,7 @@ set(Eigen_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIRS})
 set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 
 set(LIBRARIES
-  Se3Controller MpcController FailsafeController MidairActivationController
+  Se3Controller MpcController FailsafeController MidairActivationController MotorController
   )
 
 catkin_package(
@@ -133,6 +133,22 @@ add_dependencies(MidairActivationController
   )
 
 target_link_libraries(MidairActivationController
+  ${catkin_LIBRARIES}
+  )
+
+# Motor controller
+
+add_library(MotorController
+  src/motor_controller/motor_controller.cpp
+  )
+
+add_dependencies(MotorController
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
+  )
+
+target_link_libraries(MotorController
   ${catkin_LIBRARIES}
   )
 
