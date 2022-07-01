@@ -67,4 +67,4 @@ angular_rate_feedforward:
 rotation_matrix: 1 # {0 = lee, 1 = baca (oblique projection}
 
 # output mode to PixHawk
-output_mode: 2 # {0 = attitude_rate, 1 = orientation, 2 = actuator control}
+output_mode: 0 # {0 = attitude_rate, 1 = orientation, 2 = actuator control}

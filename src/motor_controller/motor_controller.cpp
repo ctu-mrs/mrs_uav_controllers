@@ -51,6 +51,8 @@ public:
       [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints);
 
 private:
+  ros::NodeHandle nh_;
+
   std::string _version_;
 
   bool is_initialized_ = false;
@@ -73,11 +75,6 @@ private:
 
   double _uav_mass_;
   double uav_mass_difference_;
-
-  // | ------------ controller limits and saturations ----------- |
-
-  bool   _tilt_angle_failsafe_enabled_;
-  double _tilt_angle_failsafe_;
 
   // | ------------------ activation and output ----------------- |
 
@@ -102,7 +99,7 @@ private:
 void MotorController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
                                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
-  ros::NodeHandle nh_(parent_nh, name_space);
+  nh_ = ros::NodeHandle(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
   _uav_mass_       = uav_mass;
@@ -121,14 +118,6 @@ void MotorController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unuse
     ros::shutdown();
   }
 
-  // constraints
-  param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
-  if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
-    ROS_ERROR("[MotorController]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
-    ros::shutdown();
-  }
-
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[MotorController]: could not load all parameters!");
     ros::shutdown();
@@ -136,7 +125,7 @@ void MotorController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unuse
 
   // | --------------------- service clients -------------------- |
 
-  sc_actuator_control_ = mrs_lib::ServiceClientHandler<mrs_msgs::ActuatorControl>(nh_, "actuator_control_out");
+  sc_actuator_control_ = mrs_lib::ServiceClientHandler<mrs_msgs::ActuatorControl>(nh_, "actuator_control_srv_out");
 
   // | ----------------------- finish init ---------------------- |
 
@@ -208,28 +197,61 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
   srv_out.request.uav_state = *uav_state;
   srv_out.request.reference = *control_reference;
 
-  future_service_result_ = sc_actuator_control_.callAsync(srv_out);
+  bool success = sc_actuator_control_.call(srv_out);
 
-  int i = 0;
+  if (!success) {
+    ROS_ERROR("[MotorController]: service call failed");
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
 
-  while (ros::ok() && future_service_result_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+  /* int i = 0; */
 
-    if (i++ > 10) {
-      ROS_WARN("[MotorController]: service request timeouted, switching back");
-      return mrs_msgs::AttitudeCommand::ConstPtr();
-    }
+  /* while (ros::ok() && future_service_result_.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) { */
+
+  /*   if (i++ > 10) { */
+  /*     ROS_WARN("[MotorController]: service request timeouted, switching back"); */
+  /*     return mrs_msgs::AttitudeCommand::ConstPtr(); */
+  /*   } */
+  /* } */
+
+  /* auto result = future_service_result_.get(); */
+
+  ROS_INFO("[MotorController]: result: %.2f, %.2f, %.2f, %.2f, %d", srv_out.response.motors[0], srv_out.response.motors[1], srv_out.response.motors[2],
+           srv_out.response.motors[3], srv_out.response.success);
+
+  if (!srv_out.response.success) {
+    ROS_WARN("[MotorController]: received false status from the external controller, switching back");
+    return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
-  Eigen::Vector3d actuator_action;
-
+  Eigen::Vector4d motors;
   Eigen::Matrix4d mixer_matrix;
 
-  output_command->actuator_control.x = -actuator_action[0];
-  output_command->actuator_control.y = actuator_action[1];
-  output_command->actuator_control.z = actuator_action[2];
+  // clang-format off
+
+  motors <<
+    srv_out.response.motors[0],
+    srv_out.response.motors[1],
+    srv_out.response.motors[2],
+    srv_out.response.motors[3];
+
+  mixer_matrix <<
+  -0.35355,  0.35355,  0.35355, -0.35355,
+   0.35355, -0.35355,  0.35355, -0.35355,
+   0.25000,  0.25000, -0.25000, -0.25000,
+   0.25000,  0.25000,  0.25000,  0.25000;
+
+  // clang-format on
+
+  Eigen::Vector4d control_group = mixer_matrix * motors;
+
+  output_command->actuator_control.x = control_group[0];
+  output_command->actuator_control.y = control_group[1];
+  output_command->actuator_control.z = control_group[2];
+  output_command->thrust             = control_group[3];
 
   output_command->mass_difference = 0;
   output_command->total_mass      = _uav_mass_;
@@ -237,6 +259,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
   output_command->controller_enforcing_constraints = false;
 
   output_command->controller = "MotorController";
+
+  output_command->mode_mask = output_command->MODE_ACTUATORS;
 
   last_attitude_cmd_ = output_command;
 
