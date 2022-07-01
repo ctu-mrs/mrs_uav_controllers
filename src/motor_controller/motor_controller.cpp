@@ -58,6 +58,8 @@ private:
   bool is_initialized_ = false;
   bool is_active_      = false;
 
+  Eigen::MatrixXd _allocation_matrix_;
+
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
 
   // | ------------------------ uav state ----------------------- |
@@ -111,6 +113,8 @@ void MotorController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unuse
   mrs_lib::ParamLoader param_loader(nh_, "MotorController");
 
   param_loader.loadParam("version", _version_);
+
+  _allocation_matrix_ = param_loader.loadMatrixDynamic2("allocation_matrix", 4, -1);
 
   if (_version_ != VERSION) {
 
@@ -197,29 +201,27 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
   srv_out.request.uav_state = *uav_state;
   srv_out.request.reference = *control_reference;
 
-  bool success = sc_actuator_control_.call(srv_out);
+  future_service_result_ = sc_actuator_control_.callAsync(srv_out);
 
-  if (!success) {
-    ROS_ERROR("[MotorController]: service call failed");
-    return mrs_msgs::AttitudeCommand::ConstPtr();
+  int i = 0;
+
+  while (ros::ok() && future_service_result_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+
+    if (i > 10) {
+      ROS_WARN("[MotorController]: control service call takes more than 10 ms!");
+    } else if (i > 20) {
+      ROS_ERROR("[MotorController]: control service call takes more than 20 ms!");
+    }
+
+    if (i++ > 100) {
+      ROS_WARN("[MotorController]: service request timeouted, switching back");
+      return mrs_msgs::AttitudeCommand::ConstPtr();
+    }
   }
 
-  /* int i = 0; */
+  auto result = future_service_result_.get();
 
-  /* while (ros::ok() && future_service_result_.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) { */
-
-  /*   if (i++ > 10) { */
-  /*     ROS_WARN("[MotorController]: service request timeouted, switching back"); */
-  /*     return mrs_msgs::AttitudeCommand::ConstPtr(); */
-  /*   } */
-  /* } */
-
-  /* auto result = future_service_result_.get(); */
-
-  ROS_INFO("[MotorController]: result: %.2f, %.2f, %.2f, %.2f, %d", srv_out.response.motors[0], srv_out.response.motors[1], srv_out.response.motors[2],
-           srv_out.response.motors[3], srv_out.response.success);
-
-  if (!srv_out.response.success) {
+  if (!result.response.success) {
     ROS_WARN("[MotorController]: received false status from the external controller, switching back");
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -228,25 +230,30 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
   output_command->header.stamp = ros::Time::now();
 
   Eigen::Vector4d motors;
-  Eigen::Matrix4d mixer_matrix;
 
-  // clang-format off
+  if (!std::isfinite(result.response.motors[0])) {
+    ROS_ERROR("NaN detected in variable \"result.response.motors[0]\"!!!");
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
 
-  motors <<
-    srv_out.response.motors[0],
-    srv_out.response.motors[1],
-    srv_out.response.motors[2],
-    srv_out.response.motors[3];
+  if (!std::isfinite(result.response.motors[1])) {
+    ROS_ERROR("NaN detected in variable \"result.response.motors[1]\"!!!");
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
 
-  mixer_matrix <<
-  -0.35355,  0.35355,  0.35355, -0.35355,
-   0.35355, -0.35355,  0.35355, -0.35355,
-   0.25000,  0.25000, -0.25000, -0.25000,
-   0.25000,  0.25000,  0.25000,  0.25000;
+  if (!std::isfinite(result.response.motors[2])) {
+    ROS_ERROR("NaN detected in variable \"result.response.motors[2]\"!!!");
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
 
-  // clang-format on
+  if (!std::isfinite(result.response.motors[3])) {
+    ROS_ERROR("NaN detected in variable \"result.response.motors[3]\"!!!");
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
 
-  Eigen::Vector4d control_group = mixer_matrix * motors;
+  motors << result.response.motors[0], result.response.motors[1], result.response.motors[2], result.response.motors[3];
+
+  Eigen::Vector4d control_group = _allocation_matrix_ * motors;
 
   output_command->actuator_control.x = control_group[0];
   output_command->actuator_control.y = control_group[1];
