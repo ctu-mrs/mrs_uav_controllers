@@ -229,6 +229,34 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
 
+  // | -------------- unbiased desired acceleration ------------- |
+
+  double desired_x_accel = 0;
+  double desired_y_accel = 0;
+  double desired_z_accel = 0;
+
+  {
+
+    geometry_msgs::Vector3Stamped world_accel;
+
+    world_accel.header.stamp    = ros::Time::now();
+    world_accel.header.frame_id = uav_state->header.frame_id;
+    world_accel.vector.x        = result.response.desired_acceleration.x;
+    world_accel.vector.y        = result.response.desired_acceleration.y;
+    world_accel.vector.z        = result.response.desired_acceleration.z;
+
+    auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
+
+    if (res) {
+
+      desired_x_accel = res.value().vector.x;
+      desired_y_accel = res.value().vector.y;
+      desired_z_accel = res.value().vector.z;
+    }
+  }
+
+  // | --------------------- motor commands --------------------- |
+
   Eigen::Vector4d motors;
 
   if (!std::isfinite(result.response.motors[0])) {
@@ -259,6 +287,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
   output_command->actuator_control.y = control_group[1];
   output_command->actuator_control.z = control_group[2];
   output_command->thrust             = control_group[3];
+
+  output_command->desired_acceleration.x = desired_x_accel;
+  output_command->desired_acceleration.y = desired_y_accel;
+  output_command->desired_acceleration.z = desired_z_accel;
+
+  output_command->attitude = mrs_lib::AttitudeConverter(0, 0, 0).setHeading(control_reference->heading);
 
   output_command->mass_difference = 0;
   output_command->total_mass      = _uav_mass_;
