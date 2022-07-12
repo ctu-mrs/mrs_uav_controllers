@@ -6,6 +6,8 @@
 
 #include <mrs_uav_managers/controller.h>
 #include <mrs_msgs/ActuatorControl.h>
+#include <mrs_msgs/ActuatorControlIn.h>
+#include <mrs_msgs/ActuatorControlOut.h>
 
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
@@ -13,6 +15,8 @@
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/service_client_handler.h>
+#include <mrs_lib/publisher_handler.h>
+#include <mrs_lib/subscribe_handler.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
 
@@ -54,6 +58,7 @@ private:
   ros::NodeHandle nh_;
 
   std::string _version_;
+  int         _mode_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
@@ -88,6 +93,18 @@ private:
   mrs_lib::ServiceClientHandler<mrs_msgs::ActuatorControl> sc_actuator_control_;
 
   std::future<mrs_msgs::ActuatorControl> future_service_result_;
+
+  // | ----------------------- publishers ----------------------- |
+
+  mrs_lib::PublisherHandler<mrs_msgs::ActuatorControlOut> ph_out_;
+
+  // | ----------------------- subscribers ---------------------- |
+
+  mrs_lib::SubscribeHandler<mrs_msgs::ActuatorControlIn> sh_in_;
+
+  void callbackActuatorControl(mrs_lib::SubscribeHandler<mrs_msgs::ActuatorControlIn>& wrp);
+
+  std::atomic<bool> got_response_ = false;
 };
 
 //}
@@ -113,6 +130,7 @@ void MotorController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unuse
   mrs_lib::ParamLoader param_loader(nh_, "MotorController");
 
   param_loader.loadParam("version", _version_);
+  param_loader.loadParam("mode", _mode_);
 
   _allocation_matrix_ = param_loader.loadMatrixDynamic2("allocation_matrix", 4, -1);
 
@@ -130,6 +148,23 @@ void MotorController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unuse
   // | --------------------- service clients -------------------- |
 
   sc_actuator_control_ = mrs_lib::ServiceClientHandler<mrs_msgs::ActuatorControl>(nh_, "actuator_control_srv_out");
+
+  // | ----------------------- publishers ----------------------- |
+
+  ph_out_ = mrs_lib::PublisherHandler<mrs_msgs::ActuatorControlOut>(nh_, "actuator_control_out", 10);
+
+  // | ----------------------- subscribers ---------------------- |
+
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.nh                 = nh_;
+  shopts.node_name          = "MotorController";
+  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
+  shopts.queue_size         = 10;
+  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
+
+  sh_in_ = mrs_lib::SubscribeHandler<mrs_msgs::ActuatorControlIn>(shopts, "actuator_control_in", &MotorController::callbackActuatorControl, this);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -193,35 +228,73 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
+  // | ------------------------- request ------------------------ |
+
+  mrs_msgs::ActuatorControlOut msg_out;
+
+  msg_out.header    = uav_state->header;
+  msg_out.uav_state = *uav_state;
+  msg_out.reference = *control_reference;
+
+  // | ------------------------- result ------------------------- |
+
+  mrs_msgs::ActuatorControlIn msg_in;
+
   // | ------------------ prepeare service out ------------------ |
 
-  mrs_msgs::ActuatorControl srv_out;
+  if (_mode_ == 0) {
 
-  srv_out.request.header    = uav_state->header;
-  srv_out.request.uav_state = *uav_state;
-  srv_out.request.reference = *control_reference;
+    mrs_msgs::ActuatorControl srv_out;
+    srv_out.request.request = msg_out;
 
-  future_service_result_ = sc_actuator_control_.callAsync(srv_out);
+    future_service_result_ = sc_actuator_control_.callAsync(srv_out);
 
-  int i = 0;
+    int i = 0;
 
-  while (ros::ok() && future_service_result_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+    while (ros::ok() && future_service_result_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
 
-    if (i > 10) {
-      ROS_WARN("[MotorController]: control service call takes more than 10 ms!");
-    } else if (i > 20) {
-      ROS_ERROR("[MotorController]: control service call takes more than 20 ms!");
+      if (i > 10) {
+        ROS_WARN("[MotorController]: control service call takes more than 10 ms!");
+      } else if (i > 20) {
+        ROS_ERROR("[MotorController]: control service call takes more than 20 ms!");
+      }
+
+      if (i++ > 100) {
+        ROS_WARN("[MotorController]: service request timeouted, switching back");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
     }
 
-    if (i++ > 100) {
-      ROS_WARN("[MotorController]: service request timeouted, switching back");
-      return mrs_msgs::AttitudeCommand::ConstPtr();
+    msg_in = future_service_result_.get().response.response;
+
+  } else {
+
+    got_response_ = false;
+
+    ph_out_.publish(msg_out);
+
+    int i = 0;
+
+    while (ros::ok() && !got_response_) {
+
+      ros::Duration(0.001).sleep();
+
+      if (i > 10) {
+        ROS_WARN("[MotorController]: control topic takes more than 10 ms!");
+      } else if (i > 20) {
+        ROS_ERROR("[MotorController]: control topic takes more than 20 ms!");
+      }
+
+      if (i++ > 100) {
+        ROS_WARN("[MotorController]: topic request timeouted, switching back");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
     }
+
+    msg_in = *sh_in_.getMsg();
   }
 
-  auto result = future_service_result_.get();
-
-  if (!result.response.success) {
+  if (!msg_in.success) {
     ROS_WARN("[MotorController]: received false status from the external controller, switching back");
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -236,14 +309,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
   double desired_z_accel = 0;
 
   {
-
     geometry_msgs::Vector3Stamped world_accel;
 
     world_accel.header.stamp    = ros::Time::now();
     world_accel.header.frame_id = uav_state->header.frame_id;
-    world_accel.vector.x        = result.response.desired_acceleration.x;
-    world_accel.vector.y        = result.response.desired_acceleration.y;
-    world_accel.vector.z        = result.response.desired_acceleration.z;
+    world_accel.vector.x        = msg_in.desired_acceleration.x;
+    world_accel.vector.y        = msg_in.desired_acceleration.y;
+    world_accel.vector.z        = msg_in.desired_acceleration.z;
 
     auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
 
@@ -259,27 +331,27 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
 
   Eigen::Vector4d motors;
 
-  if (!std::isfinite(result.response.motors[0])) {
-    ROS_ERROR("NaN detected in variable \"result.response.motors[0]\"!!!");
+  if (!std::isfinite(msg_in.motors[0])) {
+    ROS_ERROR("NaN detected in variable \"msg_in.motors[0]\"!!!");
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (!std::isfinite(result.response.motors[1])) {
-    ROS_ERROR("NaN detected in variable \"result.response.motors[1]\"!!!");
+  if (!std::isfinite(msg_in.motors[1])) {
+    ROS_ERROR("NaN detected in variable \"msg_in.motors[1]\"!!!");
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (!std::isfinite(result.response.motors[2])) {
-    ROS_ERROR("NaN detected in variable \"result.response.motors[2]\"!!!");
+  if (!std::isfinite(msg_in.motors[2])) {
+    ROS_ERROR("NaN detected in variable \"msg_in.motors[2]\"!!!");
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (!std::isfinite(result.response.motors[3])) {
-    ROS_ERROR("NaN detected in variable \"result.response.motors[3]\"!!!");
+  if (!std::isfinite(msg_in.motors[3])) {
+    ROS_ERROR("NaN detected in variable \"msg_in.motors[3]\"!!!");
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  motors << result.response.motors[0], result.response.motors[1], result.response.motors[2], result.response.motors[3];
+  motors << msg_in.motors[0], msg_in.motors[1], msg_in.motors[2], msg_in.motors[3];
 
   Eigen::Vector4d control_group = _allocation_matrix_ * motors;
 
@@ -357,6 +429,20 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr MotorController::setCon
   res.message = "constraints updated";
 
   return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+}
+
+//}
+
+// | ------------------------ callbacks ----------------------- |
+
+/* callbackActuatroControl() //{ */
+
+void MotorController::callbackActuatorControl([[maybe_unused]] mrs_lib::SubscribeHandler<mrs_msgs::ActuatorControlIn>& wrp) {
+
+  if (!is_initialized_)
+    return;
+
+  got_response_ = true;
 }
 
 //}
