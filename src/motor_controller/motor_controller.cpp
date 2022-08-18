@@ -267,7 +267,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
 
     msg_in = future_service_result_.get().response.response;
 
-  } else {
+  } else if (_mode_ == 1) {
 
     got_response_ = false;
 
@@ -292,12 +292,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr MotorController::update(const mrs_msgs
     }
 
     msg_in = *sh_in_.getMsg();
+
+  } else if (_mode_ == 2) {
+
+    mrs_msgs::ActuatorControlIn msg_in;
   }
 
   if (!msg_in.success) {
     ROS_WARN("[MotorController]: received false status from the external controller, switching back");
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
+
+  ROS_INFO("[MotorController]: response is %.3 s old", (ros::Time::now() - msg_in.header.stamp).toSec());
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
   output_command->header.stamp = ros::Time::now();
