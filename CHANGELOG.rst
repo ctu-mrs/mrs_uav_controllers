@@ -2,6 +2,12 @@
 Changelog for package mrs_controllers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* adding big dofec stuff
+* updated dofec motor params
+* Contributors: Dan Hert, Tomas Baca
+
 1.0.3 (2022-05-09)
 ------------------
 * added dit2 motor params
