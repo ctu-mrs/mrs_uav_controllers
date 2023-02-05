@@ -31,7 +31,7 @@ public:
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &control_reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::TrackerCommand::ConstPtr &control_reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state);
@@ -163,7 +163,7 @@ void MidairActivationController::deactivate(void) {
 /* update() //{ */
 
 const mrs_msgs::AttitudeCommand::ConstPtr MidairActivationController::update([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &       uav_state,
-                                                                             [[maybe_unused]] const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
+                                                                             [[maybe_unused]] const mrs_msgs::TrackerCommand::ConstPtr &control_reference) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer =
@@ -175,7 +175,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MidairActivationController::update([[m
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (control_reference == mrs_msgs::PositionCommand::Ptr()) {
+  if (control_reference == mrs_msgs::TrackerCommand::Ptr()) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 

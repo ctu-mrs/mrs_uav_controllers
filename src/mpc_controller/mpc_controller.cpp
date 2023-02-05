@@ -44,7 +44,7 @@ public:
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::PositionCommand::ConstPtr &control_reference);
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::TrackerCommand::ConstPtr &control_reference);
   const mrs_msgs::ControllerStatus          getStatus();
 
   void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state);
@@ -443,7 +443,7 @@ void MpcController::deactivate(void) {
 /* //{ update() */
 
 const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::UavState::ConstPtr &       uav_state,
-                                                                const mrs_msgs::PositionCommand::ConstPtr &control_reference) {
+                                                                const mrs_msgs::TrackerCommand::ConstPtr &control_reference) {
 
   mrs_lib::Routine    profiler_routine = profiler.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("MpcController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
@@ -458,7 +458,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (control_reference == mrs_msgs::PositionCommand::Ptr()) {
+  if (control_reference == mrs_msgs::TrackerCommand::Ptr()) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
@@ -843,7 +843,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr MpcController::update(const mrs_msgs::
     ROS_INFO("[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f[0], f[1], f[2]);
     ROS_INFO("[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback[0], integral_feedback[1], integral_feedback[2]);
     ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[%s]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), control_reference->position.x, control_reference->position.y,
+    ROS_INFO("[%s]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), control_reference->position.x, control_reference->position.y,
              control_reference->position.z, control_reference->heading);
     ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), uav_state->pose.position.x, uav_state->pose.position.y,
              uav_state->pose.position.z, uav_heading);
