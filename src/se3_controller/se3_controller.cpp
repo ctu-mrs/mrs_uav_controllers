@@ -35,13 +35,17 @@ class Se3Controller : public mrs_uav_managers::Controller {
 public:
   ~Se3Controller(){};
 
+  mrs_uav_managers::Controller::ControllerOutputs probeControllerOutputs(void);
+
   void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space, const double uav_mass,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd);
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::TrackerCommand::ConstPtr& control_reference);
-  const mrs_msgs::ControllerStatus          getStatus();
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::TrackerCommand::ConstPtr& control_reference,
+                                                   const mrs_uav_managers::Controller::ControllerOutputs& output_modalities);
+
+  const mrs_msgs::ControllerStatus getStatus();
 
   void switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new_uav_state);
 
@@ -164,6 +168,25 @@ private:
 // --------------------------------------------------------------
 // |                   controller's interface                   |
 // --------------------------------------------------------------
+
+/* probeControllerOutputs() //{ */
+
+mrs_uav_managers::Controller::ControllerOutputs Se3Controller::probeControllerOutputs(void) {
+
+  mrs_uav_managers::Controller::ControllerOutputs outputs;
+
+  outputs.position      = false;
+  outputs.acceleration  = false;
+  outputs.velocity      = false;
+  outputs.attitude      = true;
+  outputs.attitude_rate = true;
+  outputs.control_group = false;
+  outputs.actuators     = false;
+
+  return outputs;
+}
+
+//}
 
 /* //{ initialize() */
 
@@ -383,8 +406,9 @@ void Se3Controller::deactivate(void) {
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::UavState::ConstPtr&       uav_state,
-                                                                const mrs_msgs::TrackerCommand::ConstPtr& control_reference) {
+const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::UavState::ConstPtr&                    uav_state,
+                                                                const mrs_msgs::TrackerCommand::ConstPtr&              control_reference,
+                                                                const mrs_uav_managers::Controller::ControllerOutputs& output_modalities) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
