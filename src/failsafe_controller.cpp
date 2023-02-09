@@ -4,6 +4,8 @@
 
 #include <ros/ros.h>
 
+#include <common.h>
+
 #include <mrs_uav_managers/controller.h>
 
 #include <mrs_lib/profiler.h>
@@ -24,8 +26,6 @@ class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
   ~FailsafeController(){};
-
-  mrs_uav_managers::Controller::ControllerOutputs probeControllerOutputs(void);
 
   void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
@@ -86,25 +86,6 @@ private:
 // --------------------------------------------------------------
 // |                   controller's interface                   |
 // --------------------------------------------------------------
-
-/* probeControllerOutputs() //{ */
-
-mrs_uav_managers::Controller::ControllerOutputs FailsafeController::probeControllerOutputs(void) {
-
-  mrs_uav_managers::Controller::ControllerOutputs outputs;
-
-  outputs.position      = false;
-  outputs.acceleration  = false;
-  outputs.velocity      = false;
-  outputs.attitude      = true;
-  outputs.attitude_rate = true;
-  outputs.control_group = false;
-  outputs.actuators     = false;
-
-  return outputs;
-}
-
-//}
 
 /* initialize() //{ */
 

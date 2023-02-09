@@ -76,7 +76,8 @@ endif()
 # SE3 controller
 
 add_library(Se3Controller
-  src/se3_controller/se3_controller.cpp
+  src/se3_controller.cpp
+  src/common.cpp
   )
 
 add_dependencies(Se3Controller
@@ -92,7 +93,8 @@ target_link_libraries(Se3Controller
 # Mpc controller
 
 add_library(MpcController
-  src/mpc_controller/mpc_controller.cpp
+  src/mpc_controller.cpp
+  src/common.cpp
   )
 
 add_dependencies(MpcController
@@ -109,7 +111,8 @@ target_link_libraries(MpcController
 # Failsafe controller
 
 add_library(FailsafeController
-  src/failsafe_controller/failsafe_controller.cpp
+  src/failsafe_controller.cpp
+  src/common.cpp
   )
 
 add_dependencies(FailsafeController
@@ -124,7 +127,8 @@ target_link_libraries(FailsafeController
 # Midair Activation Controller
 
 add_library(MidairActivationController
-  src/midair_activation_controller/midair_activation_controller.cpp
+  src/midair_activation_controller.cpp
+  src/common.cpp
   )
 
 add_dependencies(MidairActivationController

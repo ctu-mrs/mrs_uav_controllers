@@ -4,6 +4,8 @@
 
 #include <ros/ros.h>
 
+#include <common.h>
+
 #include <mrs_uav_managers/controller.h>
 
 #include <dynamic_reconfigure/server.h>
@@ -34,8 +36,6 @@ class Se3Controller : public mrs_uav_managers::Controller {
 
 public:
   ~Se3Controller(){};
-
-  mrs_uav_managers::Controller::ControllerOutputs probeControllerOutputs(void);
 
   void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space, const double uav_mass,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
@@ -168,25 +168,6 @@ private:
 // --------------------------------------------------------------
 // |                   controller's interface                   |
 // --------------------------------------------------------------
-
-/* probeControllerOutputs() //{ */
-
-mrs_uav_managers::Controller::ControllerOutputs Se3Controller::probeControllerOutputs(void) {
-
-  mrs_uav_managers::Controller::ControllerOutputs outputs;
-
-  outputs.position      = false;
-  outputs.acceleration  = false;
-  outputs.velocity      = false;
-  outputs.attitude      = true;
-  outputs.attitude_rate = true;
-  outputs.control_group = false;
-  outputs.actuators     = false;
-
-  return outputs;
-}
-
-//}
 
 /* //{ initialize() */
 
@@ -737,48 +718,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3Controller::update(const mrs_msgs::
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
-    // fill in the desired orientation based on the state feedback
-    if (drs_params.rotation_type == 0) {
-
-      Rd.col(2) = f_norm;
-      Rd.col(1) = Rd.col(2).cross(bxd);
-      Rd.col(1).normalize();
-      Rd.col(0) = Rd.col(1).cross(Rd.col(2));
-      Rd.col(0).normalize();
-
-    } else {
-
-      // | ------------------------- body z ------------------------- |
-      Rd.col(2) = f_norm;
-
-      // | ------------------------- body x ------------------------- |
-
-      // construct the oblique projection
-      Eigen::Matrix3d projector_body_z_compl = (Eigen::Matrix3d::Identity(3, 3) - f_norm * f_norm.transpose());
-
-      // create a basis of the body-z complement subspace
-      Eigen::MatrixXd A = Eigen::MatrixXd(3, 2);
-      A.col(0)          = projector_body_z_compl.col(0);
-      A.col(1)          = projector_body_z_compl.col(1);
-
-      // create the basis of the projection null-space complement
-      Eigen::MatrixXd B = Eigen::MatrixXd(3, 2);
-      B.col(0)          = Eigen::Vector3d(1, 0, 0);
-      B.col(1)          = Eigen::Vector3d(0, 1, 0);
-
-      // oblique projector to <range_basis>
-      Eigen::MatrixXd Bt_A               = B.transpose() * A;
-      Eigen::MatrixXd Bt_A_pseudoinverse = ((Bt_A.transpose() * Bt_A).inverse()) * Bt_A.transpose();
-      Eigen::MatrixXd oblique_projector  = A * Bt_A_pseudoinverse * B.transpose();
-
-      Rd.col(0) = oblique_projector * bxd;
-      Rd.col(0).normalize();
-
-      // | ------------------------- body y ------------------------- |
-
-      Rd.col(1) = Rd.col(2).cross(Rd.col(0));
-      Rd.col(1).normalize();
-    }
+    Rd = common::so3transform(f_norm, bxd, drs_params.rotation_type == 1);
   }
 
   // --------------------------------------------------------------
