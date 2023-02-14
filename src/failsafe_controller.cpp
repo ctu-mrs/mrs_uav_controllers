@@ -28,12 +28,13 @@ public:
   ~FailsafeController(){};
 
   void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
-                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
-  void deactivate(void);
+                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t>    common_handlers,
+                  const mrs_uav_managers::Controller::ControllerOutputs &output_modalities);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::TrackerCommand::ConstPtr &control_reference,
-                                                   const mrs_uav_managers::Controller::ControllerOutputs &output_modalities);
+  virtual bool activate(const ControlOutput &last_control_output) = 0;
+  void         deactivate(void);
+
+  ControlOutput update(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
@@ -69,8 +70,8 @@ private:
 
   // | ------------------ activation and output ----------------- |
 
-  mrs_msgs::AttitudeCommand::ConstPtr last_attitude_cmd_;
-  mrs_msgs::AttitudeCommand           activation_attitude_cmd_;
+  ControlOutput last_control_output_;
+  ControlOutput activation_control_output_;
 
   ros::Time last_update_time_;
   bool      first_iteration_ = true;
@@ -159,10 +160,10 @@ bool FailsafeController::activate(const mrs_msgs::AttitudeCommand::ConstPtr &las
 
     ROS_INFO("[FailsafeController]: activated with yaw: %.2f rad", yaw_setpoint_);
 
-    activation_attitude_cmd_ = *last_attitude_cmd;
-    uav_mass_difference_     = last_attitude_cmd->mass_difference;
+    activation_control_output_ = *last_attitude_cmd;
+    uav_mass_difference_       = last_attitude_cmd->mass_difference;
 
-    activation_attitude_cmd_.controller_enforcing_constraints = false;
+    activation_control_output_.controller_enforcing_constraints = false;
 
     hover_thrust_ = _initial_thrust_percentage_ *
                     mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
@@ -194,9 +195,8 @@ void FailsafeController::deactivate(void) {
 
 /* update() //{ */
 
-const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &      uav_state,
-                                                                     [[maybe_unused]] const mrs_msgs::TrackerCommand::ConstPtr &control_reference,
-                                                                     const mrs_uav_managers::Controller::ControllerOutputs &    output_modalities) {
+FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::UavState &                     uav_state,
+                                                             const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
 
   // WARNING: this mutex keeps the disarming routine from being called during the same moment, when the update routine is being called
   // If we try to disarm during the update() execution, it will freeze, since the update() is being called by the control manager
@@ -208,11 +208,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   if (!is_active_) {
-    return mrs_msgs::AttitudeCommand::ConstPtr();
+    return ControlOutput();
   }
 
-  if (control_reference == mrs_msgs::TrackerCommand::Ptr()) {
-    return mrs_msgs::AttitudeCommand::ConstPtr();
+  if (!tracker_command) {
+    return ControlOutput();
   }
 
   // | -------------------- calculate the dt -------------------- |
@@ -235,13 +235,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
 
       ROS_WARN_THROTTLE(0.1, "[FailsafeController]: the update was called with too small dt (%.3f s)!", dt);
 
-      if (last_attitude_cmd_ != mrs_msgs::AttitudeCommand::Ptr()) {
+      if (last_control_output_.control_output) {
 
-        return last_attitude_cmd_;
+        return last_control_output_;
 
       } else {
 
-        return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
+        return activation_control_output_;
       }
     }
 
@@ -281,7 +281,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr FailsafeController::update([[maybe_unu
 
   output_command->controller = "FailsafeController";
 
-  last_attitude_cmd_ = output_command;
+  last_control_output_ = output_command;
 
   return output_command;
 }
