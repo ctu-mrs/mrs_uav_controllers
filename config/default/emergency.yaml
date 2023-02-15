@@ -18,4 +18,4 @@ attitude_feedback:
 
   # saturations and limits
   tilt_angle_failsafe: 90.0 # [deg], disabled when 0.0
-  thrust_saturation: 0.9 # [-], range from 0 to 1
+  throttle_saturation: 0.9 # [-], range from 0 to 1

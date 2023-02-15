@@ -28,17 +28,18 @@ class MidairActivationController : public mrs_uav_managers::Controller {
 public:
   ~MidairActivationController(){};
 
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space, const double uav_mass,
+  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd);
+
+  bool activate(const ControlOutput &last_control_output);
+
   void deactivate(void);
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr &uav_state, const mrs_msgs::TrackerCommand::ConstPtr &control_reference,
-                                                   const mrs_uav_managers::Controller::ControllerOutputs &output_modalities);
+  MidairActivationController::ControlOutput update(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &control_reference);
 
   const mrs_msgs::ControllerStatus getStatus();
 
-  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr &new_uav_state);
+  void switchOdometrySource(const mrs_msgs::UavState& new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -62,16 +63,16 @@ private:
   double _uav_mass_;
   double uav_mass_difference_;
 
-  double hover_thrust_;
-
-  // | ----------------------- yaw control ---------------------- |
-
-  double heading_setpoint_;
+  double hover_throttle_;
 
   // | ------------------------ profiler ------------------------ |
 
   mrs_lib::Profiler profiler_;
   bool              _profiler_enabled_ = false;
+
+  // | ------------------------ routines ------------------------ |
+
+  double getHeadingSafely(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
 };
 
 //}
@@ -83,12 +84,12 @@ private:
 /* initialize() //{ */
 
 void MidairActivationController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                                            const double uav_mass, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
+                                            std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
-  _uav_mass_       = uav_mass;
+  _uav_mass_       = common_handlers->getMass();
 
   ros::Time::waitForValid();
 
@@ -108,7 +109,7 @@ void MidairActivationController::initialize(const ros::NodeHandle &parent_nh, [[
 
   // | ----------- calculate the default hover thrust ----------- |
 
-  hover_thrust_ = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, _uav_mass_ * common_handlers_->g);
+  hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g);
 
   // | ------------------------ profiler ------------------------ |
 
@@ -125,23 +126,13 @@ void MidairActivationController::initialize(const ros::NodeHandle &parent_nh, [[
 
 /* activate() //{ */
 
-bool MidairActivationController::activate([[maybe_unused]] const mrs_msgs::AttitudeCommand::ConstPtr &last_attitude_cmd) {
+bool MidairActivationController::activate([[maybe_unused]] const ControlOutput &last_control_output) {
 
   ROS_INFO("[MidairActivationController]: activating");
 
   auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
 
-  try {
-    heading_setpoint_ = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
-  }
-  catch (...) {
-    ROS_WARN_THROTTLE(1.0, "[MidairActivationController]: could not calculate heading");
-    heading_setpoint_ = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYaw();
-  }
-
-  ROS_INFO("[MidairActivationController]: activated with heading: %.2f rad", heading_setpoint_);
-
-  hover_thrust_ = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, _uav_mass_ * common_handlers_->g);
+  hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g);
 
   is_active_ = true;
 
@@ -166,47 +157,156 @@ void MidairActivationController::deactivate(void) {
 
 /* update() //{ */
 
-const mrs_msgs::AttitudeCommand::ConstPtr MidairActivationController::update([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &      uav_state,
-                                                                             [[maybe_unused]] const mrs_msgs::TrackerCommand::ConstPtr &control_reference,
-                                                                             const mrs_uav_managers::Controller::ControllerOutputs &    output_modalities) {
+MidairActivationController::ControlOutput MidairActivationController::update(
+    [[maybe_unused]] const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &control_reference) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer =
       mrs_lib::ScopeTimer("MidairActivationController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
-  mrs_lib::set_mutexed(mutex_uav_state_, *uav_state, uav_state_);
+  mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
   if (!is_active_) {
-    return mrs_msgs::AttitudeCommand::ConstPtr();
+    return Controller::ControlOutput();
   }
 
-  if (control_reference == mrs_msgs::TrackerCommand::Ptr()) {
-    return mrs_msgs::AttitudeCommand::ConstPtr();
+  if (!control_reference) {
+    return Controller::ControlOutput();
   }
 
   // | --------------- prepare the control output --------------- |
 
-  mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
+  ControlOutput control_output;
 
-  output_command->header.stamp = ros::Time::now();
+  control_output.diagnostics.controller = "FailsafeController";
 
-  output_command->attitude = mrs_lib::AttitudeConverter(0, 0, 0).setHeading(heading_setpoint_);
+  if (common_handlers_->control_output_modalities.position) {
 
-  output_command->thrust    = hover_thrust_;
-  output_command->mode_mask = output_command->MODE_ATTITUDE;
+    mrs_msgs::HwApiPositionCmd cmd;
 
-  output_command->mass_difference = uav_mass_difference_;
-  output_command->total_mass      = _uav_mass_ + uav_mass_difference_;
+    cmd.header.stamp    = ros::Time::now();
+    cmd.header.frame_id = uav_state.header.frame_id;
 
-  output_command->desired_acceleration.x = 0;
-  output_command->desired_acceleration.y = 0;
-  output_command->desired_acceleration.z = 0;
+    cmd.position.x = uav_state.pose.position.x;
+    cmd.position.y = uav_state.pose.position.y;
+    cmd.position.z = uav_state.pose.position.z;
 
-  output_command->controller_enforcing_constraints = false;
+    cmd.heading = getHeadingSafely(uav_state, control_reference.value());
 
-  output_command->controller = "MidairActivationController";
+    control_output.control_output = cmd;
 
-  return output_command;
+  } else if (common_handlers_->control_output_modalities.velocity_hdg) {
+
+    mrs_msgs::HwApiVelocityHdgCmd cmd;
+
+    cmd.header.stamp    = ros::Time::now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.velocity.x = uav_state.velocity.linear.x;
+    cmd.velocity.y = uav_state.velocity.linear.y;
+    cmd.velocity.z = uav_state.velocity.linear.z;
+
+    cmd.heading = getHeadingSafely(uav_state, control_reference.value());
+
+    control_output.control_output = cmd;
+
+  } else if (common_handlers_->control_output_modalities.velocity_hdg_rate) {
+
+    mrs_msgs::HwApiVelocityHdgRateCmd cmd;
+
+    cmd.header.stamp    = ros::Time::now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.velocity.x = uav_state.velocity.linear.x;
+    cmd.velocity.y = uav_state.velocity.linear.y;
+    cmd.velocity.z = uav_state.velocity.linear.z;
+
+    cmd.heading_rate = 0;
+
+    control_output.control_output = cmd;
+
+  } else if (common_handlers_->control_output_modalities.acceleration_hdg) {
+
+    mrs_msgs::HwApiAccelerationHdgCmd cmd;
+
+    cmd.header.stamp    = ros::Time::now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.acceleration.x = 0;
+    cmd.acceleration.y = 0;
+    cmd.acceleration.z = 0;
+
+    cmd.heading = getHeadingSafely(uav_state, control_reference.value());
+
+    control_output.control_output = cmd;
+
+  } else if (common_handlers_->control_output_modalities.acceleration_hdg_rate) {
+
+    mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
+
+    cmd.header.stamp    = ros::Time::now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.acceleration.x = 0;
+    cmd.acceleration.y = 0;
+    cmd.acceleration.z = 0;
+
+    cmd.heading_rate = 0;
+
+    control_output.control_output = cmd;
+
+  } else if (common_handlers_->control_output_modalities.attitude) {
+
+    mrs_msgs::HwApiAttitudeCmd cmd;
+
+    cmd.stamp = ros::Time::now();
+
+    cmd.orientation = uav_state.pose.orientation;
+    cmd.throttle    = hover_throttle_;
+
+    control_output.control_output = cmd;
+
+  } else if (common_handlers_->control_output_modalities.attitude_rate) {
+
+    mrs_msgs::HwApiAttitudeRateCmd cmd;
+
+    cmd.stamp = ros::Time::now();
+
+    cmd.body_rate.x = 0;
+    cmd.body_rate.y = 0;
+    cmd.body_rate.z = 0;
+
+    cmd.throttle = hover_throttle_;
+
+    control_output.control_output = cmd;
+
+  } else if (common_handlers_->control_output_modalities.control_group) {
+
+    mrs_msgs::HwApiControlGroupCmd cmd;
+
+    cmd.stamp = ros::Time::now();
+
+    cmd.roll     = 0;
+    cmd.pitch    = 0;
+    cmd.yaw      = 0;
+    cmd.throttle = hover_throttle_;
+
+    control_output.control_output = cmd;
+
+  } else if (common_handlers_->control_output_modalities.actuators) {
+
+    mrs_msgs::HwApiActuatorCmd cmd;
+
+    cmd.stamp = ros::Time::now();
+
+    for (int i = 0; i < common_handlers_->throttle_model.n_motors; i++) {
+      cmd.motors.push_back(hover_throttle_);
+    }
+
+    control_output.control_output = cmd;
+  }
+
+  return control_output;
 }
 
 //}
@@ -226,7 +326,7 @@ const mrs_msgs::ControllerStatus MidairActivationController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void MidairActivationController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState::ConstPtr &new_uav_state) {
+void MidairActivationController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState &new_uav_state) {
 }
 
 //}
@@ -244,6 +344,31 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr MidairActivationControl
     [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
 
   return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+}
+
+//}
+
+/* getHeadingSafely() //{ */
+
+double MidairActivationController::getHeadingSafely(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
+  }
+  catch (...) {
+  }
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYaw();
+  }
+  catch (...) {
+  }
+
+  if (tracker_command.use_heading) {
+    return tracker_command.heading;
+  }
+
+  return 0;
 }
 
 //}

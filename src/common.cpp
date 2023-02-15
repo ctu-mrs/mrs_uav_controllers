@@ -63,7 +63,7 @@ Eigen::Matrix3d so3transform(const Eigen::Vector3d& body_z, const ::Eigen::Vecto
 
 /* getLowestOutput() //{ */
 
-std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::Controller::ControllerOutputs& outputs) {
+std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::ControlOutputModalities_t& outputs) {
 
   if (outputs.actuators) {
     return ACTUATORS_CMD;
@@ -81,12 +81,20 @@ std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::Controller:
     return ATTITUDE;
   }
 
-  if (outputs.acceleration) {
-    return ACCELERATION;
+  if (outputs.acceleration_hdg_rate) {
+    return ACCELERATION_HDG_RATE;
   }
 
-  if (outputs.velocity) {
-    return VELOCITY;
+  if (outputs.acceleration_hdg) {
+    return ACCELERATION_HDG;
+  }
+
+  if (outputs.velocity_hdg_rate) {
+    return VELOCITY_HDG_RATE;
+  }
+
+  if (outputs.velocity_hdg) {
+    return VELOCITY_HDG;
   }
 
   if (outputs.position) {
@@ -100,18 +108,26 @@ std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::Controller:
 
 /* getHighestOutput() //{ */
 
-std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::Controller::ControllerOutputs& outputs) {
+std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::ControlOutputModalities_t& outputs) {
 
   if (outputs.position) {
     return POSITION;
   }
 
-  if (outputs.velocity) {
-    return VELOCITY;
+  if (outputs.velocity_hdg) {
+    return VELOCITY_HDG;
   }
 
-  if (outputs.acceleration) {
-    return ACCELERATION;
+  if (outputs.velocity_hdg_rate) {
+    return VELOCITY_HDG_RATE;
+  }
+
+  if (outputs.acceleration_hdg) {
+    return ACCELERATION_HDG;
+  }
+
+  if (outputs.acceleration_hdg_rate) {
+    return ACCELERATION_HDG_RATE;
   }
 
   if (outputs.attitude) {
@@ -131,6 +147,19 @@ std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::Controller
   }
 
   return {};
+}
+
+//}
+
+/* extractThrottle() //{ */
+
+std::optional<double> extractThrottle(const mrs_uav_managers::Controller::ControlOutput& control_output) {
+
+  if (!control_output.control_output) {
+    return {};
+  }
+
+  return std::visit(HwApiCmdExtractThrottleVisitor(), control_output.control_output.value());
 }
 
 //}
