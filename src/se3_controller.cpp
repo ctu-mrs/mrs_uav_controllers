@@ -82,7 +82,7 @@ private:
   std::mutex                    mutex_constraints_;
   bool                          got_constraints_ = false;
 
-  // | ---------- thrust generation and mass estimation --------- |
+  // | --------- throttle generation and mass estimation -------- |
 
   double _uav_mass_;
   double uav_mass_difference_;
@@ -234,7 +234,7 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
     ros::shutdown();
   }
 
-  param_loader.loadParam("constraints/thrust_saturation", _throttle_saturation_);
+  param_loader.loadParam("constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
   param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
@@ -340,11 +340,11 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
 
     double hover_throttle =
         mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, last_control_output.diagnostics.total_mass * common_handlers_->g);
-    double thrust_difference = hover_throttle - throttle_last_controller.value();
+    double throttle_difference = hover_throttle - throttle_last_controller.value();
 
-    if (thrust_difference > 0) {
+    if (throttle_difference > 0) {
       rampup_direction_ = 1;
-    } else if (thrust_difference < 0) {
+    } else if (throttle_difference < 0) {
       rampup_direction_ = -1;
     } else {
       rampup_direction_ = 0;
@@ -357,7 +357,7 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
     rampup_last_time_  = ros::Time::now();
     rampup_throttle_   = throttle_last_controller.value();
 
-    rampup_duration_ = fabs(thrust_difference) / _rampup_speed_;
+    rampup_duration_ = fabs(throttle_difference) / _rampup_speed_;
   }
 
   first_iteration_ = true;
@@ -422,7 +422,7 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
     ROS_INFO("[Se3Controller]: first iteration");
 
-    return {activation_control_output_};
+    dt = 0.01;
 
   } else {
 
@@ -742,30 +742,30 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
         (E(1, 0) - E(0, 1)) / 2.0;
   // clang-format on
 
-  double thrust_force = f.dot(R.col(2));
-  double throttle     = 0;
+  double throttle_force = f.dot(R.col(2));
+  double throttle       = 0;
 
-  if (!tracker_command->use_thrust) {
-    if (thrust_force >= 0) {
-      throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, thrust_force);
+  if (!tracker_command->use_throttle) {
+    if (throttle_force >= 0) {
+      throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, throttle_force);
     } else {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", throttle_force);
     }
   } else {
-    // the thrust is overriden from the tracker command
-    throttle = tracker_command->thrust;
+    // the throttle is overriden from the tracker command
+    throttle = tracker_command->throttle;
   }
 
-  // saturate the thrust
+  // saturate throttle
   if (!std::isfinite(throttle)) {
 
     throttle = 0;
-    ROS_ERROR("[Se3Controller]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
+    ROS_ERROR("[Se3Controller]: NaN detected in variable 'throttle', setting it to 0 and returning!!!");
 
   } else if (throttle > _throttle_saturation_) {
 
     throttle = _throttle_saturation_;
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating thrust to %.2f", _throttle_saturation_);
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to %.2f", _throttle_saturation_);
     ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
     ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command->position.x,
                       tracker_command->position.y, tracker_command->position.z, tracker_command->heading);
@@ -785,7 +785,7 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
   } else if (throttle < 0.0) {
 
     throttle = 0.0;
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating thrust to 0");
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to 0");
     ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
     ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command->position.x,
                       tracker_command->position.y, tracker_command->position.z, tracker_command->heading);
@@ -831,7 +831,7 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
     Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command->jerk.x, tracker_command->jerk.y, tracker_command->jerk.z);
-    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force / total_mass);
+    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (throttle_force / total_mass);
   }
 
   // angular feedback + angular rate feedforward
@@ -1066,7 +1066,7 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
   {
 
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d thrust_vector   = thrust_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector   = throttle_force * des_orientation.col(2);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
@@ -1125,8 +1125,6 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
   // fill the unbiased desired accelerations
   last_control_output_.desired_unbiased_acceleration = Eigen::Vector3d(desired_x_accel, desired_y_accel, desired_z_accel);
 
-  auto output_mode = common::getHighestOuput(common_handlers_->control_output_modalities);
-
   if (rampup_active_) {
 
     // deactivate the rampup when the times up
@@ -1150,7 +1148,17 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
     }
   }
 
-  if (output_mode == common::ATTITUDE_RATE) {
+  auto output_mode = common::getHighestOuput(common_handlers_->control_output_modalities);
+
+  if (!output_mode) {
+
+    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: output modalities are empty! This error should never appear.");
+    last_control_output_.control_output = {};
+
+    return last_control_output_;
+  }
+
+  if (output_mode.value() == common::ATTITUDE_RATE) {
 
     mrs_msgs::HwApiAttitudeRateCmd cmd;
 
@@ -1162,7 +1170,7 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
     last_control_output_.control_output = cmd;
 
-  } else if (output_mode == common::ATTITUDE) {
+  } else if (output_mode.value() == common::ATTITUDE) {
 
     mrs_msgs::HwApiAttitudeCmd cmd;
 
@@ -1181,7 +1189,7 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
   last_control_output_.diagnostics.ramping_up = rampup_active_;
 
-  last_control_output_.diagnostics.mass_estimator = true;
+  last_control_output_.diagnostics.mass_estimator  = true;
   last_control_output_.diagnostics.mass_difference = uav_mass_difference_;
   last_control_output_.diagnostics.total_mass      = total_mass;
 

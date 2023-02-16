@@ -1310,8 +1310,6 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   // fill the unbiased desired accelerations
   last_control_output_.desired_unbiased_acceleration = Eigen::Vector3d(desired_x_accel, desired_y_accel, desired_z_accel);
 
-  auto output_mode = common::getHighestOuput(common_handlers_->control_output_modalities);
-
   if (rampup_active_) {
 
     // deactivate the rampup when the times up
@@ -1335,7 +1333,17 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     }
   }
 
-  if (output_mode == common::ATTITUDE_RATE) {
+  auto output_mode = common::getHighestOuput(common_handlers_->control_output_modalities);
+
+  if (!output_mode) {
+
+    ROS_ERROR_THROTTLE(1.0, "[MpcController]: output modalities are empty! This error should never appear.");
+    last_control_output_.control_output = {};
+
+    return last_control_output_;
+  }
+
+  if (output_mode.value() == common::ATTITUDE_RATE) {
 
     mrs_msgs::HwApiAttitudeRateCmd cmd;
 
@@ -1347,7 +1355,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
     last_control_output_.control_output = cmd;
 
-  } else if (output_mode == common::ATTITUDE) {
+  } else if (output_mode.value() == common::ATTITUDE) {
 
     mrs_msgs::HwApiAttitudeCmd cmd;
 
