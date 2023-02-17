@@ -48,7 +48,9 @@ public:
 
   void deactivate(void);
 
-  ControlOutput update(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
+  void update(const mrs_msgs::UavState &uav_state);
+
+  ControlOutput update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
@@ -135,8 +137,8 @@ private:
   ControlOutput last_control_output_;
   ControlOutput activation_control_output_;
 
-  ros::Time last_update_time_;
-  bool      first_iteration_ = true;
+  ros::Time         last_update_time_;
+  std::atomic<bool> first_iteration_ = true;
 
   // | ----------------- integral terms enabler ----------------- |
 
@@ -448,23 +450,23 @@ void MpcController::deactivate(void) {
 
 /* //{ update() */
 
-MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
+void MpcController::update(const mrs_msgs::UavState &uav_state) {
+
+  mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
+
+  last_update_time_ = uav_state.header.stamp;
+
+  first_iteration_ = false;
+}
+
+MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("MpcController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
-  {
-    std::scoped_lock lock(mutex_uav_state_);
-
-    uav_state_ = uav_state;
-  }
+  mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
   if (!is_active_) {
-    last_control_output_.control_output = {};
-    return last_control_output_;
-  }
-
-  if (!tracker_command) {
     last_control_output_.control_output = {};
     return last_control_output_;
   }
@@ -473,32 +475,19 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   double dt;
 
-
   if (first_iteration_) {
-
-    last_update_time_ = uav_state.header.stamp;
-
-    first_iteration_ = false;
-
-    ROS_INFO("[MpcController]: first iteration");
-
-    return {activation_control_output_};
-
+    dt = 0.01;
   } else {
-
-    dt                = (uav_state.header.stamp - last_update_time_).toSec();
-    last_update_time_ = uav_state.header.stamp;
+    dt = (uav_state.header.stamp - last_update_time_).toSec();
   }
 
-  if (fabs(dt) <= 0.001) {
+  last_update_time_ = uav_state.header.stamp;
 
-    ROS_DEBUG("[%s]: the last odometry message came too close (%.2f s)!", this->name_.c_str(), dt);
+  if (fabs(dt) < 0.001) {
 
-    if (last_control_output_.control_output) {
-      return last_control_output_;
-    } else {
-      return {activation_control_output_};
-    }
+    ROS_DEBUG("[Se3Controller]: the last odometry message came too close (%.2f s)!", dt);
+
+    dt = 0.01;
   }
 
   // | ----------------- get the current heading ---------------- |
@@ -512,7 +501,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     ROS_ERROR_THROTTLE(1.0, "[%s]: could not calculate the UAV heading", name_.c_str());
   }
 
-  if (tracker_command->disable_antiwindups) {  // TODO why is this here?
+  if (tracker_command.disable_antiwindups) {  // TODO why is this here?
     ROS_INFO_THROTTLE(1.0, "[%s]: antiwindups disabled by tracker", name_.c_str());
   }
 
@@ -534,15 +523,15 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   Eigen::Vector3d Ra = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Rw = Eigen::Vector3d::Zero(3);
 
-  Rp << tracker_command->position.x, tracker_command->position.y, tracker_command->position.z;  // fill the desired position
-  Rv << tracker_command->velocity.x, tracker_command->velocity.y, tracker_command->velocity.z;
+  Rp << tracker_command.position.x, tracker_command.position.y, tracker_command.position.z;  // fill the desired position
+  Rv << tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z;
 
-  if (tracker_command->use_heading_rate) {
+  if (tracker_command.use_heading_rate) {
 
     // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
     double desired_yaw_rate = 0;
     try {
-      desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYawRateIntrinsic(tracker_command->heading_rate);
+      desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYawRateIntrinsic(tracker_command.heading_rate);
     }
     catch (...) {
       ROS_ERROR("[%s]: exception caught while calculating the desired_yaw_rate feedforward", name_.c_str());
@@ -587,7 +576,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     if (fabs(uav_state.acceleration.linear.x) < coef * _max_acceleration_horizontal_) {
       acceleration = uav_state.acceleration.linear.x;
     } else {
-      acceleration = tracker_command->acceleration.x;
+      acceleration = tracker_command.acceleration.x;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state.acceleration.linear.x), coef, _max_acceleration_horizontal_);
@@ -596,7 +585,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     if (fabs(uav_state.velocity.linear.x) < coef * _max_speed_horizontal_) {
       velocity = uav_state.velocity.linear.x;
     } else {
-      velocity = tracker_command->velocity.x;
+      velocity = tracker_command.velocity.x;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state.velocity.linear.x), coef, _max_speed_horizontal_);
@@ -617,7 +606,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     if (fabs(uav_state.acceleration.linear.y) < coef * _max_acceleration_horizontal_) {
       acceleration = uav_state.acceleration.linear.y;
     } else {
-      acceleration = tracker_command->acceleration.y;
+      acceleration = tracker_command.acceleration.y;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state.acceleration.linear.y), coef, _max_acceleration_horizontal_);
@@ -626,7 +615,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     if (fabs(uav_state.velocity.linear.y) < coef * _max_speed_horizontal_) {
       velocity = uav_state.velocity.linear.y;
     } else {
-      velocity = tracker_command->velocity.y;
+      velocity = tracker_command.velocity.y;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state.velocity.linear.y), coef, _max_speed_horizontal_);
@@ -647,7 +636,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     if (fabs(uav_state.acceleration.linear.z) < coef * _max_acceleration_horizontal_) {
       acceleration = uav_state.acceleration.linear.z;
     } else {
-      acceleration = tracker_command->acceleration.z;
+      acceleration = tracker_command.acceleration.z;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state.acceleration.linear.z), coef, _max_acceleration_horizontal_);
@@ -656,7 +645,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     if (fabs(uav_state.velocity.linear.z) < coef * _max_speed_vertical_) {
       velocity = uav_state.velocity.linear.z;
     } else {
-      velocity = tracker_command->velocity.z;
+      velocity = tracker_command.velocity.z;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
                          fabs(uav_state.velocity.linear.z), coef, _max_speed_vertical_);
@@ -676,9 +665,9 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   // prepare the full reference vector
   for (int i = 0; i < _horizon_length_; i++) {
 
-    mpc_reference_x((i * _n_states_) + 0, 0) = tracker_command->position.x;
-    mpc_reference_y((i * _n_states_) + 0, 0) = tracker_command->position.y;
-    mpc_reference_z((i * _n_states_) + 0, 0) = tracker_command->position.z;
+    mpc_reference_x((i * _n_states_) + 0, 0) = tracker_command.position.x;
+    mpc_reference_y((i * _n_states_) + 0, 0) = tracker_command.position.y;
+    mpc_reference_z((i * _n_states_) + 0, 0) = tracker_command.position.z;
   }
 
   // | ------------------ set the penalizations ----------------- |
@@ -689,22 +678,22 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   std::vector<double> temp_S_horizontal = _mat_S_;
   std::vector<double> temp_S_vertical   = _mat_S_z_;
 
-  if (!tracker_command->use_position_horizontal) {
+  if (!tracker_command.use_position_horizontal) {
     temp_Q_horizontal[0] = 0;
     temp_S_horizontal[0] = 0;
   }
 
-  if (!tracker_command->use_velocity_horizontal) {
+  if (!tracker_command.use_velocity_horizontal) {
     temp_Q_horizontal[1] = 0;
     temp_S_horizontal[1] = 0;
   }
 
-  if (!tracker_command->use_position_vertical) {
+  if (!tracker_command.use_position_vertical) {
     temp_Q_vertical[0] = 0;
     temp_S_vertical[0] = 0;
   }
 
-  if (!tracker_command->use_velocity_vertical) {
+  if (!tracker_command.use_velocity_vertical) {
     temp_Q_vertical[1] = 0;
     temp_S_vertical[1] = 0;
   }
@@ -749,14 +738,14 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   // | ----------- disable lateral feedback if needed ----------- |
 
-  if (tracker_command->disable_position_gains) {
+  if (tracker_command.disable_position_gains) {
     mpc_solver_x_u_ = 0;
     mpc_solver_y_u_ = 0;
   }
 
   // | --------------------- load the gains --------------------- |
 
-  filterGains(tracker_command->disable_position_gains, dt);
+  filterGains(tracker_command.disable_position_gains, dt);
 
   Eigen::Vector3d Ka;
   Eigen::Array3d  Kq;
@@ -800,9 +789,8 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   // construct the desired force vector
 
-  if (tracker_command->use_acceleration) {
-    Ra << tracker_command->acceleration.x + mpc_solver_x_u_, tracker_command->acceleration.y + mpc_solver_y_u_,
-        tracker_command->acceleration.z + mpc_solver_z_u_;
+  if (tracker_command.use_acceleration) {
+    Ra << tracker_command.acceleration.x + mpc_solver_x_u_, tracker_command.acceleration.y + mpc_solver_y_u_, tracker_command.acceleration.z + mpc_solver_z_u_;
   } else {
     Ra << mpc_solver_x_u_, mpc_solver_y_u_, mpc_solver_z_u_;
   }
@@ -855,8 +843,8 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     ROS_INFO("[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f[0], f[1], f[2]);
     ROS_INFO("[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback[0], integral_feedback[1], integral_feedback[2]);
     ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[%s]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), tracker_command->position.x, tracker_command->position.y,
-             tracker_command->position.z, tracker_command->heading);
+    ROS_INFO("[%s]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), tracker_command.position.x, tracker_command.position.y,
+             tracker_command.position.z, tracker_command.heading);
     ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), uav_state.pose.position.x, uav_state.pose.position.y,
              uav_state.pose.position.z, uav_heading);
 
@@ -882,14 +870,14 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   Eigen::Matrix3d Rd;
 
-  if (tracker_command->use_orientation) {
+  if (tracker_command.use_orientation) {
 
     // fill in the desired orientation based on the desired orientation from the control command
-    Rd = mrs_lib::AttitudeConverter(tracker_command->orientation);
+    Rd = mrs_lib::AttitudeConverter(tracker_command.orientation);
 
-    if (tracker_command->use_heading) {
+    if (tracker_command.use_heading) {
       try {
-        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command->heading);
+        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command.heading);
       }
       catch (...) {
         ROS_WARN_THROTTLE(1.0, "[%s]: failed to add heading to the desired orientation matrix", this->name_.c_str());
@@ -900,8 +888,8 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
     Eigen::Vector3d bxd;  // desired heading vector
 
-    if (tracker_command->use_heading) {
-      bxd << cos(tracker_command->heading), sin(tracker_command->heading), 0;
+    if (tracker_command.use_heading) {
+      bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
     } else {
       ROS_ERROR_THROTTLE(1.0, "[%s]: desired heading was not specified, using current heading instead!", this->name_.c_str());
       bxd << cos(uav_heading), sin(uav_heading), 0;
@@ -944,14 +932,14 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     throttle = _throttle_saturation_;
     ROS_WARN_THROTTLE(1.0, "[%s]: saturating throttle to %.2f", this->name_.c_str(), _throttle_saturation_);
     ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->position.x,
-                      tracker_command->position.y, tracker_command->position.z, tracker_command->heading);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->velocity.x,
-                      tracker_command->velocity.y, tracker_command->velocity.z, tracker_command->heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->acceleration.x,
-                      tracker_command->acceleration.y, tracker_command->acceleration.z, tracker_command->heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->jerk.x,
-                      tracker_command->jerk.y, tracker_command->jerk.z, tracker_command->heading_jerk);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.position.x,
+                      tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.velocity.x,
+                      tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.acceleration.x,
+                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.jerk.x,
+                      tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
     ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
     ROS_WARN_THROTTLE(0.1, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), uav_state.pose.position.x,
                       uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
@@ -964,14 +952,14 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     throttle = 0.0;
     ROS_WARN_THROTTLE(1.0, "[%s]: saturating throttle to %.2f", this->name_.c_str(), 0.0);
     ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->position.x,
-                      tracker_command->position.y, tracker_command->position.z, tracker_command->heading);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->velocity.x,
-                      tracker_command->velocity.y, tracker_command->velocity.z, tracker_command->heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->acceleration.x,
-                      tracker_command->acceleration.y, tracker_command->acceleration.z, tracker_command->heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command->jerk.x,
-                      tracker_command->jerk.y, tracker_command->jerk.z, tracker_command->heading_jerk);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.position.x,
+                      tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.velocity.x,
+                      tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.acceleration.x,
+                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.jerk.x,
+                      tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
     ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
     ROS_WARN_THROTTLE(0.1, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), uav_state.pose.position.x,
                       uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
@@ -988,7 +976,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   Eigen::Matrix3d I;
   I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
-  Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command->jerk.x, tracker_command->jerk.y, tracker_command->jerk.z);
+  Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z);
   q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (throttle_force / total_mass);
 
   // angular feedback + angular rate feedforward
@@ -1075,7 +1063,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
     // antiwindup
     double temp_gain = kibxy_;
-    if (!tracker_command->disable_antiwindups) {
+    if (!tracker_command.disable_antiwindups) {
       if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
         temp_gain = 0;
         ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
@@ -1083,9 +1071,9 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     }
 
     if (integral_terms_enabled_) {
-      if (tracker_command->use_position_horizontal) {
+      if (tracker_command.use_position_horizontal) {
         Ib_b_ -= temp_gain * Ep_fcu_untilted * dt;
-      } else if (tracker_command->use_velocity_horizontal) {
+      } else if (tracker_command.use_velocity_horizontal) {
         Ib_b_ -= temp_gain * Ev_fcu_untilted * dt;
       }
     }
@@ -1142,7 +1130,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
     // antiwindup
     double temp_gain = kiwxy_;
-    if (!tracker_command->disable_antiwindups) {
+    if (!tracker_command.disable_antiwindups) {
       if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
         temp_gain = 0;
         ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
@@ -1150,9 +1138,9 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     }
 
     if (integral_terms_enabled_) {
-      if (tracker_command->use_position_horizontal) {
+      if (tracker_command.use_position_horizontal) {
         Iw_w_ -= temp_gain * Ep.head(2) * dt;
-      } else if (tracker_command->use_velocity_horizontal) {
+      } else if (tracker_command.use_velocity_horizontal) {
         Iw_w_ -= temp_gain * Ev.head(2) * dt;
       }
     }
@@ -1211,7 +1199,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
 
-    if (tracker_command->use_position_vertical) {
+    if (tracker_command.use_position_vertical) {
       uav_mass_difference_ -= temp_gain * Ep[2] * dt;
     }
 
@@ -1278,7 +1266,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
     double world_accel_x = (throttle_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (throttle_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = tracker_command->acceleration.z;
+    double world_accel_z = tracker_command.acceleration.z;
 
     // You might thing this should be here. However, if you uncomment this, the landings are going to be very slow
     // because the the estimator will produce non-zero velocity even when sitting on the ground. This will trigger

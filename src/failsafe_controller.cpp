@@ -34,11 +34,13 @@ public:
   bool activate(const ControlOutput &last_control_output);
   void deactivate(void);
 
-  ControlOutput update(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
+  void update(const mrs_msgs::UavState &uav_state);
+
+  ControlOutput update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
-  void switchOdometrySource(const mrs_msgs::UavState& new_uav_state);
+  void switchOdometrySource(const mrs_msgs::UavState &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -78,8 +80,8 @@ private:
   ControlOutput last_control_output_;
   ControlOutput activation_control_output_;
 
-  ros::Time last_update_time_;
-  bool      first_iteration_ = true;
+  ros::Time         last_update_time_;
+  std::atomic<bool> first_iteration_ = true;
 
   // | ------------------------ profiler ------------------------ |
 
@@ -213,8 +215,17 @@ void FailsafeController::deactivate(void) {
 
 /* update() //{ */
 
-FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::UavState &                     uav_state,
-                                                             const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
+void FailsafeController::update(const mrs_msgs::UavState &uav_state) {
+
+  mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
+
+  last_update_time_ = ros::Time::now();
+
+  first_iteration_ = false;
+}
+
+FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::UavState &                       uav_state,
+                                                             [[maybe_unused]] const mrs_msgs::TrackerCommand &tracker_command) {
 
   // WARNING: this mutex keeps the disarming routine from being called during the same moment, when the update routine is being called
   // If we try to disarm during the update() execution, it will freeze, since the update() is being called by the control manager
@@ -235,54 +246,32 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
     return ControlOutput();
   }
 
-  if (!tracker_command) {
-    return ControlOutput();
-  }
-
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
 
   if (first_iteration_) {
 
-    last_update_time_ = ros::Time::now();
-
     first_iteration_ = false;
-
-    ROS_INFO("[FailsafeController]: first iteration");
+    dt               = 0.01;
 
   } else {
-
     dt = (ros::Time::now() - last_update_time_).toSec();
+  }
 
-    if (dt <= 0.001) {
+  // decrease the hover throttle
+  {
+    std::scoped_lock lock(mutex_hover_throttle_);
 
-      ROS_WARN_THROTTLE(0.1, "[FailsafeController]: the update was called with too small dt (%.3f s)!", dt);
+    hover_throttle_ -= _throttle_decrease_rate_ * dt;
 
-      if (last_control_output_.control_output) {
-
-        return last_control_output_;
-
-      } else {
-
-        return activation_control_output_;
-      }
-    }
-
-    // decrease the hover throttle
-    {
-      std::scoped_lock lock(mutex_hover_throttle_);
-
-      hover_throttle_ -= _throttle_decrease_rate_ * dt;
-
-      if (!std::isfinite(hover_throttle_)) {
-        hover_throttle_ = 0;
-        ROS_ERROR("[FailsafeController]: NaN detected in variable 'hover_throttle', setting it to 0 and returning!!!");
-      } else if (hover_throttle_ > 1.0) {
-        hover_throttle_ = 1.0;
-      } else if (hover_throttle_ < 0.0) {
-        hover_throttle_ = 0.0;
-      }
+    if (!std::isfinite(hover_throttle_)) {
+      hover_throttle_ = 0;
+      ROS_ERROR("[FailsafeController]: NaN detected in variable 'hover_throttle', setting it to 0 and returning!!!");
+    } else if (hover_throttle_ > 1.0) {
+      hover_throttle_ = 1.0;
+    } else if (hover_throttle_ < 0.0) {
+      hover_throttle_ = 0.0;
     }
   }
 

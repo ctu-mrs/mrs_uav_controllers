@@ -35,11 +35,13 @@ public:
 
   void deactivate(void);
 
-  MidairActivationController::ControlOutput update(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &control_reference);
+  void update(const mrs_msgs::UavState &uav_state);
+
+  MidairActivationController::ControlOutput update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
-  void switchOdometrySource(const mrs_msgs::UavState& new_uav_state);
+  void switchOdometrySource(const mrs_msgs::UavState &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
@@ -157,8 +159,13 @@ void MidairActivationController::deactivate(void) {
 
 /* update() //{ */
 
-MidairActivationController::ControlOutput MidairActivationController::update(
-    [[maybe_unused]] const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &control_reference) {
+void MidairActivationController::update(const mrs_msgs::UavState &uav_state) {
+
+  mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
+}
+
+MidairActivationController::ControlOutput MidairActivationController::update([[maybe_unused]] const mrs_msgs::UavState &      uav_state,
+                                                                             [[maybe_unused]] const mrs_msgs::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer =
@@ -167,10 +174,6 @@ MidairActivationController::ControlOutput MidairActivationController::update(
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
   if (!is_active_) {
-    return Controller::ControlOutput();
-  }
-
-  if (!control_reference) {
     return Controller::ControlOutput();
   }
 
@@ -191,7 +194,7 @@ MidairActivationController::ControlOutput MidairActivationController::update(
     cmd.position.y = uav_state.pose.position.y;
     cmd.position.z = uav_state.pose.position.z;
 
-    cmd.heading = getHeadingSafely(uav_state, control_reference.value());
+    cmd.heading = getHeadingSafely(uav_state, tracker_command);
 
     control_output.control_output = cmd;
 
@@ -206,7 +209,7 @@ MidairActivationController::ControlOutput MidairActivationController::update(
     cmd.velocity.y = uav_state.velocity.linear.y;
     cmd.velocity.z = uav_state.velocity.linear.z;
 
-    cmd.heading = getHeadingSafely(uav_state, control_reference.value());
+    cmd.heading = getHeadingSafely(uav_state, tracker_command);
 
     control_output.control_output = cmd;
 
@@ -236,7 +239,7 @@ MidairActivationController::ControlOutput MidairActivationController::update(
     cmd.acceleration.y = 0;
     cmd.acceleration.z = 0;
 
-    cmd.heading = getHeadingSafely(uav_state, control_reference.value());
+    cmd.heading = getHeadingSafely(uav_state, tracker_command);
 
     control_output.control_output = cmd;
 
