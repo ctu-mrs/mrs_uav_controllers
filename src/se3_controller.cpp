@@ -78,6 +78,11 @@ private:
   void                                              callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, uint32_t level);
   DrsConfig_t                                       drs_params_;
 
+  // | ----------------------- controllers ---------------------- |
+
+  Se3Controller::ControlOutput SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const double& dt,
+                                             const common::CONTROL_OUTPUT& output_modality);
+
   // | ----------------------- constraints ---------------------- |
 
   mrs_msgs::DynamicsConstraints constraints_;
@@ -387,7 +392,7 @@ void Se3Controller::deactivate(void) {
 
 //}
 
-/* //{ update() */
+/* update(const mrs_msgs::UavState& uav_state) //{ */
 
 void Se3Controller::update(const mrs_msgs::UavState& uav_state) {
 
@@ -398,14 +403,16 @@ void Se3Controller::update(const mrs_msgs::UavState& uav_state) {
   first_iteration_ = false;
 }
 
+//}
+
+/* //{ update(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) */
+
 Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
-
-  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
 
   if (!is_active_) {
     last_control_output_.control_output = {};
@@ -434,6 +441,136 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
   // | -------------- clean the last control output ------------- |
 
   last_control_output_.control_output = {};
+
+  // | ----- execute controller based on the output modality ---- |
+
+  auto lowest_modality = common::getLowestOuput(common_handlers_->control_output_modalities);
+
+  if (!lowest_modality) {
+
+    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: output modalities are empty! This error should never appear.");
+
+    return last_control_output_;
+  }
+
+  switch (lowest_modality.value()) {
+
+    case common::ATTITUDE: {
+
+      SE3Controller(uav_state, tracker_command, dt, lowest_modality.value());
+      break;
+    }
+
+    default: {
+      return last_control_output_;
+    }
+  }
+
+  return last_control_output_;
+}
+
+//}
+
+/* //{ getStatus() */
+
+const mrs_msgs::ControllerStatus Se3Controller::getStatus() {
+
+  mrs_msgs::ControllerStatus controller_status;
+
+  controller_status.active = is_active_;
+
+  return controller_status;
+}
+
+//}
+
+/* switchOdometrySource() //{ */
+
+void Se3Controller::switchOdometrySource(const mrs_msgs::UavState& new_uav_state) {
+
+  ROS_INFO("[Se3Controller]: switching the odometry source");
+
+  auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
+
+  // | ----- transform world disturabances to the new frame ----- |
+
+  geometry_msgs::Vector3Stamped world_integrals;
+
+  world_integrals.header.stamp    = ros::Time::now();
+  world_integrals.header.frame_id = uav_state.header.frame_id;
+
+  world_integrals.vector.x = Iw_w_[0];
+  world_integrals.vector.y = Iw_w_[1];
+  world_integrals.vector.z = 0;
+
+  auto res = common_handlers_->transformer->transformSingle(world_integrals, new_uav_state.header.frame_id);
+
+  if (res) {
+
+    std::scoped_lock lock(mutex_integrals_);
+
+    Iw_w_[0] = res.value().vector.x;
+    Iw_w_[1] = res.value().vector.y;
+
+  } else {
+
+    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform world integral to the new frame");
+
+    std::scoped_lock lock(mutex_integrals_);
+
+    Iw_w_[0] = 0;
+    Iw_w_[1] = 0;
+  }
+}
+
+//}
+
+/* resetDisturbanceEstimators() //{ */
+
+void Se3Controller::resetDisturbanceEstimators(void) {
+
+  std::scoped_lock lock(mutex_integrals_);
+
+  Iw_w_ = Eigen::Vector2d::Zero(2);
+  Ib_b_ = Eigen::Vector2d::Zero(2);
+}
+
+//}
+
+/* setConstraints() //{ */
+
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3Controller::setConstraints([
+    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+
+  if (!is_initialized_) {
+    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  }
+
+  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
+
+  got_constraints_ = true;
+
+  ROS_INFO("[Se3Controller]: updating constraints");
+
+  mrs_msgs::DynamicsConstraintsSrvResponse res;
+  res.success = true;
+  res.message = "constraints updated";
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+}
+
+//}
+
+// --------------------------------------------------------------
+// |                         controllers                        |
+// --------------------------------------------------------------
+
+/* SE3Controller() //{ */
+
+Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command,
+                                                          const double& dt, const common::CONTROL_OUTPUT& output_modality) {
+
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
 
   // | ----------------- get the current heading ---------------- |
 
@@ -1140,14 +1277,6 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
   auto output_mode = common::getHighestOuput(common_handlers_->control_output_modalities);
 
-  if (!output_mode) {
-
-    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: output modalities are empty! This error should never appear.");
-    last_control_output_.control_output = {};
-
-    return last_control_output_;
-  }
-
   if (output_mode.value() == common::ATTITUDE_RATE) {
 
     mrs_msgs::HwApiAttitudeRateCmd cmd;
@@ -1199,96 +1328,6 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
   last_control_output_.diagnostics.controller = "Se3Controller";
 
   return last_control_output_;
-}
-
-//}
-
-/* //{ getStatus() */
-
-const mrs_msgs::ControllerStatus Se3Controller::getStatus() {
-
-  mrs_msgs::ControllerStatus controller_status;
-
-  controller_status.active = is_active_;
-
-  return controller_status;
-}
-
-//}
-
-/* switchOdometrySource() //{ */
-
-void Se3Controller::switchOdometrySource(const mrs_msgs::UavState& new_uav_state) {
-
-  ROS_INFO("[Se3Controller]: switching the odometry source");
-
-  auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
-
-  // | ----- transform world disturabances to the new frame ----- |
-
-  geometry_msgs::Vector3Stamped world_integrals;
-
-  world_integrals.header.stamp    = ros::Time::now();
-  world_integrals.header.frame_id = uav_state.header.frame_id;
-
-  world_integrals.vector.x = Iw_w_[0];
-  world_integrals.vector.y = Iw_w_[1];
-  world_integrals.vector.z = 0;
-
-  auto res = common_handlers_->transformer->transformSingle(world_integrals, new_uav_state.header.frame_id);
-
-  if (res) {
-
-    std::scoped_lock lock(mutex_integrals_);
-
-    Iw_w_[0] = res.value().vector.x;
-    Iw_w_[1] = res.value().vector.y;
-
-  } else {
-
-    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform world integral to the new frame");
-
-    std::scoped_lock lock(mutex_integrals_);
-
-    Iw_w_[0] = 0;
-    Iw_w_[1] = 0;
-  }
-}
-
-//}
-
-/* resetDisturbanceEstimators() //{ */
-
-void Se3Controller::resetDisturbanceEstimators(void) {
-
-  std::scoped_lock lock(mutex_integrals_);
-
-  Iw_w_ = Eigen::Vector2d::Zero(2);
-  Ib_b_ = Eigen::Vector2d::Zero(2);
-}
-
-//}
-
-/* setConstraints() //{ */
-
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3Controller::setConstraints([
-    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
-
-  if (!is_initialized_) {
-    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
-  }
-
-  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
-
-  got_constraints_ = true;
-
-  ROS_INFO("[Se3Controller]: updating constraints");
-
-  mrs_msgs::DynamicsConstraintsSrvResponse res;
-  res.success = true;
-  res.message = "constraints updated";
-
-  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
 }
 
 //}
