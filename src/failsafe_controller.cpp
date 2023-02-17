@@ -69,8 +69,6 @@ private:
   double _throttle_decrease_rate_;
   double _initial_throttle_percentage_;
 
-  std::mutex mutex_hover_throttle_;
-
   // | ----------------------- yaw control ---------------------- |
 
   double yaw_setpoint_;
@@ -181,12 +179,8 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
 
     activation_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-    {
-      std::scoped_lock lock(mutex_hover_throttle_);
-
-      hover_throttle_ = _initial_throttle_percentage_ * mrs_lib::quadratic_throttle_model::forceToThrottle(
-                                                            common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
-    }
+    hover_throttle_ = _initial_throttle_percentage_ * mrs_lib::quadratic_throttle_model::forceToThrottle(
+                                                          common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
 
     ROS_INFO("[FailsafeController]: activated with uav_mass_difference %.2f kg.", uav_mass_difference_);
   }
@@ -227,12 +221,6 @@ void FailsafeController::update(const mrs_msgs::UavState &uav_state) {
 FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::UavState &                       uav_state,
                                                              [[maybe_unused]] const mrs_msgs::TrackerCommand &tracker_command) {
 
-  // WARNING: this mutex keeps the disarming routine from being called during the same moment, when the update routine is being called
-  // If we try to disarm during the update() execution, it will freeze, since the update() is being called by the control manager
-  // and the disarm is automatically swithing motors off, which is automatically switching to NullTracker, which means this controller
-  // is getting deactivated
-  std::scoped_lock lock(mutex_hover_throttle_);
-
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
@@ -259,27 +247,20 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
     dt = (ros::Time::now() - last_update_time_).toSec();
   }
 
-  // decrease the hover throttle
-  {
-    std::scoped_lock lock(mutex_hover_throttle_);
-
-    hover_throttle_ -= _throttle_decrease_rate_ * dt;
-
-    if (!std::isfinite(hover_throttle_)) {
-      hover_throttle_ = 0;
-      ROS_ERROR("[FailsafeController]: NaN detected in variable 'hover_throttle', setting it to 0 and returning!!!");
-    } else if (hover_throttle_ > 1.0) {
-      hover_throttle_ = 1.0;
-    } else if (hover_throttle_ < 0.0) {
-      hover_throttle_ = 0.0;
-    }
-  }
-
   last_update_time_ = ros::Time::now();
 
-  // | --------------- prepare the control output --------------- |
+  hover_throttle_ -= _throttle_decrease_rate_ * dt;
 
-  auto hover_throttle = mrs_lib::get_mutexed(mutex_hover_throttle_, hover_throttle_);
+  if (!std::isfinite(hover_throttle_)) {
+    hover_throttle_ = 0;
+    ROS_ERROR("[FailsafeController]: NaN detected in variable 'hover_throttle', setting it to 0 and returning!!!");
+  } else if (hover_throttle_ > 1.0) {
+    hover_throttle_ = 1.0;
+  } else if (hover_throttle_ < 0.0) {
+    hover_throttle_ = 0.0;
+  }
+
+  // | --------------- prepare the control output --------------- |
 
   FailsafeController::ControlOutput control_output;
 
@@ -291,12 +272,14 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
 
     attitude_cmd.stamp       = ros::Time::now();
     attitude_cmd.orientation = mrs_lib::AttitudeConverter(0, 0, yaw_setpoint_);
-    attitude_cmd.throttle    = hover_throttle;
+    attitude_cmd.throttle    = hover_throttle_;
 
     control_output.control_output = attitude_cmd;
   }
 
   // TODO finish the other output modalities
+
+  control_output.diagnostics.controller = "FailsafeController";
 
   return control_output;
 }

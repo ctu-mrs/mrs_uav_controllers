@@ -225,6 +225,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   common_handlers_ = common_handlers;
   _uav_mass_       = common_handlers->getMass();
+  name_            = name;
 
   ros::Time::waitForValid();
 
@@ -294,7 +295,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
   param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
-    ROS_ERROR("[MpcController]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
+    ROS_ERROR("[%s]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low", name_.c_str());
     ros::shutdown();
   }
 
@@ -413,7 +414,7 @@ bool MpcController::activate(const ControlOutput &last_control_output) {
       rampup_direction_ = 0;
     }
 
-    ROS_INFO("[MpcController]: activating rampup with initial throttle: %.4f, target: %.4f", throttle_last_controller.value(), hover_throttle);
+    ROS_INFO("[%s]: activating rampup with initial throttle: %.4f, target: %.4f", name_.c_str(), throttle_last_controller.value(), hover_throttle);
 
     rampup_active_     = true;
     rampup_start_time_ = ros::Time::now();
@@ -485,7 +486,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   if (fabs(dt) < 0.001) {
 
-    ROS_DEBUG("[Se3Controller]: the last odometry message came too close (%.2f s)!", dt);
+    ROS_DEBUG("[%s]: the last odometry message came too close (%.2f s)!", name_.c_str(), dt);
 
     dt = 0.01;
   }
@@ -1305,7 +1306,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
       rampup_active_ = false;
 
-      ROS_INFO("[MpcController]: rampup finished");
+      ROS_INFO("[%s]: rampup finished", name_.c_str());
 
     } else {
 
@@ -1317,7 +1318,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
       throttle = rampup_throttle_;
 
-      ROS_INFO_THROTTLE(0.1, "[MpcController]: ramping up throttle, %.4f", throttle);
+      ROS_INFO_THROTTLE(0.1, "[%s]: ramping up throttle, %.4f", name_.c_str(), throttle);
     }
   }
 
@@ -1325,7 +1326,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   if (!output_mode) {
 
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: output modalities are empty! This error should never appear.");
+    ROS_ERROR_THROTTLE(1.0, "[%s]: output modalities are empty! This error should never appear!", name_.c_str());
     last_control_output_.control_output = {};
 
     return last_control_output_;
@@ -1355,7 +1356,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   } else {
 
-    ROS_ERROR_THROTTLE(1.0, "[MpcController]: the controller does not support the required output modality");
+    ROS_ERROR_THROTTLE(1.0, "[%s]: the controller does not support the required output modality", name_.c_str());
   }
 
   // | ----------------- fill in the diagnostics ---------------- |
