@@ -1,70 +1,83 @@
 version: "1.0.4.0"
 
-default_gains:
+se3:
 
-  # Gains in this file SHOULD NOT BE CHANGED, since they are not used most of the times.
-  # Gains which are actually used are in the mrs_uav_manager package under the gain_manager configs
+  default_gains:
 
-  # influences pitching and rolling
-  horizontal:
-    kp: 3.0
-    kv: 2.0
-    ka: 1.0
+    # Gains in this file SHOULD NOT BE CHANGED, since they are not used most of the times.
+    # Gains which are actually used are in the mrs_uav_manager package under the gain_manager configs
 
-    attitude:
-      kq: 5.0
+    # influences pitching and rolling
+    horizontal:
+      kp: 3.0
+      kv: 2.0
+      ka: 1.0
 
-    kib: 0.1
-    kib_lim: 10.0
+      attitude:
+        kq: 5.0
 
-    kiw: 0.1
-    kiw_lim: 10.0
+      kib: 0.1
+      kib_lim: 10.0
 
-  # influences yawing
-  vertical:
-    kp: 15.0
-    kv: 8.0
-    ka: 1.0
+      kiw: 0.1
+      kiw_lim: 10.0
 
-    attitude:
-      kq: 5.0
+    # influences yawing
+    vertical:
+      kp: 15.0
+      kv: 8.0
+      ka: 1.0
 
-  mass_estimator:
-    km: 1.0
-    km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+      attitude:
+        kq: 5.0
 
-# gains can be muted by the tracker by this factor
-# gains are also muting just after activation
-gain_mute_coefficient: 0.5
+    mass_estimator:
+      km: 1.0
+      km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
-constraints:
+  # gains can be muted by the tracker by this factor
+  # gains are also muting just after activation
+  gain_mute_coefficient: 0.5
 
-  throttle_saturation: 0.9 # [-], range from 0 to 1
+  constraints:
 
-  # When the controller wants to output tilt larger than this,
-  # it will return an empty command instead, which should trigger
-  # a failsafe in the control manager.
-  tilt_angle_failsafe:
+    throttle_saturation: 0.9 # [-], range from 0 to 1
+
+    # When the controller wants to output tilt larger than this,
+    # it will return an empty command instead, which should trigger
+    # a failsafe in the control manager.
+    tilt_angle_failsafe:
+      enabled: true
+      limit: deg(90.0) # [rad]
+
+  rampup:
     enabled: true
-    limit: deg(90.0) # [rad]
+    speed: 0.75 # [1/s]
 
-rampup:
-  enabled: true
-  speed: 0.75 # [1/s]
+  gains_filter:
+    perc_change_rate: 1.0
+    min_change_rate: 0.1 # perc of the difference
 
-gains_filter:
-  perc_change_rate: 1.0
-  min_change_rate: 0.1 # perc of the difference
+  angular_rate_feedforward:
 
-angular_rate_feedforward:
+    # compensation of a parasitic heading rate due to pitch and roll rate
+    parasitic_pitch_roll: true
 
-  # compensation of a parasitic heading rate due to pitch and roll rate
-  parasitic_pitch_roll: true
+    # jerk feed forward
+    jerk: true
 
-  # jerk feed forward
-  jerk: true
+  rotation_matrix: 1 # {0 = lee, 1 = baca (oblique projection}
 
-rotation_matrix: 1 # {0 = lee, 1 = baca (oblique projection}
+  # output mode to PixHawk
+  output_mode: 0 # {0 = attitude_rate, 1 = orientation}
 
-# output mode to PixHawk
-output_mode: 0 # {0 = attitude_rate, 1 = orientation}
+position_controller:
+
+  translation_gains:
+    p: 1.0
+    d: 0.1
+    i: 0.05
+  heading_gains:
+    p: 10.0
+    d: 1.0
+    i: 0.1

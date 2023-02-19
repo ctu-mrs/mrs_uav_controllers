@@ -5,6 +5,7 @@
 #include <ros/ros.h>
 
 #include <common.h>
+#include <pid.hpp>
 
 #include <mrs_uav_managers/controller.h>
 
@@ -16,6 +17,7 @@
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
+#include <mrs_lib/geometry/cyclic.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
 
@@ -80,14 +82,18 @@ private:
 
   // | ----------------------- controllers ---------------------- |
 
-  Se3Controller::ControlOutput SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const double& dt,
-                                             const common::CONTROL_OUTPUT& output_modality);
+  void positionPassthrough(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command);
+
+  void PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const common::CONTROL_OUTPUT& control_output,
+                         const double& dt);
+
+  void SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const double& dt,
+                     const common::CONTROL_OUTPUT& output_modality);
 
   // | ----------------------- constraints ---------------------- |
 
   mrs_msgs::DynamicsConstraints constraints_;
   std::mutex                    mutex_constraints_;
-  bool                          got_constraints_ = false;
 
   // | --------- throttle generation and mass estimation -------- |
 
@@ -169,6 +175,21 @@ private:
   double    rampup_duration_;
   ros::Time rampup_start_time_;
   ros::Time rampup_last_time_;
+
+  // | ---------------------- position pid ---------------------- |
+
+  double _pos_pid_p_;
+  double _pos_pid_i_;
+  double _pos_pid_d_;
+
+  double _hdg_pid_p_;
+  double _hdg_pid_i_;
+  double _hdg_pid_d_;
+
+  PIDController position_pid_x_;
+  PIDController position_pid_y_;
+  PIDController position_pid_z_;
+  PIDController position_pid_heading_;
 };
 
 //}
@@ -204,60 +225,72 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.loadParam("enable_profiler", _profiler_enabled_);
 
   // lateral gains
-  param_loader.loadParam("default_gains/horizontal/kp", kpxy_);
-  param_loader.loadParam("default_gains/horizontal/kv", kvxy_);
-  param_loader.loadParam("default_gains/horizontal/ka", kaxy_);
+  param_loader.loadParam("se3/default_gains/horizontal/kp", kpxy_);
+  param_loader.loadParam("se3/default_gains/horizontal/kv", kvxy_);
+  param_loader.loadParam("se3/default_gains/horizontal/ka", kaxy_);
 
-  param_loader.loadParam("default_gains/horizontal/kiw", kiwxy_);
-  param_loader.loadParam("default_gains/horizontal/kib", kibxy_);
+  param_loader.loadParam("se3/default_gains/horizontal/kiw", kiwxy_);
+  param_loader.loadParam("se3/default_gains/horizontal/kib", kibxy_);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.loadParam("rampup/enabled", _rampup_enabled_);
-  param_loader.loadParam("rampup/speed", _rampup_speed_);
+  param_loader.loadParam("se3/rampup/enabled", _rampup_enabled_);
+  param_loader.loadParam("se3/rampup/speed", _rampup_speed_);
 
   // height gains
-  param_loader.loadParam("default_gains/vertical/kp", kpz_);
-  param_loader.loadParam("default_gains/vertical/kv", kvz_);
-  param_loader.loadParam("default_gains/vertical/ka", kaz_);
+  param_loader.loadParam("se3/default_gains/vertical/kp", kpz_);
+  param_loader.loadParam("se3/default_gains/vertical/kv", kvz_);
+  param_loader.loadParam("se3/default_gains/vertical/ka", kaz_);
 
   // attitude gains
-  param_loader.loadParam("default_gains/horizontal/attitude/kq", kqxy_);
-  param_loader.loadParam("default_gains/vertical/attitude/kq", kqz_);
+  param_loader.loadParam("se3/default_gains/horizontal/attitude/kq", kqxy_);
+  param_loader.loadParam("se3/default_gains/vertical/attitude/kq", kqz_);
 
   // mass estimator
-  param_loader.loadParam("default_gains/mass_estimator/km", km_);
-  param_loader.loadParam("default_gains/mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam("se3/default_gains/mass_estimator/km", km_);
+  param_loader.loadParam("se3/default_gains/mass_estimator/km_lim", km_lim_);
 
   // integrator limits
-  param_loader.loadParam("default_gains/horizontal/kiw_lim", kiwxy_lim_);
-  param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
+  param_loader.loadParam("se3/default_gains/horizontal/kiw_lim", kiwxy_lim_);
+  param_loader.loadParam("se3/default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  param_loader.loadParam("se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  param_loader.loadParam("se3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[Se3Controller]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
     ros::shutdown();
   }
 
-  param_loader.loadParam("constraints/throttle_saturation", _throttle_saturation_);
+  param_loader.loadParam("se3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam("se3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam("se3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // gain muting
-  param_loader.loadParam("gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam("se3/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  param_loader.loadParam("output_mode", output_mode_);
+  param_loader.loadParam("se3/output_mode", output_mode_);
 
-  param_loader.loadParam("rotation_matrix", drs_params_.rotation_type);
+  param_loader.loadParam("se3/rotation_matrix", drs_params_.rotation_type);
 
   // angular rate feed forward
-  param_loader.loadParam("angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
-  param_loader.loadParam("angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  param_loader.loadParam("se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
+  param_loader.loadParam("se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+
+  // | ------------------- position pid params ------------------ |
+
+  param_loader.loadParam("position_controller/translation_gains/p", _pos_pid_p_);
+  param_loader.loadParam("position_controller/translation_gains/i", _pos_pid_i_);
+  param_loader.loadParam("position_controller/translation_gains/d", _pos_pid_d_);
+
+  param_loader.loadParam("position_controller/heading_gains/p", _hdg_pid_p_);
+  param_loader.loadParam("position_controller/heading_gains/i", _hdg_pid_i_);
+  param_loader.loadParam("position_controller/heading_gains/d", _hdg_pid_d_);
+
+  // | ------------------ finish loading params ----------------- |
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[Se3Controller]: could not load all parameters!");
@@ -300,6 +333,13 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   Drs_t::CallbackType f = boost::bind(&Se3Controller::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
 
+  // | ---------------------- position pid ---------------------- |
+
+  position_pid_x_.setParams(_pos_pid_p_, _pos_pid_d_, _pos_pid_i_, -1);
+  position_pid_y_.setParams(_pos_pid_p_, _pos_pid_d_, _pos_pid_i_, -1);
+  position_pid_z_.setParams(_pos_pid_p_, _pos_pid_d_, _pos_pid_i_, -1);
+  position_pid_heading_.setParams(_hdg_pid_p_, _hdg_pid_d_, _hdg_pid_i_, -1);
+
   // | ------------------------ profiler ------------------------ |
 
   profiler_ = mrs_lib::Profiler(nh_, "Se3Controller", _profiler_enabled_);
@@ -309,7 +349,7 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   ROS_INFO("[Se3Controller]: initialized, version %s", VERSION);
 
   is_initialized_ = true;
-}  // namespace se3_controller
+}
 
 //}
 
@@ -414,8 +454,9 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
+  last_control_output_.control_output = {};
+
   if (!is_active_) {
-    last_control_output_.control_output = {};
     return last_control_output_;
   }
 
@@ -438,10 +479,6 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
     dt = 0.01;
   }
 
-  // | -------------- clean the last control output ------------- |
-
-  last_control_output_.control_output = {};
-
   // | ----- execute controller based on the output modality ---- |
 
   auto lowest_modality = common::getLowestOuput(common_handlers_->control_output_modalities);
@@ -455,14 +492,42 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
   switch (lowest_modality.value()) {
 
-    case common::ATTITUDE: {
+    case common::POSITION: {
+      positionPassthrough(uav_state, tracker_command);
+      break;
+    }
 
-      SE3Controller(uav_state, tracker_command, dt, lowest_modality.value());
+    case common::VELOCITY_HDG: {
+      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG, dt);
+      break;
+    }
+
+    case common::VELOCITY_HDG_RATE: {
+      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG_RATE, dt);
+      break;
+    }
+
+    case common::ACCELERATION_HDG: {
+      SE3Controller(uav_state, tracker_command, dt, common::ACCELERATION_HDG);
+      break;
+    }
+
+    case common::ACCELERATION_HDG_RATE: {
+      SE3Controller(uav_state, tracker_command, dt, common::ACCELERATION_HDG_RATE);
+      break;
+    }
+
+    case common::ATTITUDE: {
+      SE3Controller(uav_state, tracker_command, dt, common::ATTITUDE);
+      break;
+    }
+
+    case common::ATTITUDE_RATE: {
+      SE3Controller(uav_state, tracker_command, dt, common::ATTITUDE_RATE);
       break;
     }
 
     default: {
-      return last_control_output_;
     }
   }
 
@@ -548,8 +613,6 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3Controller::setConst
 
   mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
 
-  got_constraints_ = true;
-
   ROS_INFO("[Se3Controller]: updating constraints");
 
   mrs_msgs::DynamicsConstraintsSrvResponse res;
@@ -567,10 +630,11 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3Controller::setConst
 
 /* SE3Controller() //{ */
 
-Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command,
-                                                          const double& dt, const common::CONTROL_OUTPUT& output_modality) {
+void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const double& dt,
+                                  const common::CONTROL_OUTPUT& output_modality) {
 
-  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+  auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
   // | ----------------- get the current heading ---------------- |
 
@@ -596,7 +660,6 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
   Eigen::Vector3d Rp = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Ra = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d Rw = Eigen::Vector3d::Zero(3);
 
   if (tracker_command.use_position_vertical || tracker_command.use_position_horizontal) {
 
@@ -652,7 +715,7 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
   Eigen::Vector3d Ep = Eigen::Vector3d::Zero(3);
 
   if (tracker_command.use_position_horizontal || tracker_command.use_position_vertical) {
-    Ep = Op - Rp;
+    Ep = Rp - Op;
   }
 
   // velocity control error
@@ -660,7 +723,7 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
 
   if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
       tracker_command.use_position_vertical) {  // even wehn use_position_vertical to provide dampening
-    Ev = Ov - Rv;
+    Ev = Rv - Ov;
   }
 
   // | --------------------- load the gains --------------------- |
@@ -718,6 +781,9 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
+  // TODO factor mass / inertia into attitude gain
+  /* Kq = Kq * (_uav_mass_ + uav_mass_difference_); */
+
   // | --------------- desired orientation matrix --------------- |
 
   // get body integral in the world frame
@@ -725,7 +791,6 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
   Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);
 
   {
-
     geometry_msgs::Vector3Stamped Ib_b_stamped;
 
     Ib_b_stamped.header.stamp    = ros::Time::now();
@@ -749,8 +814,8 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
   Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
-  Eigen::Vector3d position_feedback = -Kp * Ep.array();
-  Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
+  Eigen::Vector3d position_feedback = Kp * Ep.array();
+  Eigen::Vector3d velocity_feedback = Kv * Ev.array();
   Eigen::Vector3d integral_feedback;
   {
     std::scoped_lock lock(mutex_integrals_);
@@ -758,241 +823,8 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
     integral_feedback << Ib_w[0] + Iw_w_[0], Ib_w[1] + Iw_w_[1], 0;
   }
 
-  Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
-
-  // | ----------- limiting the downwards acceleration ---------- |
-  // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
-
-  // if the downwards part of the force is close to counter-act the gravity acceleration
-  if (f[2] < 0) {
-
-    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
-
-    f << 0, 0, 1;
-  }
-
-  // | ------------------ limit the tilt angle ------------------ |
-
-  Eigen::Vector3d f_norm = f.normalized();
-
-  // calculate the force in spherical coordinates
-  double theta = acos(f_norm[2]);
-  double phi   = atan2(f_norm[1], f_norm[0]);
-
-  // check for the failsafe limit
-  if (!std::isfinite(theta)) {
-
-    ROS_ERROR("[Se3Controller]: NaN detected in variable 'theta', returning empty command");
-
-    return last_control_output_;
-  }
-
-  if (_tilt_angle_failsafe_enabled_ && theta > _tilt_angle_failsafe_) {
-
-    ROS_ERROR("[Se3Controller]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
-              (180.0 / M_PI) * _tilt_angle_failsafe_);
-    ROS_INFO("[Se3Controller]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
-    ROS_INFO("[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
-    ROS_INFO("[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
-    ROS_INFO("[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[Se3Controller]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", tracker_command.position.x, tracker_command.position.y,
-             tracker_command.position.z, tracker_command.heading);
-    ROS_INFO("[Se3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state.pose.position.x, uav_state.pose.position.y,
-             uav_state.pose.position.z, uav_heading);
-
-    return last_control_output_;
-  }
-
-  // saturate the angle
-
-  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
-
-  if (fabs(constraints.tilt) > 1e-3 && theta > constraints.tilt) {
-    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
-                      (constraints.tilt / M_PI) * 180.0);
-    theta = constraints.tilt;
-  }
-
-  // reconstruct the vector
-  f_norm[0] = sin(theta) * cos(phi);
-  f_norm[1] = sin(theta) * sin(phi);
-  f_norm[2] = cos(theta);
-
-  // | --------- construct the desired rotational matrix -------- |
-
-  Eigen::Matrix3d Rd;
-
-  if (tracker_command.use_orientation) {
-
-    // fill in the desired orientation based on the desired orientation from the control command
-    Rd = mrs_lib::AttitudeConverter(tracker_command.orientation);
-
-    if (tracker_command.use_heading) {
-      try {
-        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command.heading);
-      }
-      catch (...) {
-        ROS_ERROR("[Se3Controller]: could not set the desired heading");
-      }
-    }
-
-  } else {
-
-    Eigen::Vector3d bxd;  // desired heading vector
-
-    if (tracker_command.use_heading) {
-      bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
-    } else {
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: desired heading was not specified, using current heading instead!");
-      bxd << cos(uav_heading), sin(uav_heading), 0;
-    }
-
-    Rd = common::so3transform(f_norm, bxd, drs_params.rotation_type == 1);
-  }
-
   // --------------------------------------------------------------
-  // |                      orientation error                     |
-  // --------------------------------------------------------------
-
-  // orientation error
-  Eigen::Matrix3d E = Eigen::Matrix3d::Zero();
-
-  if (!tracker_command.use_attitude_rate) {
-    E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
-  }
-
-  Eigen::Vector3d Eq;
-
-  // clang-format off
-  Eq << (E(2, 1) - E(1, 2)) / 2.0,
-        (E(0, 2) - E(2, 0)) / 2.0,
-        (E(1, 0) - E(0, 1)) / 2.0;
-  // clang-format on
-
-  double throttle_force = f.dot(R.col(2));
-  double throttle       = 0;
-
-  if (!tracker_command.use_throttle) {
-    if (throttle_force >= 0) {
-      throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, throttle_force);
-    } else {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", throttle_force);
-    }
-  } else {
-    // the throttle is overriden from the tracker command
-    throttle = tracker_command.throttle;
-  }
-
-  // saturate throttle
-  if (!std::isfinite(throttle)) {
-
-    throttle = 0;
-    ROS_ERROR("[Se3Controller]: NaN detected in variable 'throttle', setting it to 0 and returning!!!");
-
-  } else if (throttle > _throttle_saturation_) {
-
-    throttle = _throttle_saturation_;
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to %.2f", _throttle_saturation_);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.position.x, tracker_command.position.y,
-                      tracker_command.position.z, tracker_command.heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.velocity.x, tracker_command.velocity.y,
-                      tracker_command.velocity.z, tracker_command.heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.acceleration.x,
-                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.jerk.x, tracker_command.jerk.y,
-                      tracker_command.jerk.z, tracker_command.heading_jerk);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state.pose.position.x, uav_state.pose.position.y,
-                      uav_state.pose.position.z, uav_heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state.velocity.linear.x,
-                      uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-
-  } else if (throttle < 0.0) {
-
-    throttle = 0.0;
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to 0");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.position.x, tracker_command.position.y,
-                      tracker_command.position.z, tracker_command.heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.velocity.x, tracker_command.velocity.y,
-                      tracker_command.velocity.z, tracker_command.heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.acceleration.x,
-                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.jerk.x, tracker_command.jerk.y,
-                      tracker_command.jerk.z, tracker_command.heading_jerk);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state.pose.position.x, uav_state.pose.position.y,
-                      uav_state.pose.position.z, uav_heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state.velocity.linear.x,
-                      uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-  }
-
-  // prepare the attitude feedback
-  Eigen::Vector3d q_feedback = -Kq * Eq.array();
-
-  if (tracker_command.use_attitude_rate) {
-    Rw << tracker_command.attitude_rate.x, tracker_command.attitude_rate.y, tracker_command.attitude_rate.z;
-  } else if (tracker_command.use_heading_rate) {
-
-    // to fill in the feed forward yaw rate
-    double desired_yaw_rate = 0;
-
-    try {
-      desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(tracker_command.heading_rate);
-    }
-    catch (...) {
-      ROS_ERROR("[Se3Controller]: exception caught while calculating the desired_yaw_rate feedforward");
-    }
-
-    Rw << 0, 0, desired_yaw_rate;
-  }
-
-  // feedforward angular acceleration
-  Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
-
-  if (drs_params.jerk_feedforward) {
-
-    Eigen::Matrix3d I;
-    I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
-    Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z);
-    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (throttle_force / total_mass);
-  }
-
-  // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw + q_feedforward;
-
-  // compensate for the parasitic heading rate created by the desired pitch and roll rate
-  Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
-
-  if (drs_params.pitch_roll_heading_rate_compensation) {
-
-    Eigen::Vector3d q_feedback_yawless = t;
-    q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
-
-    double parasitic_heading_rate = 0;
-
-    try {
-      parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeadingRate(q_feedback_yawless);
-    }
-    catch (...) {
-      ROS_ERROR("[Se3Controller]: exception caught while calculating the parasitic heading rate!");
-    }
-
-    try {
-      rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
-    }
-    catch (...) {
-      ROS_ERROR("[Se3Controller]: exception caught while calculating the parasitic heading rate compensation!");
-    }
-  }
-
-  t += rp_heading_rate_compensation;
-
-  // --------------------------------------------------------------
-  // |                      update parameters                     |
+  // |                 integrators and estimators                 |
   // --------------------------------------------------------------
 
   /* world error integrator //{ */
@@ -1008,9 +840,9 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
 
     // integrate the world error
     if (tracker_command.use_position_horizontal) {
-      Iw_w_ -= kiwxy_ * Ep.head(2) * dt;
+      Iw_w_ += kiwxy_ * Ep.head(2) * dt;
     } else if (tracker_command.use_velocity_horizontal) {
-      Iw_w_ -= kiwxy_ * Ev.head(2) * dt;
+      Iw_w_ += kiwxy_ * Ev.head(2) * dt;
     }
 
     // saturate the world X
@@ -1105,9 +937,9 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
 
     // integrate the body error
     if (tracker_command.use_position_horizontal) {
-      Ib_b_ -= kibxy_ * Ep_fcu_untilted * dt;
+      Ib_b_ += kibxy_ * Ep_fcu_untilted * dt;
     } else if (tracker_command.use_velocity_horizontal) {
-      Ib_b_ -= kibxy_ * Ev_fcu_untilted * dt;
+      Ib_b_ += kibxy_ * Ev_fcu_untilted * dt;
     }
 
     // saturate the body
@@ -1147,6 +979,70 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
 
   //}
 
+  if (output_modality == common::ACCELERATION_HDG || output_modality == common::ACCELERATION_HDG_RATE) {
+
+    Eigen::Vector3d des_acc = (position_feedback + velocity_feedback + integral_feedback) / total_mass + Ra;
+
+    if (output_modality == common::ACCELERATION_HDG) {
+
+      mrs_msgs::HwApiAccelerationHdgCmd cmd;
+
+      cmd.acceleration.x = des_acc[0];
+      cmd.acceleration.y = des_acc[1];
+      cmd.acceleration.z = des_acc[2];
+
+      cmd.heading = tracker_command.heading;
+
+      last_control_output_.control_output = cmd;
+
+    } else {
+
+      mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
+
+      cmd.acceleration.x = des_acc[0];
+      cmd.acceleration.y = des_acc[1];
+      cmd.acceleration.z = des_acc[2];
+
+      position_pid_heading_.setSaturation(constraints.heading_speed);
+
+      double hdg_err = mrs_lib::geometry::sradians::diff(tracker_command.heading, uav_heading);
+
+      double des_hdg_rate = position_pid_heading_.update(hdg_err, dt);
+
+      cmd.heading_rate = des_hdg_rate;
+
+      last_control_output_.control_output = cmd;
+    }
+
+    // fill the unbiased desired accelerations
+    last_control_output_.desired_unbiased_acceleration = des_acc;
+
+    // | ----------------- fill in the diagnostics ---------------- |
+
+    last_control_output_.diagnostics.ramping_up = false;
+
+    last_control_output_.diagnostics.mass_estimator  = false;
+    last_control_output_.diagnostics.mass_difference = 0;
+    last_control_output_.diagnostics.total_mass      = total_mass;
+
+    last_control_output_.diagnostics.disturbance_estimator = true;
+
+    last_control_output_.diagnostics.disturbance_bx_b = -Ib_b_[0];
+    last_control_output_.diagnostics.disturbance_by_b = -Ib_b_[1];
+
+    last_control_output_.diagnostics.disturbance_bx_w = -Ib_w[0];
+    last_control_output_.diagnostics.disturbance_by_w = -Ib_w[1];
+
+    last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_[0];
+    last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_[1];
+
+    last_control_output_.diagnostics.controller_enforcing_constraints = false;
+
+    last_control_output_.diagnostics.controller = "MrsController";
+
+    return;
+  }
+
   /* mass estimatior //{ */
 
   // --------------------------------------------------------------
@@ -1157,7 +1053,7 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
     std::scoped_lock lock(mutex_gains_);
 
     if (tracker_command.use_position_vertical && !rampup_active_) {
-      uav_mass_difference_ -= km_ * Ep[2] * dt;
+      uav_mass_difference_ += km_ * Ep[2] * dt;
     }
 
     // saturate the mass estimator
@@ -1180,18 +1076,159 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
 
   //}
 
+  Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
+
+  // | ----------- limiting the downwards acceleration ---------- |
+  // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
+
+  // if the downwards part of the force is close to counter-act the gravity acceleration
+  if (f[2] < 0) {
+
+    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
+
+    f << 0, 0, 1;
+  }
+
+  // | ------------------- sanitize tilt angle ------------------ |
+
+  double tilt_safety_limit = _tilt_angle_failsafe_enabled_ ? _tilt_angle_failsafe_ : std::numeric_limits<double>::max();
+
+  auto f_normed_sanitized = common::sanitizeDesiredForce(f.normalized(), tilt_safety_limit, constraints.tilt, "Se3Controller");
+
+  if (!f_normed_sanitized) {
+
+    ROS_INFO("[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
+    ROS_INFO("[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
+    ROS_INFO("[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
+    ROS_INFO("[Se3Controller]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", tracker_command.position.x, tracker_command.position.y,
+             tracker_command.position.z, tracker_command.heading);
+    ROS_INFO("[Se3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state.pose.position.x, uav_state.pose.position.y,
+             uav_state.pose.position.z, uav_heading);
+
+    return;
+  }
+
+  Eigen::Vector3d f_normed = f_normed_sanitized.value();
+
   // --------------------------------------------------------------
-  // |                 produce the control output                 |
+  // |               desired orientation + throttle               |
   // --------------------------------------------------------------
 
-  // | ------------ compensated desired acceleration ------------ |
+  // | ------------------- desired orientation ------------------ |
+
+  Eigen::Matrix3d Rd;
+
+  if (tracker_command.use_orientation) {
+
+    // fill in the desired orientation based on the desired orientation from the control command
+    Rd = mrs_lib::AttitudeConverter(tracker_command.orientation);
+
+    if (tracker_command.use_heading) {
+      try {
+        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command.heading);
+      }
+      catch (...) {
+        ROS_ERROR("[Se3Controller]: could not set the desired heading");
+      }
+    }
+
+  } else {
+
+    Eigen::Vector3d bxd;  // desired heading vector
+
+    if (tracker_command.use_heading) {
+      bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: desired heading was not specified, using current heading instead!");
+      bxd << cos(uav_heading), sin(uav_heading), 0;
+    }
+
+    Rd = common::so3transform(f_normed, bxd, drs_params.rotation_type == 1);
+  }
+
+  // | -------------------- desired throttle -------------------- |
+
+  double throttle_force = f.dot(R.col(2));
+  double throttle       = 0;
+
+  if (rampup_active_) {
+
+    // deactivate the rampup when the times up
+    if (fabs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
+
+      rampup_active_ = false;
+
+      ROS_INFO("[Se3Controller]: rampup finished");
+
+    } else {
+
+      double rampup_dt = (ros::Time::now() - rampup_last_time_).toSec();
+
+      rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
+
+      rampup_last_time_ = ros::Time::now();
+
+      throttle = rampup_throttle_;
+
+      ROS_INFO_THROTTLE(0.1, "[Se3Controller]: ramping up throttle, %.4f", throttle);
+    }
+
+  } else {
+
+    if (!tracker_command.use_throttle) {
+      if (throttle_force >= 0) {
+        throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, throttle_force);
+      } else {
+        ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", throttle_force);
+      }
+    } else {
+      // the throttle is overriden from the tracker command
+      throttle = tracker_command.throttle;
+    }
+  }
+
+  // | ------------------- throttle saturation ------------------ |
+
+  bool throttle_saturated = false;
+
+  if (!std::isfinite(throttle)) {
+
+    ROS_ERROR("[Se3Controller]: NaN detected in variable 'throttle'!!!");
+    return;
+
+  } else if (throttle > _throttle_saturation_) {
+    throttle = _throttle_saturation_;
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to %.2f", _throttle_saturation_);
+  } else if (throttle < 0.0) {
+    throttle = 0.0;
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to 0.0");
+  }
+
+  if (throttle_saturated) {
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.position.x, tracker_command.position.y,
+                      tracker_command.position.z, tracker_command.heading);
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.velocity.x, tracker_command.velocity.y,
+                      tracker_command.velocity.z, tracker_command.heading_rate);
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.acceleration.x,
+                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.jerk.x, tracker_command.jerk.y,
+                      tracker_command.jerk.z, tracker_command.heading_jerk);
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state.pose.position.x, uav_state.pose.position.y,
+                      uav_state.pose.position.z, uav_heading);
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state.velocity.linear.x,
+                      uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
+    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
+  }
+
+  // | -------------- unbiased desired acceleration ------------- |
 
   double desired_x_accel = 0;
   double desired_y_accel = 0;
   double desired_z_accel = 0;
 
   {
-
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
     Eigen::Vector3d thrust_vector   = throttle_force * des_orientation.col(2);
 
@@ -1217,33 +1254,6 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
     }
   }
 
-  // | --------------- saturate the attitude rate --------------- |
-
-  if (got_constraints_) {
-
-    auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
-
-    if (t[0] > constraints.roll_rate) {
-      t[0] = constraints.roll_rate;
-    } else if (t[0] < -constraints.roll_rate) {
-      t[0] = -constraints.roll_rate;
-    }
-
-    if (t[1] > constraints.pitch_rate) {
-      t[1] = constraints.pitch_rate;
-    } else if (t[1] < -constraints.pitch_rate) {
-      t[1] = -constraints.pitch_rate;
-    }
-
-    if (t[2] > constraints.yaw_rate) {
-      t[2] = constraints.yaw_rate;
-    } else if (t[2] < -constraints.yaw_rate) {
-      t[2] = -constraints.yaw_rate;
-    }
-  } else {
-    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: missing dynamics constraints");
-  }
-
   // | --------------- fill the resulting command --------------- |
 
   // fill the desired orientation for the tilt error check
@@ -1251,58 +1261,6 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
 
   // fill the unbiased desired accelerations
   last_control_output_.desired_unbiased_acceleration = Eigen::Vector3d(desired_x_accel, desired_y_accel, desired_z_accel);
-
-  if (rampup_active_) {
-
-    // deactivate the rampup when the times up
-    if (fabs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
-
-      rampup_active_ = false;
-
-      ROS_INFO("[Se3Controller]: rampup finished");
-
-    } else {
-
-      double rampup_dt = (ros::Time::now() - rampup_last_time_).toSec();
-
-      rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
-
-      rampup_last_time_ = ros::Time::now();
-
-      throttle = rampup_throttle_;
-
-      ROS_INFO_THROTTLE(0.1, "[Se3Controller]: ramping up throttle, %.4f", throttle);
-    }
-  }
-
-  auto output_mode = common::getHighestOuput(common_handlers_->control_output_modalities);
-
-  if (output_mode.value() == common::ATTITUDE_RATE) {
-
-    mrs_msgs::HwApiAttitudeRateCmd cmd;
-
-    cmd.body_rate.x = t[0];
-    cmd.body_rate.y = t[1];
-    cmd.body_rate.z = t[2];
-
-    cmd.throttle = throttle;
-
-    last_control_output_.control_output = cmd;
-
-  } else if (output_mode.value() == common::ATTITUDE) {
-
-    mrs_msgs::HwApiAttitudeCmd cmd;
-
-    cmd.orientation = mrs_lib::AttitudeConverter(Rd);
-
-    cmd.throttle = throttle;
-
-    last_control_output_.control_output = cmd;
-
-  } else {
-
-    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: the controller does not support the required output modality");
-  }
 
   // | ----------------- fill in the diagnostics ---------------- |
 
@@ -1325,9 +1283,266 @@ Se3Controller::ControlOutput Se3Controller::SE3Controller(const mrs_msgs::UavSta
 
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-  last_control_output_.diagnostics.controller = "Se3Controller";
+  last_control_output_.diagnostics.controller = "MrsController";
 
-  return last_control_output_;
+  // | ------------ construct the attitude reference ------------ |
+
+  mrs_msgs::HwApiAttitudeCmd attitude_cmd;
+
+  attitude_cmd.stamp       = ros::Time::now();
+  attitude_cmd.orientation = mrs_lib::AttitudeConverter(Rd);
+  attitude_cmd.throttle    = throttle;
+
+  if (output_modality == common::ATTITUDE) {
+
+    last_control_output_.control_output = attitude_cmd;
+
+    return;
+  }
+
+  // --------------------------------------------------------------
+  // |                      attitude control                      |
+  // --------------------------------------------------------------
+
+  Eigen::Vector3d rate_feedforward = Eigen::Vector3d::Zero(3);
+
+  if (tracker_command.use_attitude_rate) {
+
+    rate_feedforward << tracker_command.attitude_rate.x, tracker_command.attitude_rate.y, tracker_command.attitude_rate.z;
+
+  } else if (tracker_command.use_heading_rate) {
+
+    // to fill in the feed forward yaw rate
+    double desired_yaw_rate = 0;
+
+    try {
+      desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(tracker_command.heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[Se3Controller]: exception caught while calculating the desired_yaw_rate feedforward");
+    }
+
+    rate_feedforward << 0, 0, desired_yaw_rate;
+  }
+
+  // | ------------ jerk feedforward -> angular rate ------------ |
+
+  Eigen::Vector3d jerk_feedforward = Eigen::Vector3d(0, 0, 0);
+
+  if (tracker_command.use_jerk) {
+
+    Eigen::Matrix3d I;
+    I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
+    Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z);
+    jerk_feedforward             = (I.transpose() * Rd.transpose() * desired_jerk) / (throttle_force / total_mass);
+  }
+
+  // | --------------- run the attitude controller -------------- |
+
+  Eigen::Vector3d attitude_rate_saturation(constraints.roll_rate, constraints.pitch_rate, constraints.yaw_rate);
+
+  auto attitude_rate_command = common::attitudeController(uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq);
+
+  if (!attitude_rate_command) {
+    return;
+  }
+
+  // | ---------- construct the attitude rate reference --------- |
+
+  if (output_modality == common::ATTITUDE_RATE) {
+
+    last_control_output_.control_output = attitude_rate_command;
+
+    return;
+  }
+
+  // --------------------------------------------------------------
+  // |                    Attitude rate control                   |
+  // --------------------------------------------------------------
+
+  return;
+}
+
+//}
+
+/* positionPassthrough() //{ */
+
+void Se3Controller::positionPassthrough(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
+
+  if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
+    ROS_ERROR("[Se3Controller]: the tracker did not provide position+hdg reference");
+    return;
+  }
+
+  mrs_msgs::HwApiPositionCmd cmd;
+
+  cmd.header.frame_id = uav_state.header.frame_id;
+  cmd.header.stamp    = ros::Time::now();
+
+  cmd.position = tracker_command.position;
+  cmd.heading  = tracker_command.heading;
+
+  last_control_output_.control_output = cmd;
+
+  // fill the unbiased desired accelerations
+  last_control_output_.desired_unbiased_acceleration = {};
+  last_control_output_.desired_orientation           = {};
+  last_control_output_.desired_heading_rate          = {};
+
+  // | ----------------- fill in the diagnostics ---------------- |
+
+  last_control_output_.diagnostics.ramping_up = false;
+
+  last_control_output_.diagnostics.mass_estimator  = false;
+  last_control_output_.diagnostics.mass_difference = 0;
+
+  last_control_output_.diagnostics.disturbance_estimator = false;
+
+  last_control_output_.diagnostics.disturbance_bx_b = 0;
+  last_control_output_.diagnostics.disturbance_by_b = 0;
+
+  last_control_output_.diagnostics.disturbance_bx_w = 0;
+  last_control_output_.diagnostics.disturbance_by_w = 0;
+
+  last_control_output_.diagnostics.disturbance_wx_w = 0;
+  last_control_output_.diagnostics.disturbance_wy_w = 0;
+
+  last_control_output_.diagnostics.controller_enforcing_constraints = false;
+
+  last_control_output_.diagnostics.controller = "MrsController";
+}
+
+//}
+
+/* PIDVelocityOutput() //{ */
+
+void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command,
+                                      const common::CONTROL_OUTPUT& control_output, const double& dt) {
+
+  if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
+    ROS_ERROR("[Se3Controller]: the tracker did not provide position+hdg reference");
+    return;
+  }
+
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+
+  Eigen::Vector3d pos_ref = Eigen::Vector3d(tracker_command.position.x, tracker_command.position.y, tracker_command.position.z);
+  Eigen::Vector3d pos     = Eigen::Vector3d(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
+
+  double hdg_ref = tracker_command.heading;
+  double hdg     = 0;
+
+  try {
+    hdg = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
+  }
+  catch (...) {
+    // TODO get heading alternatively
+    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not calculate the UAV heading");
+  }
+
+  // | ------------------ velocity feedforward ------------------ |
+
+  Eigen::Vector3d vel_ff = Eigen::Vector3d(tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z);
+
+  // | -------------------------- gains ------------------------- |
+
+  Eigen::Vector3d Kp;
+
+  {
+    std::scoped_lock lock(mutex_gains_);
+
+    Kp << kpxy_, kpxy_, kpz_;
+  }
+
+  // | --------------------- control errors --------------------- |
+
+  Eigen::Vector3d Ep = pos_ref - pos;
+
+  // | --------------------------- pid -------------------------- |
+
+  position_pid_x_.setSaturation(constraints.horizontal_speed);
+  position_pid_y_.setSaturation(constraints.horizontal_speed);
+  position_pid_z_.setSaturation(std::min(constraints.vertical_ascending_speed, constraints.vertical_descending_speed));
+
+  double des_vel_x = position_pid_x_.update(Ep[0], dt);
+  double des_vel_y = position_pid_y_.update(Ep[1], dt);
+  double des_vel_z = position_pid_z_.update(Ep[2], dt);
+
+  // | -------------------- position feedback ------------------- |
+
+  Eigen::Vector3d des_vel = Eigen::Vector3d(des_vel_x, des_vel_y, des_vel_z) + vel_ff;
+
+  if (control_output == common::VELOCITY_HDG) {
+
+    // | --------------------- fill the output -------------------- |
+
+    mrs_msgs::HwApiVelocityHdgCmd cmd;
+
+    cmd.header.frame_id = uav_state.header.frame_id;
+    cmd.header.stamp    = ros::Time::now();
+
+    cmd.velocity.x = des_vel[0];
+    cmd.velocity.y = des_vel[1];
+    cmd.velocity.z = des_vel[2];
+
+    cmd.heading = tracker_command.heading;
+
+    last_control_output_.control_output = cmd;
+
+  } else if (control_output == common::VELOCITY_HDG_RATE) {
+
+    position_pid_heading_.setSaturation(constraints.heading_speed);
+
+    double hdg_err = mrs_lib::geometry::sradians::diff(hdg_ref, hdg);
+
+    double des_hdg_rate = position_pid_heading_.update(hdg_err, dt);
+
+    // | --------------------- fill the output -------------------- |
+
+    mrs_msgs::HwApiVelocityHdgRateCmd cmd;
+
+    cmd.header.frame_id = uav_state.header.frame_id;
+    cmd.header.stamp    = ros::Time::now();
+
+    cmd.velocity.x = des_vel[0];
+    cmd.velocity.y = des_vel[1];
+    cmd.velocity.z = des_vel[2];
+
+    cmd.heading_rate = des_hdg_rate;
+
+    last_control_output_.control_output = cmd;
+  } else {
+
+    ROS_ERROR("[Se3Controller]: the required output of the position PID is not supported");
+    return;
+  }
+
+  // fill the unbiased desired accelerations
+  last_control_output_.desired_unbiased_acceleration = {};
+  last_control_output_.desired_orientation           = {};
+  last_control_output_.desired_heading_rate          = {};
+
+  // | ----------------- fill in the diagnostics ---------------- |
+
+  last_control_output_.diagnostics.ramping_up = false;
+
+  last_control_output_.diagnostics.mass_estimator  = false;
+  last_control_output_.diagnostics.mass_difference = 0;
+
+  last_control_output_.diagnostics.disturbance_estimator = false;
+
+  last_control_output_.diagnostics.disturbance_bx_b = 0;
+  last_control_output_.diagnostics.disturbance_by_b = 0;
+
+  last_control_output_.diagnostics.disturbance_bx_w = 0;
+  last_control_output_.diagnostics.disturbance_by_w = 0;
+
+  last_control_output_.diagnostics.disturbance_wx_w = 0;
+  last_control_output_.diagnostics.disturbance_wy_w = 0;
+
+  last_control_output_.diagnostics.controller_enforcing_constraints = false;
+
+  last_control_output_.diagnostics.controller = "MrsController";
 }
 
 //}
