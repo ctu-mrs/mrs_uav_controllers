@@ -459,7 +459,10 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
-  last_control_output_.control_output = {};
+  last_control_output_.desired_heading_rate          = {};
+  last_control_output_.desired_orientation           = {};
+  last_control_output_.desired_unbiased_acceleration = {};
+  last_control_output_.control_output                = {};
 
   if (!is_active_) {
     return last_control_output_;
@@ -1026,6 +1029,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
       cmd.heading_rate = des_hdg_rate;
 
+      last_control_output_.desired_heading_rate = des_hdg_rate;
+
       last_control_output_.control_output = cmd;
     }
 
@@ -1381,6 +1386,16 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   if (!attitude_rate_command) {
     return;
+  }
+
+  // | --------- fill in the already known attitude rate -------- |
+
+  {
+    try {
+      last_control_output_.desired_heading_rate = mrs_lib::AttitudeConverter(R).getHeadingRate(attitude_rate_command->body_rate);
+    }
+    catch (...) {
+    }
   }
 
   // | ---------- construct the attitude rate reference --------- |
