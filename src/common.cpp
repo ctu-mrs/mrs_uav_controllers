@@ -326,6 +326,53 @@ std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_m
 
 //}
 
+/* actuatorMixer() //{ */
+
+std::optional<mrs_msgs::HwApiActuatorCmd> actuatorMixer(const mrs_msgs::HwApiControlGroupCmd& ctrl_group_cmd, const Eigen::MatrixXd& mixer) {
+
+  Eigen::Vector4d ctrl_group(ctrl_group_cmd.roll, ctrl_group_cmd.pitch, ctrl_group_cmd.yaw, ctrl_group_cmd.throttle);
+
+  Eigen::VectorXd motors = mixer * ctrl_group;
+
+  double min = motors.minCoeff();
+
+  if (min < 0.0) {
+    motors.array() += abs(min);
+  }
+
+  double max = motors.maxCoeff();
+
+  if (max > 1.0) {
+
+    if (ctrl_group_cmd.throttle > 1e-2) {
+
+      // scale down roll/pitch/yaw actions to maintain desired throttle
+      for (int i = 0; i < 3; i++) {
+        ctrl_group(i) = ctrl_group(i) / (motors.mean() / ctrl_group_cmd.throttle);
+      }
+
+      motors = mixer * ctrl_group;
+
+    } else {
+      motors /= max;
+    }
+  }
+
+  // | --------------------- fill in the msg -------------------- |
+
+  mrs_msgs::HwApiActuatorCmd actuator_msg;
+
+  actuator_msg.stamp = ros::Time::now();
+
+  for (int i = 0; i < motors.size(); i++) {
+    actuator_msg.motors.push_back(motors[i]);
+  }
+
+  return {actuator_msg};
+}
+
+//}
+
 }  // namespace common
 
 }  // namespace mrs_uav_controllers

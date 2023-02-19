@@ -537,6 +537,11 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
       break;
     }
 
+    case common::ACTUATORS_CMD: {
+      SE3Controller(uav_state, tracker_command, dt, common::ACTUATORS_CMD);
+      break;
+    }
+
     default: {
     }
   }
@@ -1024,8 +1029,29 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       last_control_output_.control_output = cmd;
     }
 
+    // | -------------- unbiased desired acceleration ------------- |
+
+    Eigen::Vector3d unbiased_des_acc(0, 0, 0);
+
+    {
+      geometry_msgs::Vector3Stamped world_accel;
+
+      world_accel.header.stamp    = ros::Time::now();
+      world_accel.header.frame_id = uav_state.header.frame_id;
+      world_accel.vector.x        = des_acc[0];
+      world_accel.vector.y        = des_acc[1];
+      world_accel.vector.z        = des_acc[2];
+
+      auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
+
+      if (res) {
+
+        unbiased_des_acc << res.value().vector.x, res.value().vector.y, res.value().vector.z;
+      }
+    }
+
     // fill the unbiased desired accelerations
-    last_control_output_.desired_unbiased_acceleration = des_acc;
+    last_control_output_.desired_unbiased_acceleration = unbiased_des_acc;
 
     // | ----------------- fill in the diagnostics ---------------- |
 
@@ -1381,6 +1407,23 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   if (output_modality == common::CONTROL_GROUP) {
 
     last_control_output_.control_output = control_output_command;
+
+    return;
+  }
+
+  // --------------------------------------------------------------
+  // |                        output mixer                        |
+  // --------------------------------------------------------------
+
+  auto actuator_cmd = common::actuatorMixer(control_output_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+
+  if (!actuator_cmd) {
+    return;
+  }
+
+  if (output_modality == common::ACTUATORS_CMD) {
+
+    last_control_output_.control_output = actuator_cmd;
 
     return;
   }
