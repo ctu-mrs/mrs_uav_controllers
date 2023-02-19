@@ -40,8 +40,8 @@ std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs:
                                                                  const Eigen::Vector3d& ff_rate, const Eigen::Vector3d& rate_saturation,
                                                                  const Eigen::Vector3d& gains);
 
-std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_msgs::UavState& uav_state, const Eigen::Vector3d& des_rate,
-                                                                     const double& des_throttle, const Eigen::Vector3d& gains);
+std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_msgs::UavState& uav_state, const mrs_msgs::HwApiAttitudeRateCmd& reference,
+                                                                     const Eigen::Vector3d& gains);
 
 
 /* throttle extraction //{ */

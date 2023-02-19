@@ -301,10 +301,30 @@ std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs:
 
 //}
 
-std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_msgs::UavState& uav_state, const Eigen::Vector3d& des_rate,
-                                                                     const double& des_throttle, const Eigen::Vector3d& gains) {
+/* attitudeRateController() //{ */
 
+std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_msgs::UavState& uav_state, const mrs_msgs::HwApiAttitudeRateCmd& reference,
+                                                                     const Eigen::Vector3d& gains) {
+
+  Eigen::Vector3d des_rate(reference.body_rate.x, reference.body_rate.y, reference.body_rate.z);
+  Eigen::Vector3d cur_rate(uav_state.velocity.angular.x, uav_state.velocity.angular.y, uav_state.velocity.angular.z);
+
+  Eigen::Vector3d ctrl_group_action = (des_rate - cur_rate).array() * gains.array();
+
+  mrs_msgs::HwApiControlGroupCmd cmd;
+
+  cmd.stamp = ros::Time::now();
+
+  cmd.throttle = reference.throttle;
+
+  cmd.roll  = ctrl_group_action[0];
+  cmd.pitch = ctrl_group_action[1];
+  cmd.yaw   = ctrl_group_action[2];
+
+  return {cmd};
 }
+
+//}
 
 }  // namespace common
 

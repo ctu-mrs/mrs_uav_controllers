@@ -116,6 +116,8 @@ private:
   double kqxy_;       // pitch/roll attitude gain
   double kqz_;        // yaw attitude gain
 
+  double kwp_;
+
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
@@ -245,6 +247,9 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   // attitude gains
   param_loader.loadParam("se3/default_gains/horizontal/attitude/kq", kqxy_);
   param_loader.loadParam("se3/default_gains/vertical/attitude/kq", kqz_);
+
+  // attitude rate gains
+  param_loader.loadParam("se3/default_gains/attitude_rate/kp", kwp_);
 
   // mass estimator
   param_loader.loadParam("se3/default_gains/mass_estimator/km", km_);
@@ -524,6 +529,11 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
 
     case common::ATTITUDE_RATE: {
       SE3Controller(uav_state, tracker_command, dt, common::ATTITUDE_RATE);
+      break;
+    }
+
+    case common::CONTROL_GROUP: {
+      SE3Controller(uav_state, tracker_command, dt, common::CONTROL_GROUP);
       break;
     }
 
@@ -1359,6 +1369,21 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // --------------------------------------------------------------
   // |                    Attitude rate control                   |
   // --------------------------------------------------------------
+
+  Eigen::Vector3d Kw = common_handlers_->detailed_model_params->inertia.diagonal() * kwp_;
+
+  auto control_output_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
+
+  if (!control_output_command) {
+    return;
+  }
+
+  if (output_modality == common::CONTROL_GROUP) {
+
+    last_control_output_.control_output = control_output_command;
+
+    return;
+  }
 
   return;
 }
