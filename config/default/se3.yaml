@@ -71,9 +71,10 @@ se3:
 
   # preferred output mode:
   # - choose this one if more output modes are available
-  preferred_output: 1 # {0 = control_group,
-                      #  1 = attitude_rate,
-                      #  2 = attitude,}
+  preferred_output: 2 # {0 = actuators,
+                      #  1 = control_group,
+                      #  2 = attitude_rate,
+                      #  3 = attitude,}
 
 position_controller:
 

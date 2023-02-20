@@ -54,19 +54,19 @@ struct HwApiCmdExtractThrottleVisitor
 {
   std::optional<double> operator()(const mrs_msgs::HwApiActuatorCmd& msg) {
 
-    std::optional<double> throttle = {};
+    double throttle = 0;
 
     if (msg.motors.size() == 0) {
-      return throttle;
+      return {};
     }
 
-    throttle.value() = 0;
+    throttle = 0;
 
     for (size_t i = 0; i < msg.motors.size(); i++) {
-      throttle.value() += msg.motors[i];
+      throttle += msg.motors[i];
     };
 
-    throttle.value() /= msg.motors.size();
+    throttle /= msg.motors.size();
 
     return throttle;
   }

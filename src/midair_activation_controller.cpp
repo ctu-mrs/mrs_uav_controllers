@@ -109,10 +109,6 @@ void MidairActivationController::initialize(const ros::NodeHandle &parent_nh, [[
 
   uav_mass_difference_ = 0;
 
-  // | ----------- calculate the default hover thrust ----------- |
-
-  hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g);
-
   // | ------------------------ profiler ------------------------ |
 
   profiler_ = mrs_lib::Profiler(nh_, "MidairActivationController", _profiler_enabled_);
@@ -138,7 +134,7 @@ bool MidairActivationController::activate([[maybe_unused]] const ControlOutput &
 
   is_active_ = true;
 
-  ROS_INFO("[MidairActivationController]: activated");
+  ROS_INFO("[MidairActivationController]: activated, hover throttle %.2f", hover_throttle_);
 
   return true;
 }
@@ -181,136 +177,174 @@ MidairActivationController::ControlOutput MidairActivationController::update([[m
 
   ControlOutput control_output;
 
-  control_output.diagnostics.controller = "FailsafeController";
+  control_output.diagnostics.controller = "MidairActivationController";
 
-  if (common_handlers_->control_output_modalities.position) {
+  auto highest_modality = common::getHighestOuput(common_handlers_->control_output_modalities);
 
-    mrs_msgs::HwApiPositionCmd cmd;
+  if (!highest_modality) {
 
-    cmd.header.stamp    = ros::Time::now();
-    cmd.header.frame_id = uav_state.header.frame_id;
+    ROS_ERROR_THROTTLE(1.0, "[MidairActivationController]: output modalities are empty! This error should never appear.");
 
-    cmd.position.x = uav_state.pose.position.x;
-    cmd.position.y = uav_state.pose.position.y;
-    cmd.position.z = uav_state.pose.position.z;
+    return control_output;
+  }
 
-    cmd.heading = getHeadingSafely(uav_state, tracker_command);
+  switch (highest_modality.value()) {
 
-    control_output.control_output = cmd;
+    case common::POSITION: {
 
-  } else if (common_handlers_->control_output_modalities.velocity_hdg) {
+      mrs_msgs::HwApiPositionCmd cmd;
 
-    mrs_msgs::HwApiVelocityHdgCmd cmd;
+      cmd.header.stamp    = ros::Time::now();
+      cmd.header.frame_id = uav_state.header.frame_id;
 
-    cmd.header.stamp    = ros::Time::now();
-    cmd.header.frame_id = uav_state.header.frame_id;
+      cmd.position.x = uav_state.pose.position.x;
+      cmd.position.y = uav_state.pose.position.y;
+      cmd.position.z = uav_state.pose.position.z;
 
-    cmd.velocity.x = uav_state.velocity.linear.x;
-    cmd.velocity.y = uav_state.velocity.linear.y;
-    cmd.velocity.z = uav_state.velocity.linear.z;
+      cmd.heading = getHeadingSafely(uav_state, tracker_command);
 
-    cmd.heading = getHeadingSafely(uav_state, tracker_command);
+      control_output.control_output = cmd;
 
-    control_output.control_output = cmd;
-
-  } else if (common_handlers_->control_output_modalities.velocity_hdg_rate) {
-
-    mrs_msgs::HwApiVelocityHdgRateCmd cmd;
-
-    cmd.header.stamp    = ros::Time::now();
-    cmd.header.frame_id = uav_state.header.frame_id;
-
-    cmd.velocity.x = uav_state.velocity.linear.x;
-    cmd.velocity.y = uav_state.velocity.linear.y;
-    cmd.velocity.z = uav_state.velocity.linear.z;
-
-    cmd.heading_rate = 0;
-
-    control_output.control_output = cmd;
-
-  } else if (common_handlers_->control_output_modalities.acceleration_hdg) {
-
-    mrs_msgs::HwApiAccelerationHdgCmd cmd;
-
-    cmd.header.stamp    = ros::Time::now();
-    cmd.header.frame_id = uav_state.header.frame_id;
-
-    cmd.acceleration.x = 0;
-    cmd.acceleration.y = 0;
-    cmd.acceleration.z = 0;
-
-    cmd.heading = getHeadingSafely(uav_state, tracker_command);
-
-    control_output.control_output = cmd;
-
-  } else if (common_handlers_->control_output_modalities.acceleration_hdg_rate) {
-
-    mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
-
-    cmd.header.stamp    = ros::Time::now();
-    cmd.header.frame_id = uav_state.header.frame_id;
-
-    cmd.acceleration.x = 0;
-    cmd.acceleration.y = 0;
-    cmd.acceleration.z = 0;
-
-    cmd.heading_rate = 0;
-
-    control_output.control_output = cmd;
-
-  } else if (common_handlers_->control_output_modalities.attitude) {
-
-    mrs_msgs::HwApiAttitudeCmd cmd;
-
-    cmd.stamp = ros::Time::now();
-
-    cmd.orientation = uav_state.pose.orientation;
-    cmd.throttle    = hover_throttle_;
-
-    control_output.control_output = cmd;
-
-  } else if (common_handlers_->control_output_modalities.attitude_rate) {
-
-    mrs_msgs::HwApiAttitudeRateCmd cmd;
-
-    cmd.stamp = ros::Time::now();
-
-    cmd.body_rate.x = 0;
-    cmd.body_rate.y = 0;
-    cmd.body_rate.z = 0;
-
-    cmd.throttle = hover_throttle_;
-
-    control_output.control_output = cmd;
-
-  } else if (common_handlers_->control_output_modalities.control_group) {
-
-    mrs_msgs::HwApiControlGroupCmd cmd;
-
-    cmd.stamp = ros::Time::now();
-
-    cmd.roll     = 0;
-    cmd.pitch    = 0;
-    cmd.yaw      = 0;
-    cmd.throttle = hover_throttle_;
-
-    control_output.control_output = cmd;
-
-  } else if (common_handlers_->control_output_modalities.actuators) {
-
-    mrs_msgs::HwApiActuatorCmd cmd;
-
-    cmd.stamp = ros::Time::now();
-
-    for (int i = 0; i < common_handlers_->throttle_model.n_motors; i++) {
-      cmd.motors.push_back(hover_throttle_);
+      break;
     }
 
-    control_output.control_output = cmd;
+    case common::VELOCITY_HDG: {
+
+      mrs_msgs::HwApiVelocityHdgCmd cmd;
+
+      cmd.header.stamp    = ros::Time::now();
+      cmd.header.frame_id = uav_state.header.frame_id;
+
+      cmd.velocity.x = uav_state.velocity.linear.x;
+      cmd.velocity.y = uav_state.velocity.linear.y;
+      cmd.velocity.z = uav_state.velocity.linear.z;
+
+      cmd.heading = getHeadingSafely(uav_state, tracker_command);
+
+      control_output.control_output = cmd;
+
+      break;
+    }
+
+    case common::VELOCITY_HDG_RATE: {
+
+      mrs_msgs::HwApiVelocityHdgRateCmd cmd;
+
+      cmd.header.stamp    = ros::Time::now();
+      cmd.header.frame_id = uav_state.header.frame_id;
+
+      cmd.velocity.x = uav_state.velocity.linear.x;
+      cmd.velocity.y = uav_state.velocity.linear.y;
+      cmd.velocity.z = uav_state.velocity.linear.z;
+
+      cmd.heading_rate = 0;
+
+      control_output.control_output = cmd;
+
+      break;
+    }
+
+    case common::ACCELERATION_HDG: {
+
+      mrs_msgs::HwApiAccelerationHdgCmd cmd;
+
+      cmd.header.stamp    = ros::Time::now();
+      cmd.header.frame_id = uav_state.header.frame_id;
+
+      cmd.acceleration.x = 0;
+      cmd.acceleration.y = 0;
+      cmd.acceleration.z = 0;
+
+      cmd.heading = getHeadingSafely(uav_state, tracker_command);
+
+      control_output.control_output = cmd;
+
+      break;
+    }
+
+    case common::ACCELERATION_HDG_RATE: {
+
+      mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
+
+      cmd.header.stamp    = ros::Time::now();
+      cmd.header.frame_id = uav_state.header.frame_id;
+
+      cmd.acceleration.x = 0;
+      cmd.acceleration.y = 0;
+      cmd.acceleration.z = 0;
+
+      cmd.heading_rate = 0;
+
+      control_output.control_output = cmd;
+
+      break;
+    }
+
+    case common::ATTITUDE: {
+
+      mrs_msgs::HwApiAttitudeCmd cmd;
+
+      cmd.stamp = ros::Time::now();
+
+      cmd.orientation = uav_state.pose.orientation;
+      cmd.throttle    = hover_throttle_;
+
+      control_output.control_output = cmd;
+
+      break;
+    }
+
+    case common::ATTITUDE_RATE: {
+
+      mrs_msgs::HwApiAttitudeRateCmd cmd;
+
+      cmd.stamp = ros::Time::now();
+
+      cmd.body_rate.x = 0;
+      cmd.body_rate.y = 0;
+      cmd.body_rate.z = 0;
+
+      cmd.throttle = hover_throttle_;
+
+      control_output.control_output = cmd;
+
+      break;
+    }
+
+    case common::CONTROL_GROUP: {
+
+      mrs_msgs::HwApiControlGroupCmd cmd;
+
+      cmd.stamp = ros::Time::now();
+
+      cmd.roll     = 0;
+      cmd.pitch    = 0;
+      cmd.yaw      = 0;
+      cmd.throttle = hover_throttle_;
+
+      control_output.control_output = cmd;
+
+      break;
+    }
+
+    case common::ACTUATORS_CMD: {
+
+      mrs_msgs::HwApiActuatorCmd cmd;
+
+      cmd.stamp = ros::Time::now();
+
+      for (int i = 0; i < common_handlers_->throttle_model.n_motors; i++) {
+        cmd.motors.push_back(hover_throttle_);
+      }
+
+      control_output.control_output = cmd;
+
+      break;
+    }
   }
 
   return control_output;
-}
+}  // namespace midair_activation_controller
 
 //}
 

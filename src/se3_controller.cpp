@@ -23,9 +23,10 @@
 
 //}
 
-#define OUTPUT_CONTROL_GROUP 0
-#define OUTPUT_ATTITUDE_RATE 1
-#define OUTPUT_ATTITUDE 2
+#define OUTPUT_ACTUATORS 0
+#define OUTPUT_CONTROL_GROUP 1
+#define OUTPUT_ATTITUDE_RATE 2
+#define OUTPUT_ATTITUDE 3
 
 namespace mrs_uav_controllers
 {
@@ -300,9 +301,9 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   // | ---------------- prepare stuff from params --------------- |
 
-  if (!(drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE ||
-        drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
-    ROS_ERROR("[Se3Controller]: preferred output mode has to be {0, 1, 2}!");
+  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
+        drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
+    ROS_ERROR("[Se3Controller]: preferred output mode has to be {0, 1, 2, 3}!");
     ros::shutdown();
   }
 
@@ -360,8 +361,11 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
 
   activation_control_output_ = last_control_output;
 
+  double activation_mass = _uav_mass_;
+
   if (last_control_output.diagnostics.mass_estimator) {
     uav_mass_difference_ = last_control_output.diagnostics.mass_difference;
+    activation_mass += uav_mass_difference_;
     ROS_INFO("[Se3Controller]: setting mass difference from the last control output: %.2f kg", uav_mass_difference_);
   }
 
@@ -386,8 +390,8 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
   // rampup check
   if (_rampup_enabled_ && throttle_last_controller) {
 
-    double hover_throttle =
-        mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, last_control_output.diagnostics.total_mass * common_handlers_->g);
+    double hover_throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, activation_mass * common_handlers_->g);
+
     double throttle_difference = hover_throttle - throttle_last_controller.value();
 
     if (throttle_difference > 0) {
@@ -507,6 +511,9 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
   } else if (drs_params.preferred_output_mode == OUTPUT_CONTROL_GROUP && common_handlers_->control_output_modalities.control_group) {
     ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing control group output");
     lowest_modality = common::CONTROL_GROUP;
+  } else if (drs_params.preferred_output_mode == OUTPUT_ACTUATORS && common_handlers_->control_output_modalities.actuators) {
+    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing actuators output");
+    lowest_modality = common::ACTUATORS_CMD;
   }
 
   switch (lowest_modality.value()) {
