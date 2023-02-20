@@ -21,17 +21,18 @@ private:
   double integral_   = 0;
 
   double saturation = -1;
+  double antiwindup = -1;
 
 public:
   PIDController();
 
-  void setParams(const double kp, const double kd, const double ki, const double saturation = -1);
+  void setParams(const double &kp, const double &kd, const double &ki, const double &saturation, const double &antiwindup);
 
   void setSaturation(const double saturation = -1);
 
   void reset(void);
 
-  double update(double error, double dt);
+  double update(const double &error, const double &dt);
 };
 
 // --------------------------------------------------------------
@@ -43,12 +44,13 @@ PIDController::PIDController() {
   this->reset();
 }
 
-void PIDController::setParams(const double kp, const double kd, const double ki, const double saturation) {
+void PIDController::setParams(const double &kp, const double &kd, const double &ki, const double &saturation, const double &antiwindup) {
 
   this->_kp_       = kp;
   this->_kd_       = kd;
   this->_ki_       = ki;
   this->saturation = saturation;
+  this->antiwindup = antiwindup;
 }
 
 void PIDController::setSaturation(const double saturation) {
@@ -62,7 +64,7 @@ void PIDController::reset(void) {
   this->integral_   = 0;
 }
 
-double PIDController::update(double error, double dt) {
+double PIDController::update(const double &error, const double &dt) {
 
   // calculate the control error difference
   double difference = (error - last_error_) / dt;
@@ -75,19 +77,18 @@ double PIDController::update(double error, double dt) {
   double sum = p_component + d_component + i_component;
 
   if (saturation > 0) {
-
     if (sum >= saturation) {
       sum = saturation;
     } else if (sum <= -saturation) {
       sum = -saturation;
-    } else {
+    }
+  }
+
+  if (antiwindup > 0) {
+    if (std::abs(sum) < antiwindup) {
+      // add to the integral
       integral_ += error * dt;
     }
-
-  } else {
-
-    // add to the integral
-    integral_ += error * dt;
   }
 
   // return the summ of the components
