@@ -38,7 +38,7 @@ std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::ControlOut
 
 std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs::UavState& uav_state, const mrs_msgs::HwApiAttitudeCmd& reference,
                                                                  const Eigen::Vector3d& ff_rate, const Eigen::Vector3d& rate_saturation,
-                                                                 const Eigen::Vector3d& gains);
+                                                                 const Eigen::Vector3d& gains, const bool& parasitic_heading_rate_compensation);
 
 std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_msgs::UavState& uav_state, const mrs_msgs::HwApiAttitudeRateCmd& reference,
                                                                      const Eigen::Vector3d& gains);

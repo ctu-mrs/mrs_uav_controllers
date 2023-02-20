@@ -76,6 +76,8 @@ Eigen::Matrix3d so3transform(const Eigen::Vector3d& body_z, const ::Eigen::Vecto
 
   if (preserve_heading) {
 
+    ROS_DEBUG_THROTTLE(1.0, "[SO3Transform]: using Baca's method");
+
     // | ------------------------- body z ------------------------- |
     Rd.col(2) = body_z_normed;
 
@@ -108,6 +110,8 @@ Eigen::Matrix3d so3transform(const Eigen::Vector3d& body_z, const ::Eigen::Vecto
     Rd.col(1).normalize();
 
   } else {
+
+    ROS_DEBUG_THROTTLE(1.0, "[SO3Transform]: using Lee's method");
 
     Rd.col(2) = body_z_normed;
     Rd.col(1) = Rd.col(2).cross(heading);
@@ -228,7 +232,7 @@ std::optional<double> extractThrottle(const mrs_uav_managers::Controller::Contro
 
 std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs::UavState& uav_state, const mrs_msgs::HwApiAttitudeCmd& reference,
                                                                  const Eigen::Vector3d& ff_rate, const Eigen::Vector3d& rate_saturation,
-                                                                 const Eigen::Vector3d& gains) {
+                                                                 const Eigen::Vector3d& gains, const bool& parasitic_heading_rate_compensation) {
 
   Eigen::Matrix3d R  = mrs_lib::AttitudeConverter(uav_state.pose.orientation);
   Eigen::Matrix3d Rd = mrs_lib::AttitudeConverter(reference.orientation);
@@ -240,29 +244,34 @@ std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs:
 
   // | ----------- parasitic heading rate compensation ---------- |
 
-  // compensate for the parasitic heading rate created by the desired pitch and roll rate
-  Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
+  if (parasitic_heading_rate_compensation) {
 
-  Eigen::Vector3d q_feedback_yawless = rate_feedback;
-  q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
+    ROS_DEBUG_THROTTLE(1.0, "[AttitudeController]: parasitic heading rate compensation enabled");
 
-  double parasitic_heading_rate = 0;
+    // compensate for the parasitic heading rate created by the desired pitch and roll rate
+    Eigen::Vector3d rp_heading_rate_compensation(0, 0, 0);
 
-  try {
-    parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeadingRate(q_feedback_yawless);
+    Eigen::Vector3d q_feedback_yawless = rate_feedback;
+    q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
+
+    double parasitic_heading_rate = 0;
+
+    try {
+      parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeadingRate(q_feedback_yawless);
+    }
+    catch (...) {
+      ROS_ERROR("[AttitudeController]: exception caught while calculating the parasitic heading rate!");
+    }
+
+    try {
+      rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[AttitudeController]: exception caught while calculating the parasitic heading rate compensation!");
+    }
+
+    rate_feedback += rp_heading_rate_compensation;
   }
-  catch (...) {
-    ROS_ERROR("[AttitudeController]: exception caught while calculating the parasitic heading rate!");
-  }
-
-  try {
-    rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
-  }
-  catch (...) {
-    ROS_ERROR("[AttitudeController]: exception caught while calculating the parasitic heading rate compensation!");
-  }
-
-  rate_feedback += rp_heading_rate_compensation;
 
   // | --------------- saturate the attitude rate --------------- |
 

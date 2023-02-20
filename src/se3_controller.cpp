@@ -23,8 +23,9 @@
 
 //}
 
-#define OUTPUT_ATTITUDE_RATE 0
-#define OUTPUT_ATTITUDE_QUATERNION 1
+#define OUTPUT_CONTROL_GROUP 0
+#define OUTPUT_ATTITUDE_RATE 1
+#define OUTPUT_ATTITUDE 2
 
 namespace mrs_uav_controllers
 {
@@ -150,11 +151,6 @@ private:
   ros::Time         last_update_time_;
   std::atomic<bool> first_iteration_ = true;
 
-  // | ----------------------- output mode ---------------------- |
-
-  int        output_mode_;  // attitude_rate / acceleration
-  std::mutex mutex_output_mode_;
-
   // | ------------------------ profiler_ ------------------------ |
 
   mrs_lib::Profiler profiler_;
@@ -277,7 +273,7 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.loadParam("se3/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  param_loader.loadParam("se3/output_mode", output_mode_);
+  param_loader.loadParam("se3/preferred_output", drs_params_.preferred_output_mode);
 
   param_loader.loadParam("se3/rotation_matrix", drs_params_.rotation_type);
 
@@ -304,8 +300,9 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   // | ---------------- prepare stuff from params --------------- |
 
-  if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[Se3Controller]: output mode has to be {0, 1}!");
+  if (!(drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE ||
+        drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
+    ROS_ERROR("[Se3Controller]: preferred output mode has to be {0, 1, 2}!");
     ros::shutdown();
   }
 
@@ -330,7 +327,6 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   drs_params_.kibxy_lim        = kibxy_lim_;
   drs_params_.km               = km_;
   drs_params_.km_lim           = km_lim_;
-  drs_params_.output_mode      = output_mode_;
   drs_params_.jerk_feedforward = true;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
@@ -457,6 +453,8 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
   last_control_output_.desired_heading_rate          = {};
@@ -496,6 +494,19 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
     ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: output modalities are empty! This error should never appear.");
 
     return last_control_output_;
+  }
+
+  // | ----- we might prefer some output mode over the other ---- |
+
+  if (drs_params.preferred_output_mode == OUTPUT_ATTITUDE_RATE && common_handlers_->control_output_modalities.attitude_rate) {
+    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing attitude rate output");
+    lowest_modality = common::ATTITUDE_RATE;
+  } else if (drs_params.preferred_output_mode == OUTPUT_ATTITUDE && common_handlers_->control_output_modalities.attitude) {
+    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing attitude output");
+    lowest_modality = common::ATTITUDE;
+  } else if (drs_params.preferred_output_mode == OUTPUT_CONTROL_GROUP && common_handlers_->control_output_modalities.control_group) {
+    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing control group output");
+    lowest_modality = common::CONTROL_GROUP;
   }
 
   switch (lowest_modality.value()) {
@@ -1050,7 +1061,6 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
 
       if (res) {
-
         unbiased_des_acc << res.value().vector.x, res.value().vector.y, res.value().vector.z;
       }
     }
@@ -1370,7 +1380,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   Eigen::Vector3d jerk_feedforward = Eigen::Vector3d(0, 0, 0);
 
-  if (tracker_command.use_jerk) {
+  if (tracker_command.use_jerk && drs_params.jerk_feedforward) {
+
+    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: using jerk feedforward");
 
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
@@ -1382,7 +1394,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   Eigen::Vector3d attitude_rate_saturation(constraints.roll_rate, constraints.pitch_rate, constraints.yaw_rate);
 
-  auto attitude_rate_command = common::attitudeController(uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq);
+  auto attitude_rate_command = common::attitudeController(uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq,
+                                                          drs_params.pitch_roll_heading_rate_compensation);
 
   if (!attitude_rate_command) {
     return;
@@ -1639,11 +1652,9 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 void Se3Controller::callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, [[maybe_unused]] uint32_t level) {
 
   {
-    std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
+    std::scoped_lock lock(mutex_drs_params_);
 
     drs_params_ = config;
-
-    output_mode_ = config.output_mode;
   }
 
   ROS_INFO("[Se3Controller]: DRS updated gains");
@@ -1694,21 +1705,20 @@ void Se3Controller::filterGains(const bool mute_gains, const double dt) {
 
       DrsConfig_t new_drs_params = drs_params_;
 
-      new_drs_params.kpxy        = kpxy_;
-      new_drs_params.kvxy        = kvxy_;
-      new_drs_params.kaxy        = kaxy_;
-      new_drs_params.kiwxy       = kiwxy_;
-      new_drs_params.kibxy       = kibxy_;
-      new_drs_params.kpz         = kpz_;
-      new_drs_params.kvz         = kvz_;
-      new_drs_params.kaz         = kaz_;
-      new_drs_params.kqxy        = kqxy_;
-      new_drs_params.kqz         = kqz_;
-      new_drs_params.kiwxy_lim   = kiwxy_lim_;
-      new_drs_params.kibxy_lim   = kibxy_lim_;
-      new_drs_params.km          = km_;
-      new_drs_params.km_lim      = km_lim_;
-      new_drs_params.output_mode = output_mode_;
+      new_drs_params.kpxy      = kpxy_;
+      new_drs_params.kvxy      = kvxy_;
+      new_drs_params.kaxy      = kaxy_;
+      new_drs_params.kiwxy     = kiwxy_;
+      new_drs_params.kibxy     = kibxy_;
+      new_drs_params.kpz       = kpz_;
+      new_drs_params.kvz       = kvz_;
+      new_drs_params.kaz       = kaz_;
+      new_drs_params.kqxy      = kqxy_;
+      new_drs_params.kqz       = kqz_;
+      new_drs_params.kiwxy_lim = kiwxy_lim_;
+      new_drs_params.kibxy_lim = kibxy_lim_;
+      new_drs_params.km        = km_;
+      new_drs_params.km_lim    = km_lim_;
 
       drs_->updateConfig(new_drs_params);
     }

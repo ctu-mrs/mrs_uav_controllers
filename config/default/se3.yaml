@@ -69,8 +69,11 @@ se3:
 
   rotation_matrix: 1 # {0 = lee, 1 = baca (oblique projection}
 
-  # output mode to PixHawk
-  output_mode: 0 # {0 = attitude_rate, 1 = orientation}
+  # preferred output mode:
+  # - choose this one if more output modes are available
+  preferred_output: 1 # {0 = control_group,
+                      #  1 = attitude_rate,
+                      #  2 = attitude,}
 
 position_controller:
 
