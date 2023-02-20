@@ -80,7 +80,7 @@ position_controller:
 
   translation_gains:
     p: 1.0
-    d: 0.1
+    d: 0.2
     i: 0.05
   heading_gains:
     p: 10.0

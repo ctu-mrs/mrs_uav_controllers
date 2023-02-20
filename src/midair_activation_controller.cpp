@@ -251,9 +251,9 @@ MidairActivationController::ControlOutput MidairActivationController::update([[m
       cmd.header.stamp    = ros::Time::now();
       cmd.header.frame_id = uav_state.header.frame_id;
 
-      cmd.acceleration.x = 0;
-      cmd.acceleration.y = 0;
-      cmd.acceleration.z = 0;
+      cmd.acceleration.x = uav_state.acceleration.linear.x;
+      cmd.acceleration.y = uav_state.acceleration.linear.y;
+      cmd.acceleration.z = uav_state.acceleration.linear.z;
 
       cmd.heading = getHeadingSafely(uav_state, tracker_command);
 
@@ -269,9 +269,9 @@ MidairActivationController::ControlOutput MidairActivationController::update([[m
       cmd.header.stamp    = ros::Time::now();
       cmd.header.frame_id = uav_state.header.frame_id;
 
-      cmd.acceleration.x = 0;
-      cmd.acceleration.y = 0;
-      cmd.acceleration.z = 0;
+      cmd.acceleration.x = uav_state.acceleration.linear.x;
+      cmd.acceleration.y = uav_state.acceleration.linear.y;
+      cmd.acceleration.z = uav_state.acceleration.linear.z;
 
       cmd.heading_rate = 0;
 
