@@ -117,6 +117,8 @@ private:
 
   double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
 
+  double getHeadingSafely(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
@@ -1322,7 +1324,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     }
   }
 
-  auto output_mode = common::getHighestOuput(common_handlers_->control_output_modalities);
+  auto output_mode = common::getLowestOuput(common_handlers_->control_output_modalities);
 
   if (!output_mode) {
 
@@ -1625,6 +1627,31 @@ double MpcController::calculateGainChange(const double dt, const double current_
   }
 
   return current_value + change;
+}
+
+//}
+
+/* getHeadingSafely() //{ */
+
+double MpcController::getHeadingSafely(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
+  }
+  catch (...) {
+  }
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYaw();
+  }
+  catch (...) {
+  }
+
+  if (tracker_command.use_heading) {
+    return tracker_command.heading;
+  }
+
+  return 0;
 }
 
 //}
