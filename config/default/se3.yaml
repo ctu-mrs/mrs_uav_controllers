@@ -30,7 +30,7 @@ se3:
         kq: 5.0
 
     attitude_rate:
-      kp: 4.0
+      kp: 1.0
 
     mass_estimator:
       km: 1.0
