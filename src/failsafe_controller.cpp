@@ -266,6 +266,15 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
 
   control_output.diagnostics.controller = "FailsafeController";
 
+  auto highest_modality = common::getHighestOuput(common_handlers_->control_output_modalities);
+
+  if (!highest_modality) {
+
+    ROS_ERROR_THROTTLE(1.0, "[MidairActivationController]: output modalities are empty! This error should never appear.");
+
+    return control_output;
+  }
+
   if (common_handlers_->control_output_modalities.attitude) {
 
     mrs_msgs::HwApiAttitudeCmd attitude_cmd;

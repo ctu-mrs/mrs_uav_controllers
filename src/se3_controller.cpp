@@ -134,6 +134,8 @@ private:
 
   double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
 
+  double getHeadingSafely(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command);
+
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
 
@@ -674,15 +676,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // | ----------------- get the current heading ---------------- |
 
-  double uav_heading = 0;
-
-  try {
-    uav_heading = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
-  }
-  catch (...) {
-    // TODO get heading alternatively
-    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not calculate the UAV heading");
-  }
+  double uav_heading = getHeadingSafely(uav_state, tracker_command);
 
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
@@ -691,7 +685,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // Rp - position reference in global frame
   // Rv - velocity reference in global frame
   // Ra - velocity reference in global frame
-  // Rw - angular velocity reference
+  // Rw - angular velocity reference in body frame
 
   Eigen::Vector3d Rp = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
@@ -734,6 +728,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     Ra << 0, 0, 0;
   }
 
+  // | ------ store the estimated values from the uav state ----- |
+
   // Op - position in global frame
   // Ov - velocity in global frame
   Eigen::Vector3d Op(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
@@ -748,17 +744,17 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // | -------------- calculate the control errors -------------- |
 
   // position control error
-  Eigen::Vector3d Ep = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Ep(0, 0, 0);
 
   if (tracker_command.use_position_horizontal || tracker_command.use_position_vertical) {
     Ep = Rp - Op;
   }
 
   // velocity control error
-  Eigen::Vector3d Ev = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Ev(0, 0, 0);
 
   if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
-      tracker_command.use_position_vertical) {  // even wehn use_position_vertical to provide dampening
+      tracker_command.use_position_vertical) {  // use_position_vertical = true, not a mistake, this provides dampening
     Ev = Rv - Ov;
   }
 
@@ -766,10 +762,10 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   filterGains(tracker_command.disable_position_gains, dt);
 
-  Eigen::Vector3d Ka = Eigen::Vector3d::Zero(3);
-  Eigen::Array3d  Kp = Eigen::Array3d::Zero(3);
-  Eigen::Array3d  Kv = Eigen::Array3d::Zero(3);
-  Eigen::Array3d  Kq = Eigen::Array3d::Zero(3);
+  Eigen::Vector3d Ka(0, 0, 0);
+  Eigen::Array3d  Kp(0, 0, 0);
+  Eigen::Array3d  Kv(0, 0, 0);
+  Eigen::Array3d  Kq(0, 0, 0);
 
   {
     std::scoped_lock lock(mutex_gains_);
@@ -809,16 +805,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       Ka << 0, 0, 0;
     }
 
-    // Those gains are set regardless of tracker_command setting,
-    // because we need to control the attitude.
-    Kq << kqxy_, kqxy_, kqz_;
+    if (!tracker_command.use_attitude_rate) {
+      Kq << kqxy_, kqxy_, kqz_;
+    }
   }
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
-
-  // TODO factor mass / inertia into attitude gain
-  /* Kq = Kq * (_uav_mass_ + uav_mass_difference_); */
+  Kq = Kq * ((_uav_mass_ + uav_mass_difference_) / (_uav_mass_));
 
   // | --------------- desired orientation matrix --------------- |
 
@@ -1206,10 +1200,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // | -------------------- desired throttle -------------------- |
 
-  double throttle_force = f.dot(R.col(2));
-  double throttle       = 0;
+  double desired_thrust_force = f.dot(R.col(2));
+  double throttle             = 0;
 
-  if (rampup_active_) {
+  if (tracker_command.use_throttle) {
+
+    // the throttle is overriden from the tracker command
+    throttle = tracker_command.throttle;
+
+  } else if (rampup_active_) {
 
     // deactivate the rampup when the times up
     if (fabs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
@@ -1233,15 +1232,10 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   } else {
 
-    if (!tracker_command.use_throttle) {
-      if (throttle_force >= 0) {
-        throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, throttle_force);
-      } else {
-        ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", throttle_force);
-      }
+    if (desired_thrust_force >= 0) {
+      throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, desired_thrust_force);
     } else {
-      // the throttle is overriden from the tracker command
-      throttle = tracker_command.throttle;
+      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", desired_thrust_force);
     }
   }
 
@@ -1288,7 +1282,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   {
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d thrust_vector   = throttle_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector   = desired_thrust_force * des_orientation.col(2);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
@@ -1394,7 +1388,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
     Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z);
-    jerk_feedforward             = (I.transpose() * Rd.transpose() * desired_jerk) / (throttle_force / total_mass);
+    jerk_feedforward             = (I.transpose() * Rd.transpose() * desired_jerk) / (desired_thrust_force / total_mass);
   }
 
   // | --------------- run the attitude controller -------------- |
@@ -1464,7 +1458,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   }
 
   return;
-}
+}  // namespace se3_controller
 
 //}
 
@@ -1533,19 +1527,15 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
   Eigen::Vector3d pos     = Eigen::Vector3d(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
 
   double hdg_ref = tracker_command.heading;
-  double hdg     = 0;
-
-  try {
-    hdg = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
-  }
-  catch (...) {
-    // TODO get heading alternatively
-    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not calculate the UAV heading");
-  }
+  double hdg     = getHeadingSafely(uav_state, tracker_command);
 
   // | ------------------ velocity feedforward ------------------ |
 
-  Eigen::Vector3d vel_ff = Eigen::Vector3d(tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z);
+  Eigen::Vector3d vel_ff(0, 0, 0);
+
+  if (tracker_command.use_velocity_horizontal && tracker_command.use_velocity_vertical) {
+    vel_ff = Eigen::Vector3d(tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z);
+  }
 
   // | -------------------------- gains ------------------------- |
 
@@ -1600,6 +1590,14 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 
     double des_hdg_rate = position_pid_heading_.update(hdg_err, dt);
 
+    // | --------------------------- ff --------------------------- |
+
+    double des_hdg_ff = 0;
+
+    if (tracker_command.use_heading_rate) {
+      des_hdg_ff = tracker_command.heading_rate;
+    }
+
     // | --------------------- fill the output -------------------- |
 
     mrs_msgs::HwApiVelocityHdgRateCmd cmd;
@@ -1611,7 +1609,7 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
     cmd.velocity.y = des_vel[1];
     cmd.velocity.z = des_vel[2];
 
-    cmd.heading_rate = des_hdg_rate;
+    cmd.heading_rate = des_hdg_rate + des_hdg_ff;
 
     last_control_output_.control_output = cmd;
   } else {
@@ -1778,6 +1776,31 @@ double Se3Controller::calculateGainChange(const double dt, const double current_
   }
 
   return current_value + change;
+}
+
+//}
+
+/* getHeadingSafely() //{ */
+
+double Se3Controller::getHeadingSafely(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
+  }
+  catch (...) {
+  }
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYaw();
+  }
+  catch (...) {
+  }
+
+  if (tracker_command.use_heading) {
+    return tracker_command.heading;
+  }
+
+  return 0;
 }
 
 //}
