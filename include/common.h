@@ -44,7 +44,7 @@ std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_m
                                                                      const Eigen::Vector3d& gains);
 
 
-std::optional<mrs_msgs::HwApiActuatorCmd> actuatorMixer(const mrs_msgs::HwApiControlGroupCmd& ctrl_group_cmd, const Eigen::MatrixXd& mixer);
+mrs_msgs::HwApiActuatorCmd actuatorMixer(const mrs_msgs::HwApiControlGroupCmd& ctrl_group_cmd, const Eigen::MatrixXd& mixer);
 
 /* throttle extraction //{ */
 

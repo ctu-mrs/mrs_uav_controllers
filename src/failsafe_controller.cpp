@@ -46,6 +46,8 @@ public:
 
   const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
 
+  double getHeadingSafely(const mrs_msgs::UavState &uav_state);
+
 private:
   std::string _version_;
 
@@ -53,6 +55,14 @@ private:
   bool is_active_      = false;
 
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
+
+  // | ----------------------- parameters ----------------------- |
+
+  double _descend_speed_;
+  double _descend_acceleration_;
+
+  double _kq_;
+  double _kw_;
 
   // | ------------------- remember uav state ------------------- |
 
@@ -71,7 +81,7 @@ private:
 
   // | ----------------------- yaw control ---------------------- |
 
-  double yaw_setpoint_;
+  double heading_setpoint_;
 
   // | ------------------ activation and output ----------------- |
 
@@ -85,6 +95,11 @@ private:
 
   mrs_lib::Profiler profiler_;
   bool              _profiler_enabled_ = false;
+
+  // | ----------------------- constraints ---------------------- |
+
+  mrs_msgs::DynamicsConstraints constraints_;
+  std::mutex                    mutex_constraints_;
 };
 
 //}
@@ -120,6 +135,11 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   param_loader.loadParam("throttle_decrease_rate", _throttle_decrease_rate_);
   param_loader.loadParam("enable_profiler", _profiler_enabled_);
   param_loader.loadParam("initial_throttle_percentage", _initial_throttle_percentage_);
+  param_loader.loadParam("attitude_controller/gains/kp", _kq_);
+  param_loader.loadParam("rate_controller/gains/kp", _kw_);
+
+  param_loader.loadParam("velocity_output/descend_speed", _descend_speed_);
+  param_loader.loadParam("acceleration_output/descend_acceleration", _descend_acceleration_);
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[FailsafeController]: Could not load all parameters!");
@@ -127,6 +147,8 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
   }
 
   uav_mass_difference_ = 0;
+
+  _kq_ *= _uav_mass_;
 
   // | ----------- calculate the default hover throttle ----------- |
 
@@ -161,13 +183,9 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
 
     // | --------------- calculate the euler angles --------------- |
 
-    if (last_control_output_.desired_orientation) {
-      yaw_setpoint_ = mrs_lib::AttitudeConverter(last_control_output.desired_orientation.value()).getYaw();
-    } else {
-      yaw_setpoint_ = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYaw();
-    }
+    heading_setpoint_ = getHeadingSafely(uav_state);
 
-    ROS_INFO("[FailsafeController]: activated with yaw: %.2f rad", yaw_setpoint_);
+    ROS_INFO("[FailsafeController]: activated with heading: %.2f rad", heading_setpoint_);
 
     activation_control_output_ = last_control_output;
 
@@ -234,6 +252,8 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
     return ControlOutput();
   }
 
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
@@ -269,27 +289,147 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
   auto highest_modality = common::getHighestOuput(common_handlers_->control_output_modalities);
 
   if (!highest_modality) {
-
-    ROS_ERROR_THROTTLE(1.0, "[MidairActivationController]: output modalities are empty! This error should never appear.");
-
+    ROS_ERROR_THROTTLE(1.0, "[FailsafeController]: output modalities are empty! This error should never appear.");
     return control_output;
   }
 
-  if (common_handlers_->control_output_modalities.attitude) {
-
-    mrs_msgs::HwApiAttitudeCmd attitude_cmd;
-
-    attitude_cmd.stamp       = ros::Time::now();
-    attitude_cmd.orientation = mrs_lib::AttitudeConverter(0, 0, yaw_setpoint_);
-    attitude_cmd.throttle    = hover_throttle_;
-
-    control_output.control_output = attitude_cmd;
-  }
-
-  // TODO finish the other output modalities
-
   control_output.diagnostics.controller = "FailsafeController";
 
+  // --------------------------------------------------------------
+  // |                       position output                      |
+  // --------------------------------------------------------------
+
+  if (highest_modality.value() == common::POSITION) {
+    ROS_INFO_THROTTLE(1.0, "[FailsafeController]: returning empty command, because we are at the position modality");
+    return control_output;
+  }
+
+  // --------------------------------------------------------------
+  // |                       velocity output                      |
+  // --------------------------------------------------------------
+
+  if (highest_modality.value() == common::VELOCITY_HDG) {
+
+    mrs_msgs::HwApiVelocityHdgCmd vel_cmd;
+
+    vel_cmd.header.stamp = ros::Time::now();
+
+    vel_cmd.velocity.x = 0;
+    vel_cmd.velocity.y = 0;
+    vel_cmd.velocity.z = _descend_speed_;
+    vel_cmd.heading    = heading_setpoint_;
+
+    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning velocity+hdg output");
+    control_output.control_output = vel_cmd;
+    return control_output;
+  }
+
+  if (highest_modality.value() == common::VELOCITY_HDG_RATE) {
+
+    mrs_msgs::HwApiVelocityHdgRateCmd vel_cmd;
+
+    vel_cmd.header.stamp = ros::Time::now();
+
+    vel_cmd.velocity.x   = 0;
+    vel_cmd.velocity.y   = 0;
+    vel_cmd.velocity.z   = _descend_speed_;
+    vel_cmd.heading_rate = 0.0;
+
+    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning velocity+hdg rate output");
+    control_output.control_output = vel_cmd;
+    return control_output;
+  }
+
+  // --------------------------------------------------------------
+  // |                     acceleration output                    |
+  // --------------------------------------------------------------
+
+  if (highest_modality.value() == common::ACCELERATION_HDG) {
+
+    mrs_msgs::HwApiAccelerationHdgCmd acc_cmd;
+
+    acc_cmd.header.stamp = ros::Time::now();
+
+    acc_cmd.acceleration.x = 0;
+    acc_cmd.acceleration.y = 0;
+    acc_cmd.acceleration.z = _descend_acceleration_;
+    acc_cmd.heading        = heading_setpoint_;
+
+    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning acceleration+hdg output");
+    control_output.control_output = acc_cmd;
+    return control_output;
+  }
+
+  if (highest_modality.value() == common::ACCELERATION_HDG_RATE) {
+
+    mrs_msgs::HwApiAccelerationHdgRateCmd acc_cmd;
+
+    acc_cmd.header.stamp = ros::Time::now();
+
+    acc_cmd.acceleration.x = 0;
+    acc_cmd.acceleration.y = 0;
+    acc_cmd.acceleration.z = _descend_acceleration_;
+    acc_cmd.heading_rate   = 0.0;
+
+    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning acceleration+hdg rate output");
+    control_output.control_output = acc_cmd;
+    return control_output;
+  }
+
+  // --------------------------------------------------------------
+  // |                       attitude output                      |
+  // --------------------------------------------------------------
+
+  mrs_msgs::HwApiAttitudeCmd attitude_cmd;
+
+  attitude_cmd.stamp       = ros::Time::now();
+  attitude_cmd.orientation = mrs_lib::AttitudeConverter(0, 0, heading_setpoint_);
+  attitude_cmd.throttle    = hover_throttle_;
+
+  if (highest_modality.value() == common::ATTITUDE) {
+    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning attitude output");
+    control_output.control_output = attitude_cmd;
+    return control_output;
+  }
+
+  // --------------------------------------------------------------
+  // |                      attitude control                      |
+  // --------------------------------------------------------------
+
+  Eigen::Vector3d attitude_rate_saturation(constraints.roll_rate, constraints.pitch_rate, constraints.yaw_rate);
+  Eigen::Vector3d rate_ff(0, 0, 0);
+  Eigen::Vector3d Kq(_kq_, _kq_, _kq_);
+
+  auto attitude_rate_command = common::attitudeController(uav_state, attitude_cmd, rate_ff, attitude_rate_saturation, Kq, false);
+
+  if (highest_modality.value() == common::ATTITUDE_RATE) {
+    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning attitude rate output");
+    control_output.control_output = attitude_rate_command;
+    return control_output;
+  }
+
+  // --------------------------------------------------------------
+  // |                    attitude rate control                   |
+  // --------------------------------------------------------------
+
+  Eigen::Vector3d Kw = common_handlers_->detailed_model_params->inertia.diagonal() * _kw_;
+
+  auto control_group_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
+
+  if (highest_modality.value() == common::CONTROL_GROUP) {
+    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning control group output");
+    control_output.control_output = control_group_command;
+    return control_output;
+  }
+
+  // --------------------------------------------------------------
+  // |                            mixer                           |
+  // --------------------------------------------------------------
+
+  mrs_msgs::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+
+  ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning actuators output");
+  control_output.control_output = actuator_cmd;
   return control_output;
 }
 
@@ -327,7 +467,40 @@ void FailsafeController::resetDisturbanceEstimators(void) {
 const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr FailsafeController::setConstraints([
     [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
 
-  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  if (!is_initialized_) {
+    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  }
+
+  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
+
+  ROS_INFO("[FailsafeController]: updating constraints");
+
+  mrs_msgs::DynamicsConstraintsSrvResponse res;
+  res.success = true;
+  res.message = "constraints updated";
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+}
+
+//}
+
+/* getHeadingSafely() //{ */
+
+double FailsafeController::getHeadingSafely(const mrs_msgs::UavState &uav_state) {
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
+  }
+  catch (...) {
+  }
+
+  try {
+    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYaw();
+  }
+  catch (...) {
+  }
+
+  return 0;
 }
 
 //}

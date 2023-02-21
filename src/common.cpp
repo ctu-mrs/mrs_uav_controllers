@@ -337,7 +337,7 @@ std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_m
 
 /* actuatorMixer() //{ */
 
-std::optional<mrs_msgs::HwApiActuatorCmd> actuatorMixer(const mrs_msgs::HwApiControlGroupCmd& ctrl_group_cmd, const Eigen::MatrixXd& mixer) {
+mrs_msgs::HwApiActuatorCmd actuatorMixer(const mrs_msgs::HwApiControlGroupCmd& ctrl_group_cmd, const Eigen::MatrixXd& mixer) {
 
   Eigen::Vector4d ctrl_group(ctrl_group_cmd.roll, ctrl_group_cmd.pitch, ctrl_group_cmd.yaw, ctrl_group_cmd.throttle);
 
@@ -377,7 +377,7 @@ std::optional<mrs_msgs::HwApiActuatorCmd> actuatorMixer(const mrs_msgs::HwApiCon
     actuator_msg.motors.push_back(motors[i]);
   }
 
-  return {actuator_msg};
+  return actuator_msg;
 }
 
 //}

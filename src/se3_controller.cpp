@@ -1090,7 +1090,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-    last_control_output_.diagnostics.controller = "MrsController";
+    last_control_output_.diagnostics.controller = "Se3Controller";
 
     return;
   }
@@ -1335,7 +1335,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-  last_control_output_.diagnostics.controller = "MrsController";
+  last_control_output_.diagnostics.controller = "Se3Controller";
 
   // | ------------ construct the attitude reference ------------ |
 
@@ -1427,15 +1427,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   Eigen::Vector3d Kw = common_handlers_->detailed_model_params->inertia.diagonal() * kwp_;
 
-  auto control_output_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
+  auto control_group_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
 
-  if (!control_output_command) {
+  if (!control_group_command) {
     return;
   }
 
   if (output_modality == common::CONTROL_GROUP) {
 
-    last_control_output_.control_output = control_output_command;
+    last_control_output_.control_output = control_group_command;
 
     return;
   }
@@ -1444,21 +1444,12 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // |                        output mixer                        |
   // --------------------------------------------------------------
 
-  auto actuator_cmd = common::actuatorMixer(control_output_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+  mrs_msgs::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
 
-  if (!actuator_cmd) {
-    return;
-  }
-
-  if (output_modality == common::ACTUATORS_CMD) {
-
-    last_control_output_.control_output = actuator_cmd;
-
-    return;
-  }
+  last_control_output_.control_output = actuator_cmd;
 
   return;
-}  // namespace se3_controller
+}
 
 //}
 
@@ -1506,7 +1497,7 @@ void Se3Controller::positionPassthrough(const mrs_msgs::UavState& uav_state, con
 
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-  last_control_output_.diagnostics.controller = "MrsController";
+  last_control_output_.diagnostics.controller = "Se3Controller";
 }
 
 //}
@@ -1643,7 +1634,7 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-  last_control_output_.diagnostics.controller = "MrsController";
+  last_control_output_.diagnostics.controller = "Se3Controller";
 }
 
 //}
