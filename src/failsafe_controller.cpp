@@ -132,10 +132,13 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
     ros::shutdown();
   }
 
-  param_loader.loadParam("throttle_decrease_rate", _throttle_decrease_rate_);
   param_loader.loadParam("enable_profiler", _profiler_enabled_);
-  param_loader.loadParam("initial_throttle_percentage", _initial_throttle_percentage_);
+
+  param_loader.loadParam("throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
+  param_loader.loadParam("throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
+
   param_loader.loadParam("attitude_controller/gains/kp", _kq_);
+
   param_loader.loadParam("rate_controller/gains/kp", _kw_);
 
   param_loader.loadParam("velocity_output/descend_speed", _descend_speed_);
@@ -145,6 +148,9 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
     ROS_ERROR("[FailsafeController]: Could not load all parameters!");
     ros::shutdown();
   }
+
+  _descend_speed_        = std::abs(_descend_speed_);
+  _descend_acceleration_ = std::abs(_descend_acceleration_);
 
   uav_mass_difference_ = 0;
 
@@ -316,7 +322,7 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
 
     vel_cmd.velocity.x = 0;
     vel_cmd.velocity.y = 0;
-    vel_cmd.velocity.z = _descend_speed_;
+    vel_cmd.velocity.z = -_descend_speed_;
     vel_cmd.heading    = heading_setpoint_;
 
     ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning velocity+hdg output");
@@ -332,7 +338,7 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
 
     vel_cmd.velocity.x   = 0;
     vel_cmd.velocity.y   = 0;
-    vel_cmd.velocity.z   = _descend_speed_;
+    vel_cmd.velocity.z   = -_descend_speed_;
     vel_cmd.heading_rate = 0.0;
 
     ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning velocity+hdg rate output");
@@ -352,7 +358,7 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
 
     acc_cmd.acceleration.x = 0;
     acc_cmd.acceleration.y = 0;
-    acc_cmd.acceleration.z = _descend_acceleration_;
+    acc_cmd.acceleration.z = -_descend_acceleration_;
     acc_cmd.heading        = heading_setpoint_;
 
     ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning acceleration+hdg output");
@@ -368,7 +374,7 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
 
     acc_cmd.acceleration.x = 0;
     acc_cmd.acceleration.y = 0;
-    acc_cmd.acceleration.z = _descend_acceleration_;
+    acc_cmd.acceleration.z = -_descend_acceleration_;
     acc_cmd.heading_rate   = 0.0;
 
     ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning acceleration+hdg rate output");

@@ -1,15 +1,16 @@
 version: "1.0.4.0"
 
-throttle_decrease_rate: 0.015 # [1/s]
+throttle_output:
+  throttle_decrease_rate: 0.015 # [1/s]
 
-# how much throttle (of the nominal+estimated offset) to apply after activation
-initial_throttle_percentage: 0.98 # [-]
+  # how much throttle (of the nominal+estimated offset) to apply after activation
+  initial_throttle_percentage: 0.98 # [-]
+
+acceleration_output:
+  descend_acceleration: 0.2 # m/s^2
 
 velocity_output:
   descend_speed: 1.0 # m/s
-
-acceleration_output:
-  descend_acceleration: 0.1 # m/s^2
 
 attitude_controller:
   gains:
