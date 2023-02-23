@@ -83,6 +83,6 @@ position_controller:
     d: 0.15
     i: 0.2
   heading_gains:
-    p: 10.0
-    d: 1.0
-    i: 0.1
+    p: 1.0
+    d: 0.1
+    i: 0.01
