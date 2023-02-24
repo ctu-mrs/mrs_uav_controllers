@@ -5,6 +5,7 @@
 #include <ros/ros.h>
 
 #include <common.h>
+#include <pid.hpp>
 
 #include <mrs_uav_managers/controller.h>
 
@@ -20,13 +21,16 @@
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
+#include <mrs_lib/geometry/cyclic.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
 
 //}
 
-#define OUTPUT_ATTITUDE_RATE 0
-#define OUTPUT_ATTITUDE_QUATERNION 1
+#define OUTPUT_ACTUATORS 0
+#define OUTPUT_CONTROL_GROUP 1
+#define OUTPUT_ATTITUDE_RATE 2
+#define OUTPUT_ATTITUDE 3
 
 namespace mrs_uav_controllers
 {
@@ -84,29 +88,39 @@ private:
   void                                              callbackDrs(mrs_uav_controllers::mpc_controllerConfig &config, uint32_t level);
   DrsConfig_t                                       drs_params_;
 
+  // | ----------------------- controllers ---------------------- |
+
+  void positionPassthrough(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+
+  void PIDVelocityOutput(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command, const common::CONTROL_OUTPUT &control_output,
+                         const double &dt);
+
+  void MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command, const double &dt,
+           const common::CONTROL_OUTPUT &output_modality);
+
   // | ----------------------- constraints ---------------------- |
 
   mrs_msgs::DynamicsConstraints constraints_;
   std::mutex                    mutex_constraints_;
-  bool                          got_constraints_ = false;
 
   // | -------- throttle generation and mass estimation --------- |
 
   double _uav_mass_;
   double uav_mass_difference_;
-  double hover_throttle_;
 
   // | ------------------- configurable gains ------------------- |
 
   // gains that are used and already filtered
-  double kiwxy_;      // world xy integral gain
-  double kibxy_;      // body xy integral gain
-  double kiwxy_lim_;  // world xy integral limit
-  double kibxy_lim_;  // body xy integral limit
-  double km_;         // mass estimator gain
-  double km_lim_;     // mass estimator limit
-  double kqxy_;       // pitch/roll attitude gain
-  double kqz_;        // yaw attitude gain
+  double kiwxy_;           // world xy integral gain
+  double kibxy_;           // body xy integral gain
+  double kiwxy_lim_;       // world xy integral limit
+  double kibxy_lim_;       // body xy integral limit
+  double km_;              // mass estimator gain
+  double km_lim_;          // mass estimator limit
+  double kqxy_;            // pitch/roll attitude gain
+  double kqz_;             // yaw attitude gain
+  double kwp_roll_pitch_;  // attitude rate gain
+  double kwp_yaw_;         // attitude rate gain
 
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
@@ -188,11 +202,6 @@ private:
   mrs_lib::Profiler profiler;
   bool              profiler_enabled_ = false;
 
-  // | ----------------------- output mode ---------------------- |
-
-  int        _output_mode_;  // attitude_rate / acceleration
-  std::mutex mutex_output_mode_;
-
   // | ------------------------ integrals ----------------------- |
 
   Eigen::Vector2d Ib_b_;  // body error integral in the body frame
@@ -210,6 +219,21 @@ private:
   double    rampup_duration_;
   ros::Time rampup_start_time_;
   ros::Time rampup_last_time_;
+
+  // | ---------------------- position pid ---------------------- |
+
+  double _pos_pid_p_;
+  double _pos_pid_i_;
+  double _pos_pid_d_;
+
+  double _hdg_pid_p_;
+  double _hdg_pid_i_;
+  double _hdg_pid_d_;
+
+  PIDController position_pid_x_;
+  PIDController position_pid_y_;
+  PIDController position_pid_z_;
+  PIDController position_pid_heading_;
 };
 
 //}
@@ -246,72 +270,90 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   param_loader.loadParam("enable_profiler", profiler_enabled_);
 
   // load the dynamicall model parameters
-  param_loader.loadParam("mpc_model/number_of_states", _n_states_);
-  param_loader.loadParam("mpc_model/dt1", _dt1_);
-  param_loader.loadParam("mpc_model/dt2", _dt2_);
+  param_loader.loadParam("mpc/mpc_model/number_of_states", _n_states_);
+  param_loader.loadParam("mpc/mpc_model/dt1", _dt1_);
+  param_loader.loadParam("mpc/mpc_model/dt2", _dt2_);
 
-  param_loader.loadParam("mpc_parameters/horizon_length", _horizon_length_);
+  param_loader.loadParam("mpc/mpc_parameters/horizon_length", _horizon_length_);
 
-  param_loader.loadParam("mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
-  param_loader.loadParam("mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
-  param_loader.loadParam("mpc_parameters/horizontal/max_jerk", _max_jerk_);
+  param_loader.loadParam("mpc/mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
+  param_loader.loadParam("mpc/mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
+  param_loader.loadParam("mpc/mpc_parameters/horizontal/max_jerk", _max_jerk_);
 
-  param_loader.loadParam("mpc_parameters/horizontal/Q", _mat_Q_);
-  param_loader.loadParam("mpc_parameters/horizontal/S", _mat_S_);
+  param_loader.loadParam("mpc/mpc_parameters/horizontal/Q", _mat_Q_);
+  param_loader.loadParam("mpc/mpc_parameters/horizontal/S", _mat_S_);
 
-  param_loader.loadParam("mpc_parameters/vertical/max_speed", _max_speed_vertical_);
-  param_loader.loadParam("mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
-  param_loader.loadParam("mpc_parameters/vertical/max_u", _max_u_vertical_);
+  param_loader.loadParam("mpc/mpc_parameters/vertical/max_speed", _max_speed_vertical_);
+  param_loader.loadParam("mpc/mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
+  param_loader.loadParam("mpc/mpc_parameters/vertical/max_u", _max_u_vertical_);
 
-  param_loader.loadParam("mpc_parameters/vertical/Q", _mat_Q_z_);
-  param_loader.loadParam("mpc_parameters/vertical/S", _mat_S_z_);
+  param_loader.loadParam("mpc/mpc_parameters/vertical/Q", _mat_Q_z_);
+  param_loader.loadParam("mpc/mpc_parameters/vertical/S", _mat_S_z_);
 
-  param_loader.loadParam("mpc_solver/verbose", _mpc_solver_verbose_);
-  param_loader.loadParam("mpc_solver/max_iterations", _mpc_solver_max_iterations_);
+  param_loader.loadParam("mpc/solver/verbose", _mpc_solver_verbose_);
+  param_loader.loadParam("mpc/solver/max_iterations", _mpc_solver_max_iterations_);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.loadParam("rampup/enabled", _rampup_enabled_);
-  param_loader.loadParam("rampup/speed", _rampup_speed_);
+  param_loader.loadParam("so3/rampup/enabled", _rampup_enabled_);
+  param_loader.loadParam("so3/rampup/speed", _rampup_speed_);
 
   // | --------------------- integral gains --------------------- |
 
-  param_loader.loadParam("integral_gains/kiw", kiwxy_);
-  param_loader.loadParam("integral_gains/kib", kibxy_);
+  param_loader.loadParam("so3/default_gains/integral_gains/kiw", kiwxy_);
+  param_loader.loadParam("so3/default_gains/integral_gains/kib", kibxy_);
 
   // integrator limits
-  param_loader.loadParam("integral_gains/kiw_lim", kiwxy_lim_);
-  param_loader.loadParam("integral_gains/kib_lim", kibxy_lim_);
+  param_loader.loadParam("so3/default_gains/integral_gains/kiw_lim", kiwxy_lim_);
+  param_loader.loadParam("so3/default_gains/integral_gains/kib_lim", kibxy_lim_);
 
   // | ------------- height and attitude controller ------------- |
 
   // attitude gains
-  param_loader.loadParam("attitude_feedback/default_gains/horizontal/attitude/kq", kqxy_);
-  param_loader.loadParam("attitude_feedback/default_gains/vertical/attitude/kq", kqz_);
+  param_loader.loadParam("so3/default_gains/attitude_feedback/horizontal/attitude/kq", kqxy_);
+  param_loader.loadParam("so3/default_gains/attitude_feedback/vertical/attitude/kq", kqz_);
+
+  // attitude rate gains
+  param_loader.loadParam("so3/default_gains/attitude_rate/kp_roll_pitch", kwp_roll_pitch_);
+  param_loader.loadParam("so3/default_gains/attitude_rate/kp_yaw", kwp_yaw_);
 
   // mass estimator
-  param_loader.loadParam("mass_estimator/km", km_);
-  param_loader.loadParam("mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam("so3/mass_estimator/km", km_);
+  param_loader.loadParam("so3/mass_estimator/km_lim", km_lim_);
 
   // constraints
-  param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  param_loader.loadParam("so3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  param_loader.loadParam("so3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[%s]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low", name_.c_str());
     ros::shutdown();
   }
 
-  param_loader.loadParam("constraints/throttle_saturation", _throttle_saturation_);
+  param_loader.loadParam("so3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam("so3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam("so3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // gain muting
-  param_loader.loadParam("gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam("so3/gain_mute_coefficient", _gain_mute_coefficient_);
+
+  // angular rate feed forward
+  param_loader.loadParam("so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
 
   // output mode
-  param_loader.loadParam("output_mode", _output_mode_);
+  param_loader.loadParam("so3/preferred_output", drs_params_.preferred_output_mode);
+
+  // | ------------------- position pid params ------------------ |
+
+  param_loader.loadParam("position_controller/translation_gains/p", _pos_pid_p_);
+  param_loader.loadParam("position_controller/translation_gains/i", _pos_pid_i_);
+  param_loader.loadParam("position_controller/translation_gains/d", _pos_pid_d_);
+
+  param_loader.loadParam("position_controller/heading_gains/p", _hdg_pid_p_);
+  param_loader.loadParam("position_controller/heading_gains/i", _hdg_pid_i_);
+  param_loader.loadParam("position_controller/heading_gains/d", _hdg_pid_d_);
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
@@ -320,8 +362,9 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   // | ---------------- prepare stuff from params --------------- |
 
-  if (!(_output_mode_ == OUTPUT_ATTITUDE_RATE || _output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[%s]: output mode has to be {0, 1}!", this->name_.c_str());
+  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
+        drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
+    ROS_ERROR("[%s]: preferred output mode has to be {0, 1, 2, 3}!", this->name_.c_str());
     ros::shutdown();
   }
 
@@ -358,6 +401,13 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   service_set_integral_terms_ = nh_.advertiseService("set_integral_terms_in", &MpcController::callbackSetIntegralTerms, this);
 
+  // | ---------------------- position pid ---------------------- |
+
+  position_pid_x_.setParams(_pos_pid_p_, _pos_pid_d_, _pos_pid_i_, -1, 1.0);
+  position_pid_y_.setParams(_pos_pid_p_, _pos_pid_d_, _pos_pid_i_, -1, 1.0);
+  position_pid_z_.setParams(_pos_pid_p_, _pos_pid_d_, _pos_pid_i_, -1, 1.0);
+  position_pid_heading_.setParams(_hdg_pid_p_, _hdg_pid_d_, _hdg_pid_i_, -1, 0.1);
+
   // | ------------------------ profiler ------------------------ |
 
   profiler = mrs_lib::Profiler(nh_, "MpcController", profiler_enabled_);
@@ -375,11 +425,13 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
 bool MpcController::activate(const ControlOutput &last_control_output) {
 
-
   activation_control_output_ = last_control_output;
+
+  double activation_mass = _uav_mass_;
 
   if (last_control_output.diagnostics.mass_estimator) {
     uav_mass_difference_ = last_control_output.diagnostics.mass_difference;
+    activation_mass += uav_mass_difference_;
     ROS_INFO("[%s]: setting mass difference from the last control output: %.2f kg", this->name_.c_str(), uav_mass_difference_);
   }
 
@@ -404,8 +456,8 @@ bool MpcController::activate(const ControlOutput &last_control_output) {
   // rampup check
   if (_rampup_enabled_ && throttle_last_controller) {
 
-    double hover_throttle =
-        mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, last_control_output.diagnostics.total_mass * common_handlers_->g);
+    double hover_throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, activation_mass * common_handlers_->g);
+
     double throttle_difference = hover_throttle - throttle_last_controller.value();
 
     if (throttle_difference > 0) {
@@ -467,10 +519,16 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   mrs_lib::Routine    profiler_routine = profiler.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("MpcController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
+  last_control_output_.desired_heading_rate          = {};
+  last_control_output_.desired_orientation           = {};
+  last_control_output_.desired_unbiased_acceleration = {};
+  last_control_output_.control_output                = {};
+
   if (!is_active_) {
-    last_control_output_.control_output = {};
     return last_control_output_;
   }
 
@@ -493,24 +551,193 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     dt = 0.01;
   }
 
+  // | ----------- obtain the lowest possible modality ---------- |
+
+  auto lowest_modality = common::getLowestOuput(common_handlers_->control_output_modalities);
+
+  if (!lowest_modality) {
+
+    ROS_ERROR_THROTTLE(1.0, "[%s]: output modalities are empty! This error should never appear.", name_.c_str());
+
+    return last_control_output_;
+  }
+
+  // | ----- we might prefer some output mode over the other ---- |
+
+  if (drs_params.preferred_output_mode == OUTPUT_ATTITUDE_RATE && common_handlers_->control_output_modalities.attitude_rate) {
+    ROS_DEBUG_THROTTLE(1.0, "[%s]: prioritizing attitude rate output", name_.c_str());
+    lowest_modality = common::ATTITUDE_RATE;
+  } else if (drs_params.preferred_output_mode == OUTPUT_ATTITUDE && common_handlers_->control_output_modalities.attitude) {
+    ROS_DEBUG_THROTTLE(1.0, "[%s]: prioritizing attitude output", name_.c_str());
+    lowest_modality = common::ATTITUDE;
+  } else if (drs_params.preferred_output_mode == OUTPUT_CONTROL_GROUP && common_handlers_->control_output_modalities.control_group) {
+    ROS_DEBUG_THROTTLE(1.0, "[%s]: prioritizing control group output", name_.c_str());
+    lowest_modality = common::CONTROL_GROUP;
+  } else if (drs_params.preferred_output_mode == OUTPUT_ACTUATORS && common_handlers_->control_output_modalities.actuators) {
+    ROS_DEBUG_THROTTLE(1.0, "[%s]: prioritizing actuators output", name_.c_str());
+    lowest_modality = common::ACTUATORS_CMD;
+  }
+
+  switch (lowest_modality.value()) {
+
+    case common::POSITION: {
+      positionPassthrough(uav_state, tracker_command);
+      break;
+    }
+
+    case common::VELOCITY_HDG: {
+      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG, dt);
+      break;
+    }
+
+    case common::VELOCITY_HDG_RATE: {
+      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG_RATE, dt);
+      break;
+    }
+
+    case common::ACCELERATION_HDG: {
+      MPC(uav_state, tracker_command, dt, common::ACCELERATION_HDG);
+      break;
+    }
+
+    case common::ACCELERATION_HDG_RATE: {
+      MPC(uav_state, tracker_command, dt, common::ACCELERATION_HDG_RATE);
+      break;
+    }
+
+    case common::ATTITUDE: {
+      MPC(uav_state, tracker_command, dt, common::ATTITUDE);
+      break;
+    }
+
+    case common::ATTITUDE_RATE: {
+      MPC(uav_state, tracker_command, dt, common::ATTITUDE_RATE);
+      break;
+    }
+
+    case common::CONTROL_GROUP: {
+      MPC(uav_state, tracker_command, dt, common::CONTROL_GROUP);
+      break;
+    }
+
+    case common::ACTUATORS_CMD: {
+      MPC(uav_state, tracker_command, dt, common::ACTUATORS_CMD);
+      break;
+    }
+
+    default: {
+      break;
+    }
+  }
+
+  return last_control_output_;
+}
+
+//}
+
+/* //{ getStatus() */
+
+const mrs_msgs::ControllerStatus MpcController::getStatus() {
+
+  mrs_msgs::ControllerStatus controller_status;
+
+  controller_status.active = is_active_;
+
+  return controller_status;
+}
+
+//}
+
+/* switchOdometrySource() //{ */
+
+void MpcController::switchOdometrySource(const mrs_msgs::UavState &new_uav_state) {
+
+  ROS_INFO("[%s]: switching the odometry source", this->name_.c_str());
+
+  auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
+
+  // | ----- transform world disturabances to the new frame ----- |
+
+  geometry_msgs::Vector3Stamped world_integrals;
+
+  world_integrals.header.stamp    = ros::Time::now();
+  world_integrals.header.frame_id = uav_state.header.frame_id;
+
+  world_integrals.vector.x = Iw_w_[0];
+  world_integrals.vector.y = Iw_w_[1];
+  world_integrals.vector.z = 0;
+
+  auto res = common_handlers_->transformer->transformSingle(world_integrals, new_uav_state.header.frame_id);
+
+  if (res) {
+
+    std::scoped_lock lock(mutex_integrals_);
+
+    Iw_w_[0] = res.value().vector.x;
+    Iw_w_[1] = res.value().vector.y;
+
+  } else {
+
+    ROS_ERROR_THROTTLE(1.0, "[%s]: could not transform world integral to the new frame", this->name_.c_str());
+
+    std::scoped_lock lock(mutex_integrals_);
+
+    Iw_w_[0] = 0;
+    Iw_w_[1] = 0;
+  }
+}
+
+//}
+
+/* resetDisturbanceEstimators() //{ */
+
+void MpcController::resetDisturbanceEstimators(void) {
+
+  std::scoped_lock lock(mutex_integrals_);
+
+  Iw_w_ = Eigen::Vector2d::Zero(2);
+  Ib_b_ = Eigen::Vector2d::Zero(2);
+}
+
+//}
+
+/* setConstraints() //{ */
+
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr MpcController::setConstraints([
+    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
+
+  if (!is_initialized_) {
+    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  }
+
+  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
+
+  ROS_INFO("[%s]: updating constraints", this->name_.c_str());
+
+  mrs_msgs::DynamicsConstraintsSrvResponse res;
+  res.success = true;
+  res.message = "constraints updated";
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+}
+
+//}
+
+// --------------------------------------------------------------
+// |                         controllers                        |
+// --------------------------------------------------------------
+
+/* Mpc() //{ */
+
+void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command, const double &dt,
+                        const common::CONTROL_OUTPUT &output_modality) {
+
+  auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+
   // | ----------------- get the current heading ---------------- |
 
-  double uav_heading = 0;
-
-  try {
-    uav_heading = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
-  }
-  catch (...) {
-    ROS_ERROR_THROTTLE(1.0, "[%s]: could not calculate the UAV heading", name_.c_str());
-  }
-
-  if (tracker_command.disable_antiwindups) {  // TODO why is this here?
-    ROS_INFO_THROTTLE(1.0, "[%s]: antiwindups disabled by tracker", name_.c_str());
-  }
-
-  // | -------------- clean the last control output ------------- |
-
-  last_control_output_.control_output = {};
+  double uav_heading = getHeadingSafely(uav_state, tracker_command);
 
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
@@ -519,29 +746,15 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   // Rp - position reference in global frame
   // Rv - velocity reference in global frame
   // Ra - velocity reference in global frame
-  // Rw - angular velocity reference
 
   Eigen::Vector3d Rp = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Ra = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d Rw = Eigen::Vector3d::Zero(3);
 
   Rp << tracker_command.position.x, tracker_command.position.y, tracker_command.position.z;  // fill the desired position
   Rv << tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z;
 
-  if (tracker_command.use_heading_rate) {
-
-    // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
-    double desired_yaw_rate = 0;
-    try {
-      desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYawRateIntrinsic(tracker_command.heading_rate);
-    }
-    catch (...) {
-      ROS_ERROR("[%s]: exception caught while calculating the desired_yaw_rate feedforward", name_.c_str());
-    }
-
-    Rw << 0, 0, desired_yaw_rate;
-  }
+  // | ------ store the estimated values from the uav state ----- |
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -560,8 +773,8 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   // | --------------- calculate the control erros -------------- |
 
-  Eigen::Vector3d Ep = Op - Rp;
-  Eigen::Vector3d Ev = Ov - Rv;
+  Eigen::Vector3d Ep = Rp - Op;
+  Eigen::Vector3d Ev = Rv - Ov;
 
   // | ------------------- initial conditions ------------------- |
 
@@ -750,19 +963,18 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   filterGains(tracker_command.disable_position_gains, dt);
 
-  Eigen::Vector3d Ka;
-  Eigen::Array3d  Kq;
+  Eigen::Array3d Kw(0, 0, 0);
+  Eigen::Array3d Kq;
 
   {
     std::scoped_lock lock(mutex_gains_);
 
     Kq << kqxy_, kqxy_, kqz_;
+
+    Kw[0] = kwp_roll_pitch_;
+    Kw[1] = kwp_roll_pitch_;
+    Kw[2] = kwp_yaw_;
   }
-
-  // | -------------- recalculate the hover throttle -------------- |
-
-  hover_throttle_ =
-      mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
 
   // | ---------- desired orientation matrix and force ---------- |
 
@@ -803,215 +1015,82 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   Eigen::Vector3d feed_forward = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
 
   Eigen::Vector3d integral_feedback;
-
   {
     std::scoped_lock lock(mutex_integrals_);
 
     integral_feedback << Ib_w[0] + Iw_w_[0], Ib_w[1] + Iw_w_[1], 0;
   }
 
-  Eigen::Vector3d f = integral_feedback + feed_forward;
-
-  // | ----------- limiting the downwards acceleration ---------- |
-  // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
-
-  // if the downwards part of the force is close to counter-act the gravity acceleration
-  if (f[2] < 0) {
-
-    ROS_WARN_THROTTLE(1.0, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", this->name_.c_str(), f[2]);
-
-    f << 0, 0, 1;
-  }
-
-  // | ------------------ limit the tilt angle ------------------ |
-
-  Eigen::Vector3d f_norm = f.normalized();
-
-  // calculate the force in spherical coordinates
-  double theta = acos(f_norm[2]);
-  double phi   = atan2(f_norm[1], f_norm[0]);
-
-  // check for the failsafe limit
-  if (!std::isfinite(theta)) {
-
-    ROS_ERROR("[%s]: NaN detected in variable 'theta', returning empty command", this->name_.c_str());
-
-    return last_control_output_;
-  }
-
-  if (_tilt_angle_failsafe_enabled_ && theta > _tilt_angle_failsafe_) {
-
-    ROS_ERROR("[%s]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", this->name_.c_str(),
-              (180.0 / M_PI) * theta, (180.0 / M_PI) * _tilt_angle_failsafe_);
-    ROS_INFO("[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f[0], f[1], f[2]);
-    ROS_INFO("[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
-    ROS_INFO("[%s]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), tracker_command.position.x, tracker_command.position.y,
-             tracker_command.position.z, tracker_command.heading);
-    ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), uav_state.pose.position.x, uav_state.pose.position.y,
-             uav_state.pose.position.z, uav_heading);
-
-    return last_control_output_;
-  }
-
-  // saturate the angle
-
-  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
-
-  if (fabs(constraints.tilt) > 1e-3 && theta > constraints.tilt) {
-    ROS_WARN_THROTTLE(1.0, "[%s]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", this->name_.c_str(), (theta / M_PI) * 180.0,
-                      (constraints.tilt / M_PI) * 180.0);
-    theta = constraints.tilt;
-  }
-
-  // reconstruct the vector
-  f_norm[0] = sin(theta) * cos(phi);
-  f_norm[1] = sin(theta) * sin(phi);
-  f_norm[2] = cos(theta);
-
-  // | ------------- construct the rotational matrix ------------ |
-
-  Eigen::Matrix3d Rd;
-
-  if (tracker_command.use_orientation) {
-
-    // fill in the desired orientation based on the desired orientation from the control command
-    Rd = mrs_lib::AttitudeConverter(tracker_command.orientation);
-
-    if (tracker_command.use_heading) {
-      try {
-        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command.heading);
-      }
-      catch (...) {
-        ROS_WARN_THROTTLE(1.0, "[%s]: failed to add heading to the desired orientation matrix", this->name_.c_str());
-      }
-    }
-
-  } else {
-
-    Eigen::Vector3d bxd;  // desired heading vector
-
-    if (tracker_command.use_heading) {
-      bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
-    } else {
-      ROS_ERROR_THROTTLE(1.0, "[%s]: desired heading was not specified, using current heading instead!", this->name_.c_str());
-      bxd << cos(uav_heading), sin(uav_heading), 0;
-    }
-
-    Rd = common::so3transform(f_norm, bxd, false);
-  }
-
-  // | -------------------- orientation error ------------------- |
-
-  Eigen::Matrix3d E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
-
-  Eigen::Vector3d Eq;
-
-  // clang-format off
-  Eq << (E(2, 1) - E(1, 2)) / 2.0,
-        (E(0, 2) - E(2, 0)) / 2.0,
-        (E(1, 0) - E(0, 1)) / 2.0;
-  // clang-format on
-
-  // | ------------------- angular rate error ------------------- |
-
-  double throttle_force = f.dot(R.col(2));
-  double throttle       = 0;
-
-  if (throttle_force >= 0) {
-    throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, throttle_force);
-  } else {
-    ROS_WARN_THROTTLE(1.0, "[%s]: just so you know, the desired throttle force is negative (%.2f)", this->name_.c_str(), throttle_force);
-  }
-
-  // saturate the throttle
-  if (!std::isfinite(throttle)) {
-
-    throttle = 0;
-    ROS_ERROR("[%s]: NaN detected in variable 'throttle', setting it to 0 and returning!!!", this->name_.c_str());
-
-  } else if (throttle > _throttle_saturation_) {
-
-    throttle = _throttle_saturation_;
-    ROS_WARN_THROTTLE(1.0, "[%s]: saturating throttle to %.2f", this->name_.c_str(), _throttle_saturation_);
-    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.position.x,
-                      tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.velocity.x,
-                      tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.acceleration.x,
-                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.jerk.x,
-                      tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
-    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-    ROS_WARN_THROTTLE(0.1, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), uav_state.pose.position.x,
-                      uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
-    ROS_WARN_THROTTLE(0.1, "[%s]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", this->name_.c_str(), uav_state.velocity.linear.x,
-                      uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
-    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-
-  } else if (throttle < 0.0) {
-
-    throttle = 0.0;
-    ROS_WARN_THROTTLE(1.0, "[%s]: saturating throttle to %.2f", this->name_.c_str(), 0.0);
-    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.position.x,
-                      tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.velocity.x,
-                      tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.acceleration.x,
-                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), tracker_command.jerk.x,
-                      tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
-    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-    ROS_WARN_THROTTLE(0.1, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", this->name_.c_str(), uav_state.pose.position.x,
-                      uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
-    ROS_WARN_THROTTLE(0.1, "[%s]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", this->name_.c_str(), uav_state.velocity.linear.x,
-                      uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
-    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", this->name_.c_str());
-  }
-
-  // prepare the attitude feedback
-  Eigen::Vector3d q_feedback = -Kq * Eq.array();
-
-  // feedforward angular acceleration
-  Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
-
-  Eigen::Matrix3d I;
-  I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
-  Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z);
-  q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (throttle_force / total_mass);
-
-  // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw + q_feedforward;
-
-  // compensate for the parasitic heading rate created by the desired pitch and roll rate
-  Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
-
-  Eigen::Vector3d q_feedback_yawless = t;
-  q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
-
-  double parasitic_heading_rate = 0;
-
-  try {
-    parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeadingRate(q_feedback_yawless);
-  }
-  catch (...) {
-    ROS_ERROR("[%s]: exception caught while calculating the parasitic heading rate", name_.c_str());
-  }
-
-  try {
-    rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
-  }
-  catch (...) {
-    ROS_ERROR("[%s]: exception caught while calculating the parasitic heading rate compensation", name_.c_str());
-  }
-
-  t += rp_heading_rate_compensation;
-
   // --------------------------------------------------------------
   // |                 integrators and estimators                 |
   // --------------------------------------------------------------
+
+  /* world error integrator //{ */
+
+  // --------------------------------------------------------------
+  // |                  integrate the world error                 |
+  // --------------------------------------------------------------
+
+  {
+    std::scoped_lock lock(mutex_gains_, mutex_integrals_);
+
+    Eigen::Vector3d integration_switch(1, 1, 0);
+
+    // integrate the world error
+
+    // antiwindup
+    double temp_gain = kiwxy_;
+    if (!tracker_command.disable_antiwindups) {
+      if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
+        temp_gain = 0;
+        ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
+      }
+    }
+
+    if (integral_terms_enabled_) {
+      if (tracker_command.use_position_horizontal) {
+        Iw_w_ += temp_gain * Ep.head(2) * dt;
+      } else if (tracker_command.use_velocity_horizontal) {
+        Iw_w_ += temp_gain * Ev.head(2) * dt;
+      }
+    }
+
+    // saturate the world X
+    bool world_integral_saturated = false;
+    if (!std::isfinite(Iw_w_[0])) {
+      Iw_w_[0] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!", this->name_.c_str());
+    } else if (Iw_w_[0] > kiwxy_lim_) {
+      Iw_w_[0]                 = kiwxy_lim_;
+      world_integral_saturated = true;
+    } else if (Iw_w_[0] < -kiwxy_lim_) {
+      Iw_w_[0]                 = -kiwxy_lim_;
+      world_integral_saturated = true;
+    }
+
+    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[%s]: MPC's world X integral is being saturated!", this->name_.c_str());
+    }
+
+    // saturate the world Y
+    world_integral_saturated = false;
+    if (!std::isfinite(Iw_w_[1])) {
+      Iw_w_[1] = 0;
+      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!", this->name_.c_str());
+    } else if (Iw_w_[1] > kiwxy_lim_) {
+      Iw_w_[1]                 = kiwxy_lim_;
+      world_integral_saturated = true;
+    } else if (Iw_w_[1] < -kiwxy_lim_) {
+      Iw_w_[1]                 = -kiwxy_lim_;
+      world_integral_saturated = true;
+    }
+
+    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
+      ROS_WARN_THROTTLE(1.0, "[%s]: MPC's world Y integral is being saturated!", this->name_.c_str());
+    }
+  }
+
+  //}
 
   /* body error integrator //{ */
 
@@ -1075,9 +1154,9 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
     if (integral_terms_enabled_) {
       if (tracker_command.use_position_horizontal) {
-        Ib_b_ -= temp_gain * Ep_fcu_untilted * dt;
+        Ib_b_ += temp_gain * Ep_fcu_untilted * dt;
       } else if (tracker_command.use_velocity_horizontal) {
-        Ib_b_ -= temp_gain * Ev_fcu_untilted * dt;
+        Ib_b_ += temp_gain * Ev_fcu_untilted * dt;
       }
     }
 
@@ -1118,72 +1197,107 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   //}
 
-  /* world error integrator //{ */
+  Eigen::Vector3d des_acc = integral_feedback / total_mass + Ra;
 
-  // --------------------------------------------------------------
-  // |                  integrate the world error                 |
-  // --------------------------------------------------------------
+  if (output_modality == common::ACCELERATION_HDG || output_modality == common::ACCELERATION_HDG_RATE) {
 
-  {
-    std::scoped_lock lock(mutex_gains_, mutex_integrals_);
+    if (output_modality == common::ACCELERATION_HDG) {
 
-    Eigen::Vector3d integration_switch(1, 1, 0);
+      mrs_msgs::HwApiAccelerationHdgCmd cmd;
 
-    // integrate the world error
+      cmd.acceleration.x = des_acc[0];
+      cmd.acceleration.y = des_acc[1];
+      cmd.acceleration.z = des_acc[2];
 
-    // antiwindup
-    double temp_gain = kiwxy_;
-    if (!tracker_command.disable_antiwindups) {
-      if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
-        temp_gain = 0;
-        ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
+      cmd.heading = tracker_command.heading;
+
+      last_control_output_.control_output = cmd;
+
+    } else {
+
+      double des_hdg_ff = 0;
+
+      if (tracker_command.use_heading_rate) {
+        des_hdg_ff = tracker_command.heading_rate;
+      }
+
+      mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
+
+      cmd.acceleration.x = des_acc[0];
+      cmd.acceleration.y = des_acc[1];
+      cmd.acceleration.z = des_acc[2];
+
+      position_pid_heading_.setSaturation(constraints.heading_speed);
+
+      double hdg_err = mrs_lib::geometry::sradians::diff(tracker_command.heading, uav_heading);
+
+      double des_hdg_rate = position_pid_heading_.update(hdg_err, dt) + des_hdg_ff;
+
+      cmd.heading_rate = des_hdg_rate;
+
+      last_control_output_.desired_heading_rate = des_hdg_rate;
+
+      last_control_output_.control_output = cmd;
+    }
+
+    // | -------------- unbiased desired acceleration ------------- |
+
+    Eigen::Vector3d unbiased_des_acc(0, 0, 0);
+
+    {
+
+      geometry_msgs::Vector3Stamped world_accel;
+
+      world_accel.header.stamp    = ros::Time::now();
+      world_accel.header.frame_id = uav_state.header.frame_id;
+      world_accel.vector.x        = Ra[0];
+      world_accel.vector.y        = Ra[1];
+      world_accel.vector.z        = Ra[2];
+
+      auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
+
+      if (res) {
+        unbiased_des_acc << res.value().vector.x, res.value().vector.y, res.value().vector.z;
       }
     }
 
-    if (integral_terms_enabled_) {
-      if (tracker_command.use_position_horizontal) {
-        Iw_w_ -= temp_gain * Ep.head(2) * dt;
-      } else if (tracker_command.use_velocity_horizontal) {
-        Iw_w_ -= temp_gain * Ev.head(2) * dt;
-      }
-    }
+    // fill the unbiased desired accelerations
+    last_control_output_.desired_unbiased_acceleration = unbiased_des_acc;
 
-    // saturate the world X
-    bool world_integral_saturated = false;
-    if (!std::isfinite(Iw_w_[0])) {
-      Iw_w_[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!", this->name_.c_str());
-    } else if (Iw_w_[0] > kiwxy_lim_) {
-      Iw_w_[0]                 = kiwxy_lim_;
-      world_integral_saturated = true;
-    } else if (Iw_w_[0] < -kiwxy_lim_) {
-      Iw_w_[0]                 = -kiwxy_lim_;
-      world_integral_saturated = true;
-    }
+    // | ----------------- fill in the diagnostics ---------------- |
 
-    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[%s]: MPC's world X integral is being saturated!", this->name_.c_str());
-    }
+    last_control_output_.diagnostics.ramping_up = false;
 
-    // saturate the world Y
-    world_integral_saturated = false;
-    if (!std::isfinite(Iw_w_[1])) {
-      Iw_w_[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!", this->name_.c_str());
-    } else if (Iw_w_[1] > kiwxy_lim_) {
-      Iw_w_[1]                 = kiwxy_lim_;
-      world_integral_saturated = true;
-    } else if (Iw_w_[1] < -kiwxy_lim_) {
-      Iw_w_[1]                 = -kiwxy_lim_;
-      world_integral_saturated = true;
-    }
+    last_control_output_.diagnostics.mass_estimator  = false;
+    last_control_output_.diagnostics.mass_difference = 0;
+    last_control_output_.diagnostics.total_mass      = total_mass;
 
-    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[%s]: MPC's world Y integral is being saturated!", this->name_.c_str());
-    }
+    last_control_output_.diagnostics.disturbance_estimator = true;
+
+    last_control_output_.diagnostics.disturbance_bx_b = -Ib_b_[0];
+    last_control_output_.diagnostics.disturbance_by_b = -Ib_b_[1];
+
+    last_control_output_.diagnostics.disturbance_bx_w = -Ib_w[0];
+    last_control_output_.diagnostics.disturbance_by_w = -Ib_w[1];
+
+    last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_[0];
+    last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_[1];
+
+    last_control_output_.diagnostics.controller_enforcing_constraints = true;
+
+    last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
+    last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
+
+    last_control_output_.diagnostics.vertical_asc_speed_constraint = 0.5 * _max_speed_vertical_;
+    last_control_output_.diagnostics.vertical_asc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+
+    last_control_output_.diagnostics.vertical_desc_speed_constraint = 0.5 * _max_speed_vertical_;
+    last_control_output_.diagnostics.vertical_desc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+
+    last_control_output_.diagnostics.controller = name_;
+
+    return;
   }
-
-  //}
 
   /* mass estimatior //{ */
 
@@ -1203,7 +1317,7 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
     }
 
     if (tracker_command.use_position_vertical) {
-      uav_mass_difference_ -= temp_gain * Ep[2] * dt;
+      uav_mass_difference_ += temp_gain * Ep[2] * dt;
     }
 
     // saturate the mass estimator
@@ -1226,38 +1340,148 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   //}
 
-  // --------------------------------------------------------------
-  // |                 produce the control output                 |
-  // --------------------------------------------------------------
+  Eigen::Vector3d f = integral_feedback + feed_forward;
 
-  // | --------------- saturate the attitude rate --------------- |
+  // | ----------- limiting the downwards acceleration ---------- |
+  // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
 
-  if (got_constraints_) {
+  // if the downwards part of the force is close to counter-act the gravity acceleration
+  if (f[2] < 0) {
 
-    auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+    ROS_WARN_THROTTLE(1.0, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", this->name_.c_str(), f[2]);
 
-    if (t[0] > constraints.roll_rate) {
-      t[0] = constraints.roll_rate;
-    } else if (t[0] < -constraints.roll_rate) {
-      t[0] = -constraints.roll_rate;
-    }
-
-    if (t[1] > constraints.pitch_rate) {
-      t[1] = constraints.pitch_rate;
-    } else if (t[1] < -constraints.pitch_rate) {
-      t[1] = -constraints.pitch_rate;
-    }
-
-    if (t[2] > constraints.yaw_rate) {
-      t[2] = constraints.yaw_rate;
-    } else if (t[2] < -constraints.yaw_rate) {
-      t[2] = -constraints.yaw_rate;
-    }
-  } else {
-    ROS_WARN_THROTTLE(1.0, "[%s]: missing dynamics constraints", this->name_.c_str());
+    f << 0, 0, 1;
   }
 
-  // | ------------ compensated desired acceleration ------------ |
+  // | ------------------- sanitize tilt angle ------------------ |
+
+  double tilt_safety_limit = _tilt_angle_failsafe_enabled_ ? _tilt_angle_failsafe_ : std::numeric_limits<double>::max();
+
+  auto f_normed_sanitized = common::sanitizeDesiredForce(f.normalized(), tilt_safety_limit, constraints.tilt, "MpcController");
+
+  if (!f_normed_sanitized) {
+
+    ROS_INFO("[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f[0], f[1], f[2]);
+    ROS_INFO("[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback[0], integral_feedback[1], integral_feedback[2]);
+    ROS_INFO("[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward[0], feed_forward[1], feed_forward[2]);
+    ROS_INFO("[%s]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), tracker_command.position.x, tracker_command.position.y,
+             tracker_command.position.z, tracker_command.heading);
+    ROS_INFO("[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), uav_state.pose.position.x, uav_state.pose.position.y,
+             uav_state.pose.position.z, uav_heading);
+
+    return;
+  }
+
+  Eigen::Vector3d f_normed = f_normed_sanitized.value();
+
+  // --------------------------------------------------------------
+  // |               desired orientation + throttle               |
+  // --------------------------------------------------------------
+
+  // | ------------------- desired orientation ------------------ |
+
+  Eigen::Matrix3d Rd;
+
+  if (tracker_command.use_orientation) {
+
+    // fill in the desired orientation based on the desired orientation from the control command
+    Rd = mrs_lib::AttitudeConverter(tracker_command.orientation);
+
+    if (tracker_command.use_heading) {
+      try {
+        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command.heading);
+      }
+      catch (...) {
+        ROS_WARN_THROTTLE(1.0, "[%s]: failed to add heading to the desired orientation matrix", this->name_.c_str());
+      }
+    }
+
+  } else {
+
+    Eigen::Vector3d bxd;  // desired heading vector
+
+    if (tracker_command.use_heading) {
+      bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
+    } else {
+      ROS_ERROR_THROTTLE(1.0, "[%s]: desired heading was not specified, using current heading instead!", this->name_.c_str());
+      bxd << cos(uav_heading), sin(uav_heading), 0;
+    }
+
+    Rd = common::so3transform(f_normed, bxd, false);
+  }
+
+  // | -------------------- desired throttle -------------------- |
+
+  double desired_thrust_force = f.dot(R.col(2));
+  double throttle             = 0;
+
+  if (rampup_active_) {
+
+    // deactivate the rampup when the times up
+    if (fabs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
+
+      rampup_active_ = false;
+
+      ROS_INFO("[%s]: rampup finished", name_.c_str());
+
+    } else {
+
+      double rampup_dt = (ros::Time::now() - rampup_last_time_).toSec();
+
+      rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
+
+      rampup_last_time_ = ros::Time::now();
+
+      throttle = rampup_throttle_;
+
+      ROS_INFO_THROTTLE(0.1, "[%s]: ramping up throttle, %.4f", name_.c_str(), throttle);
+    }
+
+  } else {
+
+    if (desired_thrust_force >= 0) {
+      throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, desired_thrust_force);
+    } else {
+      ROS_WARN_THROTTLE(1.0, "[%s]: just so you know, the desired throttle force is negative (%.2f)", name_.c_str(), desired_thrust_force);
+    }
+  }
+
+  // | ------------------- throttle saturation ------------------ |
+
+  bool throttle_saturated = false;
+
+  if (!std::isfinite(throttle)) {
+
+    ROS_ERROR("[%s]: NaN detected in variable 'throttle'!!!", name_.c_str());
+    return;
+
+  } else if (throttle > _throttle_saturation_) {
+    throttle = _throttle_saturation_;
+    ROS_WARN_THROTTLE(0.1, "[%s]: saturating throttle to %.2f", name_.c_str(), _throttle_saturation_);
+  } else if (throttle < 0.0) {
+    throttle = 0.0;
+    ROS_WARN_THROTTLE(0.1, "[%s]: saturating throttle to 0.0", name_.c_str());
+  }
+
+  if (throttle_saturated) {
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", name_.c_str());
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.position.x,
+                      tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.velocity.x,
+                      tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.acceleration.x,
+                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
+    ROS_WARN_THROTTLE(0.1, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.jerk.x, tracker_command.jerk.y,
+                      tracker_command.jerk.z, tracker_command.heading_jerk);
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", name_.c_str());
+    ROS_WARN_THROTTLE(0.1, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), uav_state.pose.position.x,
+                      uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
+    ROS_WARN_THROTTLE(0.1, "[%s]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", name_.c_str(), uav_state.velocity.linear.x,
+                      uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
+    ROS_WARN_THROTTLE(0.1, "[%s]: ---------------------------", name_.c_str());
+  }
+
+  // | -------------- unbiased desired acceleration ------------- |
 
   double desired_x_accel = 0;
   double desired_y_accel = 0;
@@ -1265,18 +1489,14 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
 
   {
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d throttle_vector = throttle_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector   = desired_thrust_force * des_orientation.col(2);
 
-    double world_accel_x = (throttle_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
-    double world_accel_y = (throttle_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = tracker_command.acceleration.z;
-
-    // You might thing this should be here. However, if you uncomment this, the landings are going to be very slow
-    // because the the estimator will produce non-zero velocity even when sitting on the ground. This will trigger
-    // anti-windup, which will stop mass estimation. Therefore, the touch-down will not be detected.
-    /* double world_accel_z = (throttle_vector[2] / total_mass) - common_handlers_->g; */
+    double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
+    double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
+    double world_accel_z = (thrust_vector[2] / total_mass) - common_handlers_->g;
 
     geometry_msgs::Vector3Stamped world_accel;
+
     world_accel.header.stamp    = ros::Time::now();
     world_accel.header.frame_id = uav_state.header.frame_id;
     world_accel.vector.x        = world_accel_x;
@@ -1301,66 +1521,6 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   // fill the unbiased desired accelerations
   last_control_output_.desired_unbiased_acceleration = Eigen::Vector3d(desired_x_accel, desired_y_accel, desired_z_accel);
 
-  if (rampup_active_) {
-
-    // deactivate the rampup when the times up
-    if (fabs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
-
-      rampup_active_ = false;
-
-      ROS_INFO("[%s]: rampup finished", name_.c_str());
-
-    } else {
-
-      double rampup_dt = (ros::Time::now() - rampup_last_time_).toSec();
-
-      rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
-
-      rampup_last_time_ = ros::Time::now();
-
-      throttle = rampup_throttle_;
-
-      ROS_INFO_THROTTLE(0.1, "[%s]: ramping up throttle, %.4f", name_.c_str(), throttle);
-    }
-  }
-
-  auto output_mode = common::getLowestOuput(common_handlers_->control_output_modalities);
-
-  if (!output_mode) {
-
-    ROS_ERROR_THROTTLE(1.0, "[%s]: output modalities are empty! This error should never appear!", name_.c_str());
-    last_control_output_.control_output = {};
-
-    return last_control_output_;
-  }
-
-  if (output_mode.value() == common::ATTITUDE_RATE) {
-
-    mrs_msgs::HwApiAttitudeRateCmd cmd;
-
-    cmd.body_rate.x = t[0];
-    cmd.body_rate.y = t[1];
-    cmd.body_rate.z = t[2];
-
-    cmd.throttle = throttle;
-
-    last_control_output_.control_output = cmd;
-
-  } else if (output_mode.value() == common::ATTITUDE) {
-
-    mrs_msgs::HwApiAttitudeCmd cmd;
-
-    cmd.orientation = mrs_lib::AttitudeConverter(Rd);
-
-    cmd.throttle = throttle;
-
-    last_control_output_.control_output = cmd;
-
-  } else {
-
-    ROS_ERROR_THROTTLE(1.0, "[%s]: the controller does not support the required output modality", name_.c_str());
-  }
-
   // | ----------------- fill in the diagnostics ---------------- |
 
   last_control_output_.diagnostics.ramping_up = rampup_active_;
@@ -1380,7 +1540,6 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_[0];
   last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_[1];
 
-  // set the constraints
   last_control_output_.diagnostics.controller_enforcing_constraints = true;
 
   last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
@@ -1392,98 +1551,313 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   last_control_output_.diagnostics.vertical_desc_speed_constraint = 0.5 * _max_speed_vertical_;
   last_control_output_.diagnostics.vertical_desc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
 
-  last_control_output_.diagnostics.controller = this->name_;
+  last_control_output_.diagnostics.controller = name_;
 
-  return last_control_output_;
+  // | ------------ construct the attitude reference ------------ |
+
+  mrs_msgs::HwApiAttitudeCmd attitude_cmd;
+
+  attitude_cmd.stamp       = ros::Time::now();
+  attitude_cmd.orientation = mrs_lib::AttitudeConverter(Rd);
+  attitude_cmd.throttle    = throttle;
+
+  if (output_modality == common::ATTITUDE) {
+
+    last_control_output_.control_output = attitude_cmd;
+
+    return;
+  }
+
+  // --------------------------------------------------------------
+  // |                      attitude control                      |
+  // --------------------------------------------------------------
+
+  Eigen::Vector3d rate_feedforward = Eigen::Vector3d::Zero(3);
+
+  if (tracker_command.use_attitude_rate) {
+
+    rate_feedforward << tracker_command.attitude_rate.x, tracker_command.attitude_rate.y, tracker_command.attitude_rate.z;
+
+  } else if (tracker_command.use_heading_rate) {
+
+    // to fill in the feed forward yaw rate
+    double desired_yaw_rate = 0;
+
+    try {
+      desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(tracker_command.heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[%s]: exception caught while calculating the desired_yaw_rate feedforward", name_.c_str());
+    }
+
+    rate_feedforward << 0, 0, desired_yaw_rate;
+  }
+
+  // | ------------ jerk feedforward -> angular rate ------------ |
+
+  Eigen::Vector3d jerk_feedforward = Eigen::Vector3d(0, 0, 0);
+
+  if (tracker_command.use_jerk && drs_params.jerk_feedforward) {
+
+    ROS_DEBUG_THROTTLE(1.0, "[%s]: using jerk feedforward", name_.c_str());
+
+    Eigen::Matrix3d I;
+    I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
+    Eigen::Vector3d desired_jerk = Eigen::Vector3d(tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z);
+    jerk_feedforward             = (I.transpose() * Rd.transpose() * desired_jerk) / (desired_thrust_force / total_mass);
+  }
+
+  // | --------------- run the attitude controller -------------- |
+
+  Eigen::Vector3d attitude_rate_saturation(constraints.roll_rate, constraints.pitch_rate, constraints.yaw_rate);
+
+  auto attitude_rate_command = common::attitudeController(uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq, false);
+
+  if (!attitude_rate_command) {
+    return;
+  }
+
+  // | --------- fill in the already known attitude rate -------- |
+
+  {
+    try {
+      last_control_output_.desired_heading_rate = mrs_lib::AttitudeConverter(R).getHeadingRate(attitude_rate_command->body_rate);
+    }
+    catch (...) {
+    }
+  }
+
+  // | ---------- construct the attitude rate reference --------- |
+
+  if (output_modality == common::ATTITUDE_RATE) {
+
+    last_control_output_.control_output = attitude_rate_command;
+
+    return;
+  }
+
+  // --------------------------------------------------------------
+  // |                    Attitude rate control                   |
+  // --------------------------------------------------------------
+
+  Kw = common_handlers_->detailed_model_params->inertia.diagonal().array() * Kw;
+
+  auto control_group_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
+
+  if (!control_group_command) {
+    return;
+  }
+
+  if (output_modality == common::CONTROL_GROUP) {
+
+    last_control_output_.control_output = control_group_command;
+
+    return;
+  }
+
+  // --------------------------------------------------------------
+  // |                        output mixer                        |
+  // --------------------------------------------------------------
+
+  mrs_msgs::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+
+  last_control_output_.control_output = actuator_cmd;
+
+  return;
 }
 
 //}
 
-/* //{ getStatus() */
+/* positionPassthrough() //{ */
 
-const mrs_msgs::ControllerStatus MpcController::getStatus() {
+void MpcController::positionPassthrough(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
 
-  mrs_msgs::ControllerStatus controller_status;
+  if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
+    ROS_ERROR("[%s]: the tracker did not provide position+hdg reference", name_.c_str());
+    return;
+  }
 
-  controller_status.active = is_active_;
+  mrs_msgs::HwApiPositionCmd cmd;
 
-  return controller_status;
+  cmd.header.frame_id = uav_state.header.frame_id;
+  cmd.header.stamp    = ros::Time::now();
+
+  cmd.position = tracker_command.position;
+  cmd.heading  = tracker_command.heading;
+
+  last_control_output_.control_output = cmd;
+
+  // fill the unbiased desired accelerations
+  last_control_output_.desired_unbiased_acceleration = {};
+  last_control_output_.desired_orientation           = {};
+  last_control_output_.desired_heading_rate          = {};
+
+  // | ----------------- fill in the diagnostics ---------------- |
+
+  last_control_output_.diagnostics.ramping_up = false;
+
+  last_control_output_.diagnostics.mass_estimator  = false;
+  last_control_output_.diagnostics.mass_difference = 0;
+
+  last_control_output_.diagnostics.disturbance_estimator = false;
+
+  last_control_output_.diagnostics.disturbance_bx_b = 0;
+  last_control_output_.diagnostics.disturbance_by_b = 0;
+
+  last_control_output_.diagnostics.disturbance_bx_w = 0;
+  last_control_output_.diagnostics.disturbance_by_w = 0;
+
+  last_control_output_.diagnostics.disturbance_wx_w = 0;
+  last_control_output_.diagnostics.disturbance_wy_w = 0;
+
+  last_control_output_.diagnostics.controller_enforcing_constraints = true;
+
+  last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
+  last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
+
+  last_control_output_.diagnostics.vertical_asc_speed_constraint = 0.5 * _max_speed_vertical_;
+  last_control_output_.diagnostics.vertical_asc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+
+  last_control_output_.diagnostics.vertical_desc_speed_constraint = 0.5 * _max_speed_vertical_;
+  last_control_output_.diagnostics.vertical_desc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+
+  last_control_output_.diagnostics.controller = name_;
 }
 
 //}
 
-/* switchOdometrySource() //{ */
+/* PIDVelocityOutput() //{ */
 
-void MpcController::switchOdometrySource(const mrs_msgs::UavState &new_uav_state) {
+void MpcController::PIDVelocityOutput(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command,
+                                      const common::CONTROL_OUTPUT &control_output, const double &dt) {
 
-  ROS_INFO("[%s]: switching the odometry source", this->name_.c_str());
+  if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
+    ROS_ERROR("[%s]: the tracker did not provide position+hdg reference", name_.c_str());
+    return;
+  }
 
-  auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-  // | ----- transform world disturabances to the new frame ----- |
+  Eigen::Vector3d pos_ref = Eigen::Vector3d(tracker_command.position.x, tracker_command.position.y, tracker_command.position.z);
+  Eigen::Vector3d pos     = Eigen::Vector3d(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
 
-  geometry_msgs::Vector3Stamped world_integrals;
+  double hdg_ref = tracker_command.heading;
+  double hdg     = getHeadingSafely(uav_state, tracker_command);
 
-  world_integrals.header.stamp    = ros::Time::now();
-  world_integrals.header.frame_id = uav_state.header.frame_id;
+  // | ------------------ velocity feedforward ------------------ |
 
-  world_integrals.vector.x = Iw_w_[0];
-  world_integrals.vector.y = Iw_w_[1];
-  world_integrals.vector.z = 0;
+  Eigen::Vector3d vel_ff(0, 0, 0);
 
-  auto res = common_handlers_->transformer->transformSingle(world_integrals, new_uav_state.header.frame_id);
+  if (tracker_command.use_velocity_horizontal && tracker_command.use_velocity_vertical) {
+    vel_ff = Eigen::Vector3d(tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z);
+  }
 
-  if (res) {
+  // | --------------------- control errors --------------------- |
 
-    std::scoped_lock lock(mutex_integrals_);
+  Eigen::Vector3d Ep = pos_ref - pos;
 
-    Iw_w_[0] = res.value().vector.x;
-    Iw_w_[1] = res.value().vector.y;
+  // | --------------------------- pid -------------------------- |
+
+  position_pid_x_.setSaturation(constraints.horizontal_speed);
+  position_pid_y_.setSaturation(constraints.horizontal_speed);
+  position_pid_z_.setSaturation(std::min(constraints.vertical_ascending_speed, constraints.vertical_descending_speed));
+
+  double des_vel_x = position_pid_x_.update(Ep[0], dt);
+  double des_vel_y = position_pid_y_.update(Ep[1], dt);
+  double des_vel_z = position_pid_z_.update(Ep[2], dt);
+
+  // | -------------------- position feedback ------------------- |
+
+  Eigen::Vector3d des_vel = Eigen::Vector3d(des_vel_x, des_vel_y, des_vel_z) + vel_ff;
+
+  if (control_output == common::VELOCITY_HDG) {
+
+    // | --------------------- fill the output -------------------- |
+
+    mrs_msgs::HwApiVelocityHdgCmd cmd;
+
+    cmd.header.frame_id = uav_state.header.frame_id;
+    cmd.header.stamp    = ros::Time::now();
+
+    cmd.velocity.x = des_vel[0];
+    cmd.velocity.y = des_vel[1];
+    cmd.velocity.z = des_vel[2];
+
+    cmd.heading = tracker_command.heading;
+
+    last_control_output_.control_output = cmd;
+
+  } else if (control_output == common::VELOCITY_HDG_RATE) {
+
+    position_pid_heading_.setSaturation(constraints.heading_speed);
+
+    double hdg_err = mrs_lib::geometry::sradians::diff(hdg_ref, hdg);
+
+    double des_hdg_rate = position_pid_heading_.update(hdg_err, dt);
+
+    // | --------------------------- ff --------------------------- |
+
+    double des_hdg_ff = 0;
+
+    if (tracker_command.use_heading_rate) {
+      des_hdg_ff = tracker_command.heading_rate;
+    }
+
+    // | --------------------- fill the output -------------------- |
+
+    mrs_msgs::HwApiVelocityHdgRateCmd cmd;
+
+    cmd.header.frame_id = uav_state.header.frame_id;
+    cmd.header.stamp    = ros::Time::now();
+
+    cmd.velocity.x = des_vel[0];
+    cmd.velocity.y = des_vel[1];
+    cmd.velocity.z = des_vel[2];
+
+    cmd.heading_rate = des_hdg_rate + des_hdg_ff;
+
+    last_control_output_.control_output = cmd;
   } else {
 
-    ROS_ERROR_THROTTLE(1.0, "[%s]: could not transform world integral to the new frame", this->name_.c_str());
-
-    std::scoped_lock lock(mutex_integrals_);
-
-    Iw_w_[0] = 0;
-    Iw_w_[1] = 0;
-  }
-}
-
-//}
-
-/* resetDisturbanceEstimators() //{ */
-
-void MpcController::resetDisturbanceEstimators(void) {
-
-  std::scoped_lock lock(mutex_integrals_);
-
-  Iw_w_ = Eigen::Vector2d::Zero(2);
-  Ib_b_ = Eigen::Vector2d::Zero(2);
-}
-
-//}
-
-/* setConstraints() //{ */
-
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr MpcController::setConstraints([
-    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
-
-  if (!is_initialized_) {
-    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+    ROS_ERROR("[%s]: the required output of the position PID is not supported", name_.c_str());
+    return;
   }
 
-  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
+  // fill the unbiased desired accelerations
+  last_control_output_.desired_unbiased_acceleration = {};
+  last_control_output_.desired_orientation           = {};
+  last_control_output_.desired_heading_rate          = {};
 
-  got_constraints_ = true;
+  // | ----------------- fill in the diagnostics ---------------- |
 
-  ROS_INFO("[%s]: updating constraints", this->name_.c_str());
+  last_control_output_.diagnostics.ramping_up = false;
 
-  mrs_msgs::DynamicsConstraintsSrvResponse res;
-  res.success = true;
-  res.message = "constraints updated";
+  last_control_output_.diagnostics.mass_estimator  = false;
+  last_control_output_.diagnostics.mass_difference = 0;
 
-  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+  last_control_output_.diagnostics.disturbance_estimator = false;
+
+  last_control_output_.diagnostics.disturbance_bx_b = 0;
+  last_control_output_.diagnostics.disturbance_by_b = 0;
+
+  last_control_output_.diagnostics.disturbance_bx_w = 0;
+  last_control_output_.diagnostics.disturbance_by_w = 0;
+
+  last_control_output_.diagnostics.disturbance_wx_w = 0;
+  last_control_output_.diagnostics.disturbance_wy_w = 0;
+
+  last_control_output_.diagnostics.controller_enforcing_constraints = true;
+
+  last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
+  last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
+
+  last_control_output_.diagnostics.vertical_asc_speed_constraint = 0.5 * _max_speed_vertical_;
+  last_control_output_.diagnostics.vertical_asc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+
+  last_control_output_.diagnostics.vertical_desc_speed_constraint = 0.5 * _max_speed_vertical_;
+  last_control_output_.diagnostics.vertical_desc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+
+  last_control_output_.diagnostics.controller = name_;
 }
 
 //}
@@ -1496,11 +1870,7 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr MpcController::setConst
 
 void MpcController::callbackDrs(mrs_uav_controllers::mpc_controllerConfig &config, [[maybe_unused]] uint32_t level) {
 
-  {
-    std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
-
-    drs_params_ = config;
-  }
+  mrs_lib::set_mutexed(mutex_drs_params_, config, drs_params_);
 
   ROS_INFO("[%s]: DRS updated gains", this->name_.c_str());
 }

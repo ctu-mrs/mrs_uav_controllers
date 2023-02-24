@@ -103,22 +103,22 @@ private:
   double uav_mass_difference_;
 
   // gains that are used and already filtered
-  double kpxy_;       // position xy gain
-  double kvxy_;       // velocity xy gain
-  double kaxy_;       // acceleration xy gain (feed forward, =1)
-  double kiwxy_;      // world xy integral gain
-  double kibxy_;      // body xy integral gain
-  double kiwxy_lim_;  // world xy integral limit
-  double kibxy_lim_;  // body xy integral limit
-  double kpz_;        // position z gain
-  double kvz_;        // velocity z gain
-  double kaz_;        // acceleration z gain (feed forward, =1)
-  double km_;         // mass estimator gain
-  double km_lim_;     // mass estimator limit
-  double kqxy_;       // pitch/roll attitude gain
-  double kqz_;        // yaw attitude gain
-
-  double kwp_;
+  double kpxy_;            // position xy gain
+  double kvxy_;            // velocity xy gain
+  double kaxy_;            // acceleration xy gain (feed forward, =1)
+  double kiwxy_;           // world xy integral gain
+  double kibxy_;           // body xy integral gain
+  double kiwxy_lim_;       // world xy integral limit
+  double kibxy_lim_;       // body xy integral limit
+  double kpz_;             // position z gain
+  double kvz_;             // velocity z gain
+  double kaz_;             // acceleration z gain (feed forward, =1)
+  double km_;              // mass estimator gain
+  double km_lim_;          // mass estimator limit
+  double kqxy_;            // pitch/roll attitude gain
+  double kqz_;             // yaw attitude gain
+  double kwp_roll_pitch_;  // attitude rate gain
+  double kwp_yaw_;         // attitude rate gain
 
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
@@ -248,7 +248,8 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   param_loader.loadParam("se3/default_gains/vertical/attitude/kq", kqz_);
 
   // attitude rate gains
-  param_loader.loadParam("se3/default_gains/attitude_rate/kp", kwp_);
+  param_loader.loadParam("se3/default_gains/attitude_rate/kp_roll_pitch", kwp_roll_pitch_);
+  param_loader.loadParam("se3/default_gains/attitude_rate/kp_yaw", kwp_yaw_);
 
   // mass estimator
   param_loader.loadParam("se3/default_gains/mass_estimator/km", km_);
@@ -491,7 +492,7 @@ Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav
     dt = 0.01;
   }
 
-  // | ----- execute controller based on the output modality ---- |
+  // | ----------- obtain the lowest possible modality ---------- |
 
   auto lowest_modality = common::getLowestOuput(common_handlers_->control_output_modalities);
 
@@ -685,7 +686,6 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // Rp - position reference in global frame
   // Rv - velocity reference in global frame
   // Ra - velocity reference in global frame
-  // Rw - angular velocity reference in body frame
 
   Eigen::Vector3d Rp = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
@@ -766,6 +766,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   Eigen::Array3d  Kp(0, 0, 0);
   Eigen::Array3d  Kv(0, 0, 0);
   Eigen::Array3d  Kq(0, 0, 0);
+  Eigen::Array3d  Kw(0, 0, 0);
 
   {
     std::scoped_lock lock(mutex_gains_);
@@ -808,6 +809,10 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (!tracker_command.use_attitude_rate) {
       Kq << kqxy_, kqxy_, kqz_;
     }
+
+    Kw[0] = kwp_roll_pitch_;
+    Kw[1] = kwp_roll_pitch_;
+    Kw[2] = kwp_yaw_;
   }
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
@@ -1027,6 +1032,12 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     } else {
 
+      double des_hdg_ff = 0;
+
+      if (tracker_command.use_heading_rate) {
+        des_hdg_ff = tracker_command.heading_rate;
+      }
+
       mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
 
       cmd.acceleration.x = des_acc[0];
@@ -1037,7 +1048,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
       double hdg_err = mrs_lib::geometry::sradians::diff(tracker_command.heading, uav_heading);
 
-      double des_hdg_rate = position_pid_heading_.update(hdg_err, dt);
+      double des_hdg_rate = position_pid_heading_.update(hdg_err, dt) + des_hdg_ff;
 
       cmd.heading_rate = des_hdg_rate;
 
@@ -1051,11 +1062,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     Eigen::Vector3d unbiased_des_acc(0, 0, 0);
 
     {
+
+      Eigen::Vector3d unbiased_des_acc_world = (position_feedback + velocity_feedback) / total_mass + Ra;
+
       geometry_msgs::Vector3Stamped world_accel;
 
       world_accel.header.stamp    = ros::Time::now();
       world_accel.header.frame_id = uav_state.header.frame_id;
-      world_accel.vector.x        = des_acc[0];
+      world_accel.vector.x        = unbiased_des_acc_world[0];
       world_accel.vector.y        = des_acc[1];
       world_accel.vector.z        = des_acc[2];
 
@@ -1425,7 +1439,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // |                    Attitude rate control                   |
   // --------------------------------------------------------------
 
-  Eigen::Vector3d Kw = common_handlers_->detailed_model_params->inertia.diagonal() * kwp_;
+  Kw = common_handlers_->detailed_model_params->inertia.diagonal().array() * Kw;
 
   auto control_group_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
 
@@ -1647,11 +1661,7 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 
 void Se3Controller::callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, [[maybe_unused]] uint32_t level) {
 
-  {
-    std::scoped_lock lock(mutex_drs_params_);
-
-    drs_params_ = config;
-  }
+  mrs_lib::set_mutexed(mutex_drs_params_, config, drs_params_);
 
   ROS_INFO("[Se3Controller]: DRS updated gains");
 }
