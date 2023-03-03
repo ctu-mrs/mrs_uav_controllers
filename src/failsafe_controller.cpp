@@ -265,10 +265,8 @@ FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::Uav
   double dt;
 
   if (first_iteration_) {
-
-    first_iteration_ = false;
     dt               = 0.01;
-
+    first_iteration_ = false;
   } else {
     dt = (ros::Time::now() - last_update_time_).toSec();
   }

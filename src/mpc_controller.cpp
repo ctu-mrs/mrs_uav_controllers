@@ -537,7 +537,8 @@ MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav
   double dt;
 
   if (first_iteration_) {
-    dt = 0.01;
+    dt               = 0.01;
+    first_iteration_ = false;
   } else {
     dt = (uav_state.header.stamp - last_update_time_).toSec();
   }
