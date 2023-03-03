@@ -1489,8 +1489,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   double desired_z_accel = 0;
 
   {
-    Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d thrust_vector   = desired_thrust_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector = desired_thrust_force * R.col(2);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
