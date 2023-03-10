@@ -33,21 +33,19 @@ namespace se3_controller
 class Se3Controller : public mrs_uav_managers::Controller {
 
 public:
-  ~Se3Controller(){};
-
   void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space, const double uav_mass,
-                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
-  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd);
-  void deactivate(void);
+                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) override;
+  bool activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd) override;
+  void deactivate(void) override;
 
-  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::PositionCommand::ConstPtr& control_reference);
-  const mrs_msgs::ControllerStatus          getStatus();
+  const mrs_msgs::AttitudeCommand::ConstPtr update(const mrs_msgs::UavState::ConstPtr& uav_state, const mrs_msgs::PositionCommand::ConstPtr& control_reference) override;
+  const mrs_msgs::ControllerStatus          getStatus() override;
 
-  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new_uav_state);
+  void switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new_uav_state) override;
 
-  void resetDisturbanceEstimators(void);
+  void resetDisturbanceEstimators(void) override;
 
-  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd) override;
 
 private:
   std::string _version_;
