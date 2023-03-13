@@ -39,8 +39,6 @@ namespace se3_controller
 class Se3Controller : public mrs_uav_managers::Controller {
 
 public:
-  ~Se3Controller(){};
-
   void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
 

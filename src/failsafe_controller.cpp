@@ -26,8 +26,6 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
-  ~FailsafeController(){};
-
   void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handler);
 

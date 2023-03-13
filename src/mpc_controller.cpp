@@ -43,8 +43,6 @@ namespace mpc_controller
 class MpcController : public mrs_uav_managers::Controller {
 
 public:
-  ~MpcController(){};
-
   void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
                   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
 
