@@ -1069,8 +1069,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       world_accel.header.stamp    = ros::Time::now();
       world_accel.header.frame_id = uav_state.header.frame_id;
       world_accel.vector.x        = unbiased_des_acc_world[0];
-      world_accel.vector.y        = des_acc[1];
-      world_accel.vector.z        = des_acc[2];
+      world_accel.vector.y        = unbiased_des_acc_world[1];
+      world_accel.vector.z        = unbiased_des_acc_world[2];
 
       auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
 
