@@ -1289,32 +1289,23 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // | -------------- unbiased desired acceleration ------------- |
 
-  double desired_x_accel = 0;
-  double desired_y_accel = 0;
-  double desired_z_accel = 0;
+  Eigen::Vector3d unbiased_des_acc(0, 0, 0);
 
   {
-    Eigen::Vector3d thrust_vector = desired_thrust_force * Rd.col(2);
-
-    double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
-    double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = (thrust_vector[2] / total_mass) - common_handlers_->g;
+    Eigen::Vector3d unbiased_des_acc_world = (position_feedback + velocity_feedback) / total_mass + Ra;
 
     geometry_msgs::Vector3Stamped world_accel;
 
     world_accel.header.stamp    = ros::Time::now();
     world_accel.header.frame_id = uav_state.header.frame_id;
-    world_accel.vector.x        = world_accel_x;
-    world_accel.vector.y        = world_accel_y;
-    world_accel.vector.z        = world_accel_z;
+    world_accel.vector.x        = unbiased_des_acc_world[0];
+    world_accel.vector.y        = unbiased_des_acc_world[1];
+    world_accel.vector.z        = unbiased_des_acc_world[2];
 
     auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
 
     if (res) {
-
-      desired_x_accel = res.value().vector.x;
-      desired_y_accel = res.value().vector.y;
-      desired_z_accel = res.value().vector.z;
+      unbiased_des_acc << res.value().vector.x, res.value().vector.y, res.value().vector.z;
     }
   }
 
@@ -1324,7 +1315,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   last_control_output_.desired_orientation = mrs_lib::AttitudeConverter(Rd);
 
   // fill the unbiased desired accelerations
-  last_control_output_.desired_unbiased_acceleration = Eigen::Vector3d(desired_x_accel, desired_y_accel, desired_z_accel);
+  last_control_output_.desired_unbiased_acceleration = unbiased_des_acc;
 
   // | ----------------- fill in the diagnostics ---------------- |
 
