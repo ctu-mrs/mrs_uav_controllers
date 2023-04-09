@@ -1491,7 +1491,9 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = (thrust_vector[2] / total_mass) - common_handlers_->g;
+
+    // TODO change to z from IMU?
+    double world_accel_z = tracker_command.acceleration.z;
 
     geometry_msgs::Vector3Stamped world_accel;
 
