@@ -816,7 +816,6 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
-  Kq = Kq * ((_uav_mass_ + uav_mass_difference_) / (_uav_mass_));
 
   // | --------------- desired orientation matrix --------------- |
 

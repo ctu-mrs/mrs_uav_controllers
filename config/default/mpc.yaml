@@ -61,8 +61,8 @@ so3:
           kq: 1.0
 
     attitude_rate:
-      kp_roll_pitch: 1.5
-      kp_yaw: 1.5
+      kp_roll_pitch: 4.0
+      kp_yaw: 4.0
 
   rampup:
     enabled: true

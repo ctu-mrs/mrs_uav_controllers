@@ -152,8 +152,6 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   uav_mass_difference_ = 0;
 
-  _kq_ *= _uav_mass_;
-
   // | ----------- calculate the default hover throttle ----------- |
 
   hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g);

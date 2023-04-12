@@ -1310,7 +1310,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     // antiwindup
     double temp_gain = km_;
     if (rampup_active_ ||
-        (fabs(uav_state.velocity.linear.z) > 0.3 && ((Ep[2] < 0 && uav_state.velocity.linear.z > 0) || (Ep[2] > 0 && uav_state.velocity.linear.z < 0)))) {
+        (fabs(uav_state.velocity.linear.z) > 0.3 && ((Ep[2] > 0 && uav_state.velocity.linear.z > 0) || (Ep[2] < 0 && uav_state.velocity.linear.z < 0)))) {
       temp_gain = 0;
       ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
