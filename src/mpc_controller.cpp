@@ -9,7 +9,7 @@
 
 #include <mrs_uav_managers/controller.h>
 
-#include <mpc_controller_solver.h>
+#include <mpc_controller.h>
 
 #include <dynamic_reconfigure/server.h>
 #include <mrs_uav_controllers/mpc_controllerConfig.h>
@@ -915,7 +915,6 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
   // | ------------------------ optimize ------------------------ |
 
-  mpc_solver_x_->lock();
   mpc_solver_x_->setQ(temp_Q_horizontal);
   mpc_solver_x_->setS(temp_S_horizontal);
   mpc_solver_x_->setParams();
@@ -925,9 +924,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   mpc_solver_x_->setInitialState(initial_x);
   [[maybe_unused]] int iters_x = mpc_solver_x_->solveMPC();
   mpc_solver_x_u_              = mpc_solver_x_->getFirstControlInput();
-  mpc_solver_x_->unlock();
 
-  mpc_solver_y_->lock();
   mpc_solver_y_->setQ(temp_Q_horizontal);
   mpc_solver_y_->setS(temp_S_horizontal);
   mpc_solver_y_->setParams();
@@ -937,9 +934,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   mpc_solver_y_->setInitialState(initial_y);
   [[maybe_unused]] int iters_y = mpc_solver_y_->solveMPC();
   mpc_solver_y_u_              = mpc_solver_y_->getFirstControlInput();
-  mpc_solver_y_->unlock();
 
-  mpc_solver_z_->lock();
   mpc_solver_z_->setQ(temp_Q_vertical);
   mpc_solver_z_->setS(temp_S_vertical);
   mpc_solver_z_->setParams();
@@ -949,7 +944,6 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   mpc_solver_z_->setInitialState(initial_z);
   [[maybe_unused]] int iters_z = mpc_solver_z_->solveMPC();
   mpc_solver_z_u_              = mpc_solver_z_->getFirstControlInput();
-  mpc_solver_z_->unlock();
 
   // | ----------- disable lateral feedback if needed ----------- |
 
