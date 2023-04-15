@@ -1,9 +1,20 @@
-#ifndef CONTROLLER_SOLVER_H
-#define CONTROLLER_SOLVER_H
+#ifndef QP_SOLVER_H
+#define QP_SOLVER_H
 
 #include <stdio.h>
 #include <math.h>
 #define pm(A, m, n) printmatrixd_controller(#A, A, m, n, 1)
+
+/* Next function is from numerical recipes in C. */
+#define IA 16807
+#define IM 2147483647
+#define AM (1.0 / IM)
+#define IQ 127773
+#define IR 2836
+#define NTAB 32
+#define NDIV (1 + (IM - 1) / NTAB)
+#define EPS 1.2e-7
+#define RNMX (1.0 - EPS)
 
 namespace mrs_mpc_solvers
 {
@@ -59,6 +70,7 @@ class QPSolver {
     double *x_ss[27];
     double *x[1];
   } ParamsController;
+
   typedef struct VarsController_t
   {
     double *x_1;   /* 3 rows. */
@@ -220,6 +232,7 @@ class QPSolver {
     double *x[27];
     double *u[26];
   } VarsController;
+
   typedef struct WorkspaceController_t
   {
     double  h[312];
@@ -275,6 +288,7 @@ class QPSolver {
     double quad_758104227840[1];
     int    converged;
   } WorkspaceController;
+
   typedef struct SettingsController_t
   {
     double resid_tol;
@@ -296,6 +310,15 @@ class QPSolver {
   //}
 
 public:
+  long    global_seed = 1;
+  clock_t tic_timestart;
+
+  long iy = 0;
+  long iv[NTAB];
+
+  int   iset = 0;
+  float gset;
+
   VarsController      varsController;
   ParamsController    paramsController;
   WorkspaceController workController;
@@ -358,4 +381,4 @@ public:
 
 }  // namespace mrs_mpc_solvers
 
-#endif // CONTROLLER_SOLVER_H
+#endif

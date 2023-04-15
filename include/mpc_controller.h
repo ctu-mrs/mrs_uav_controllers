@@ -1,7 +1,6 @@
-#ifndef MPC_CONTROLLER_SOLVER
-#define MPC_CONTROLLER_SOLVER
+#ifndef MPC_CONTROLLER_SOLVER_H
+#define MPC_CONTROLLER_SOLVER_H
 
-#include <ros/ros.h>
 #include <eigen3/Eigen/Eigen>
 #include "solver/solver.h"
 
@@ -29,7 +28,6 @@ public:
   void   setParams(void);
 
 private:
-
   QPSolver qp_solver_;
 
   std::string _name_;

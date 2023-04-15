@@ -187,9 +187,9 @@ private:
   std::vector<double> _mat_Q_z_, _mat_S_z_;
 
   // MPC solver handlers
-  std::unique_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_x_;
-  std::unique_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_y_;
-  std::unique_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_z_;
+  std::shared_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_x_;
+  std::shared_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_y_;
+  std::shared_ptr<mrs_mpc_solvers::mpc_controller::Solver> mpc_solver_z_;
 
   // MPC solver params
   bool _mpc_solver_verbose_ = false;
@@ -372,12 +372,12 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   // | ----------------- prepare the MPC solver ----------------- |
 
-  mpc_solver_x_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
-      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_, _dt2_, 0, 1.0));
-  mpc_solver_y_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
-      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_, _dt2_, 0, 1.0));
-  mpc_solver_z_ = std::make_unique<mrs_mpc_solvers::mpc_controller::Solver>(
-      mrs_mpc_solvers::mpc_controller::Solver(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_z_, _mat_S_z_, _dt1_, _dt2_, 0.5, 0.5));
+  mpc_solver_x_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_,
+                                                                            _dt2_, 0, 1.0);
+  mpc_solver_y_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_,
+                                                                            _dt2_, 0, 1.0);
+  mpc_solver_z_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_z_, _mat_S_z_,
+                                                                            _dt1_, _dt2_, 0.5, 0.5);
 
   // | --------------- dynamic reconfigure server --------------- |
 
