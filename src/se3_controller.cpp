@@ -364,20 +364,20 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
 
   double activation_mass = _uav_mass_;
 
-  if (last_control_output.diagnostics.mass_estimator) {
-    uav_mass_difference_ = last_control_output.diagnostics.mass_difference;
+  if (activation_control_output_.diagnostics.mass_estimator) {
+    uav_mass_difference_ = activation_control_output_.diagnostics.mass_difference;
     activation_mass += uav_mass_difference_;
     ROS_INFO("[Se3Controller]: setting mass difference from the last control output: %.2f kg", uav_mass_difference_);
   }
 
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-  if (last_control_output.diagnostics.disturbance_estimator) {
-    Ib_b_[0] = -last_control_output_.diagnostics.disturbance_bx_b;
-    Ib_b_[1] = -last_control_output_.diagnostics.disturbance_by_b;
+  if (activation_control_output_.diagnostics.disturbance_estimator) {
+    Ib_b_[0] = -activation_control_output_.diagnostics.disturbance_bx_b;
+    Ib_b_[1] = -activation_control_output_.diagnostics.disturbance_by_b;
 
-    Iw_w_[0] = -last_control_output_.diagnostics.disturbance_wx_w;
-    Iw_w_[1] = -last_control_output_.diagnostics.disturbance_wy_w;
+    Iw_w_[0] = -activation_control_output_.diagnostics.disturbance_wx_w;
+    Iw_w_[1] = -activation_control_output_.diagnostics.disturbance_wy_w;
 
     ROS_INFO(
         "[Se3Controller]: setting disturbances from the last control output: Ib_b_: %.2f, %.2f N, Iw_w_: "
@@ -386,7 +386,7 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
   }
 
   // did the last controller use manual throttle control?
-  auto throttle_last_controller = common::extractThrottle(last_control_output);
+  auto throttle_last_controller = common::extractThrottle(activation_control_output_);
 
   // rampup check
   if (_rampup_enabled_ && throttle_last_controller) {
