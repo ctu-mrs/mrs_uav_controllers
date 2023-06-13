@@ -18,12 +18,12 @@ attitude_feedback:
     # influences pitching and rolling
     horizontal:
       attitude:
-        kq: 8.0
+        kq: 5.0
 
     # influences yawing
     vertical:
       attitude:
-        kq: 8.0
+        kq: 5.0
 
 mass_estimator:
   km: 1.0
