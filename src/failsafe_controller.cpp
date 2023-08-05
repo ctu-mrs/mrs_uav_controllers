@@ -1,8 +1,7 @@
-#define VERSION "1.0.4.0"
-
 /* includes //{ */
 
 #include <ros/ros.h>
+#include <ros/package.h>
 
 #include <common.h>
 
@@ -26,8 +25,8 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
-                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handler);
+  bool initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   bool activate(const ControlOutput &last_control_output);
   void deactivate(void);
@@ -47,12 +46,13 @@ public:
   double getHeadingSafely(const mrs_msgs::UavState &uav_state);
 
 private:
-  std::string _version_;
+  ros::NodeHandle nh_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
 
-  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers_;
 
   // | ----------------------- parameters ----------------------- |
 
@@ -108,43 +108,53 @@ private:
 
 /* initialize() //{ */
 
-void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                                    std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
+bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                                    std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
-  ros::NodeHandle nh_(parent_nh, name_space);
+  nh_ = nh;
 
-  common_handlers_ = common_handlers;
-  _uav_mass_       = common_handlers->getMass();
+  common_handlers_  = common_handlers;
+  private_handlers_ = private_handlers;
 
   ros::Time::waitForValid();
 
   // | ------------------- loading parameters ------------------- |
 
-  mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
+  bool success = true;
 
-  param_loader.loadParam("version", _version_);
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
 
-  if (_version_ != VERSION) {
-
-    ROS_ERROR("[FailsafeController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
-    ros::shutdown();
+  if (!success) {
+    return false;
   }
 
-  param_loader.loadParam("enable_profiler", _profiler_enabled_);
+  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
 
-  param_loader.loadParam("throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
-  param_loader.loadParam("throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
+  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
 
-  param_loader.loadParam("attitude_controller/gains/kp", _kq_);
+  if (!param_loader_parent.loadedSuccessfully()) {
+    ROS_ERROR("[FailsafeController]: Could not load all parameters!");
+    return false;
+  }
 
-  param_loader.loadParam("rate_controller/gains/kp", _kw_);
+  mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
 
-  param_loader.loadParam("velocity_output/descend_speed", _descend_speed_);
-  param_loader.loadParam("acceleration_output/descend_acceleration", _descend_acceleration_);
+  const std::string yaml_namespace = "mrs_uav_controllers/failsafe_controller/";
+
+  param_loader.loadParam(yaml_namespace + "throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
+  param_loader.loadParam(yaml_namespace + "throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
+
+  param_loader.loadParam(yaml_namespace + "attitude_controller/gains/kp", _kq_);
+
+  param_loader.loadParam(yaml_namespace + "rate_controller/gains/kp", _kw_);
+
+  param_loader.loadParam(yaml_namespace + "velocity_output/descend_speed", _descend_speed_);
+  param_loader.loadParam(yaml_namespace + "acceleration_output/descend_acceleration", _descend_acceleration_);
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[FailsafeController]: Could not load all parameters!");
-    ros::shutdown();
+    return false;
   }
 
   _descend_speed_        = std::abs(_descend_speed_);
@@ -158,13 +168,15 @@ void FailsafeController::initialize(const ros::NodeHandle &parent_nh, [[maybe_un
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(nh_, "FailsafeController", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(common_handlers->parent_nh, "FailsafeController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[FailsafeController]: initialized, version %s", VERSION);
+  ROS_INFO("[FailsafeController]: initialized");
 
   is_initialized_ = true;
+
+  return true;
 }
 
 //}

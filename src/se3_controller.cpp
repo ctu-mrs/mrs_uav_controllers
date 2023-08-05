@@ -1,8 +1,7 @@
-#define VERSION "1.0.4.0"
-
 /* includes //{ */
 
 #include <ros/ros.h>
+#include <ros/package.h>
 
 #include <common.h>
 #include <pid.hpp>
@@ -39,8 +38,8 @@ namespace se3_controller
 class Se3Controller : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space,
-                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
+  bool initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   bool activate(const ControlOutput& last_control_output);
 
@@ -59,12 +58,13 @@ public:
   const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
 
 private:
-  std::string _version_;
+  ros::NodeHandle nh_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
 
-  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers_;
 
   // | ------------------------ uav state ----------------------- |
 
@@ -101,22 +101,22 @@ private:
   double uav_mass_difference_;
 
   // gains that are used and already filtered
-  double kpxy_;            // position xy gain
-  double kvxy_;            // velocity xy gain
-  double kaxy_;            // acceleration xy gain (feed forward, =1)
-  double kiwxy_;           // world xy integral gain
-  double kibxy_;           // body xy integral gain
-  double kiwxy_lim_;       // world xy integral limit
-  double kibxy_lim_;       // body xy integral limit
-  double kpz_;             // position z gain
-  double kvz_;             // velocity z gain
-  double kaz_;             // acceleration z gain (feed forward, =1)
-  double km_;              // mass estimator gain
-  double km_lim_;          // mass estimator limit
-  double kqxy_;            // pitch/roll attitude gain
-  double kqz_;             // yaw attitude gain
-  double kwp_roll_pitch_;  // attitude rate gain
-  double kwp_yaw_;         // attitude rate gain
+  double kpxy_;           // position xy gain
+  double kvxy_;           // velocity xy gain
+  double kaxy_;           // acceleration xy gain (feed forward, =1)
+  double kiwxy_;          // world xy integral gain
+  double kibxy_;          // body xy integral gain
+  double kiwxy_lim_;      // world xy integral limit
+  double kibxy_lim_;      // body xy integral limit
+  double kpz_;            // position z gain
+  double kvz_;            // velocity z gain
+  double kaz_;            // acceleration z gain (feed forward, =1)
+  double km_;             // mass estimator gain
+  double km_lim_;         // mass estimator limit
+  double kq_roll_pitch_;  // pitch/roll attitude gain
+  double kq_yaw_;         // yaw attitude gain
+  double kw_roll_pitch;   // attitude rate gain
+  double kw_yaw;          // attitude rate gain
 
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
@@ -199,105 +199,118 @@ private:
 
 /* //{ initialize() */
 
-void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                               std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
+bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                               std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
-  ros::NodeHandle nh_(parent_nh, name_space);
+  nh_ = nh;
 
-  common_handlers_ = common_handlers;
-  _uav_mass_       = common_handlers->getMass();
+  common_handlers_  = common_handlers;
+  private_handlers_ = private_handlers;
+
+  _uav_mass_ = common_handlers->getMass();
 
   ros::Time::waitForValid();
 
   // | ------------------- loading parameters ------------------- |
 
-  mrs_lib::ParamLoader param_loader(nh_, "Se3Controller");
+  bool success = true;
 
-  param_loader.loadParam("version", _version_);
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
 
-  if (_version_ != VERSION) {
-
-    ROS_ERROR("[Se3Controller]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
-    ros::shutdown();
+  if (!success) {
+    return false;
   }
 
-  param_loader.loadParam("enable_profiler", _profiler_enabled_);
+  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
+
+  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
+
+  if (!param_loader_parent.loadedSuccessfully()) {
+    ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
+    return false;
+  }
+
+  mrs_lib::ParamLoader param_loader(nh_, "Se3Controller");
+
+  const std::string yaml_namespace = "mrs_uav_controllers/se3_controller/";
 
   // lateral gains
-  param_loader.loadParam("se3/default_gains/horizontal/kp", kpxy_);
-  param_loader.loadParam("se3/default_gains/horizontal/kv", kvxy_);
-  param_loader.loadParam("se3/default_gains/horizontal/ka", kaxy_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kp", kpxy_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kv", kvxy_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/ka", kaxy_);
 
-  param_loader.loadParam("se3/default_gains/horizontal/kiw", kiwxy_);
-  param_loader.loadParam("se3/default_gains/horizontal/kib", kibxy_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw", kiwxy_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib", kibxy_);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.loadParam("se3/rampup/enabled", _rampup_enabled_);
-  param_loader.loadParam("se3/rampup/speed", _rampup_speed_);
+  param_loader.loadParam(yaml_namespace + "se3/rampup/enabled", _rampup_enabled_);
+  param_loader.loadParam(yaml_namespace + "se3/rampup/speed", _rampup_speed_);
 
   // height gains
-  param_loader.loadParam("se3/default_gains/vertical/kp", kpz_);
-  param_loader.loadParam("se3/default_gains/vertical/kv", kvz_);
-  param_loader.loadParam("se3/default_gains/vertical/ka", kaz_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kp", kpz_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kv", kvz_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/ka", kaz_);
 
   // attitude gains
-  param_loader.loadParam("se3/default_gains/horizontal/attitude/kq", kqxy_);
-  param_loader.loadParam("se3/default_gains/vertical/attitude/kq", kqz_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_roll_pitch", kq_roll_pitch_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_yaw", kq_yaw_);
 
   // attitude rate gains
-  param_loader.loadParam("se3/default_gains/attitude_rate/kp_roll_pitch", kwp_roll_pitch_);
-  param_loader.loadParam("se3/default_gains/attitude_rate/kp_yaw", kwp_yaw_);
+  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_roll_pitch", kw_roll_pitch);
+  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_yaw", kw_yaw);
 
   // mass estimator
-  param_loader.loadParam("se3/default_gains/mass_estimator/km", km_);
-  param_loader.loadParam("se3/default_gains/mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", km_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", km_lim_);
 
   // integrator limits
-  param_loader.loadParam("se3/default_gains/horizontal/kiw_lim", kiwxy_lim_);
-  param_loader.loadParam("se3/default_gains/horizontal/kib_lim", kibxy_lim_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw_lim", kiwxy_lim_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.loadParam("se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  param_loader.loadParam("se3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  param_loader.loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  param_loader.loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[Se3Controller]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
-    ros::shutdown();
+    return false;
   }
 
-  param_loader.loadParam("se3/constraints/throttle_saturation", _throttle_saturation_);
+  param_loader.loadParam(yaml_namespace + "se3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam("se3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam("se3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam(yaml_namespace + "se3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam(yaml_namespace + "se3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // gain muting
-  param_loader.loadParam("se3/gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam(yaml_namespace + "se3/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  param_loader.loadParam("se3/preferred_output", drs_params_.preferred_output_mode);
+  param_loader.loadParam(yaml_namespace + "se3/preferred_output", drs_params_.preferred_output_mode);
 
-  param_loader.loadParam("se3/rotation_matrix", drs_params_.rotation_type);
+  param_loader.loadParam(yaml_namespace + "se3/rotation_matrix", drs_params_.rotation_type);
 
   // angular rate feed forward
-  param_loader.loadParam("se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
-  param_loader.loadParam("se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  param_loader.loadParam(yaml_namespace + "se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
+  param_loader.loadParam(yaml_namespace + "se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
 
   // | ------------------- position pid params ------------------ |
 
-  param_loader.loadParam("position_controller/translation_gains/p", _pos_pid_p_);
-  param_loader.loadParam("position_controller/translation_gains/i", _pos_pid_i_);
-  param_loader.loadParam("position_controller/translation_gains/d", _pos_pid_d_);
+  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/p", _pos_pid_p_);
+  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/i", _pos_pid_i_);
+  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/d", _pos_pid_d_);
 
-  param_loader.loadParam("position_controller/heading_gains/p", _hdg_pid_p_);
-  param_loader.loadParam("position_controller/heading_gains/i", _hdg_pid_i_);
-  param_loader.loadParam("position_controller/heading_gains/d", _hdg_pid_d_);
+  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/p", _hdg_pid_p_);
+  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
+  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
 
   // | ------------------ finish loading params ----------------- |
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[Se3Controller]: could not load all parameters!");
-    ros::shutdown();
+    return false;
   }
 
   // | ---------------- prepare stuff from params --------------- |
@@ -305,7 +318,7 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
         drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
     ROS_ERROR("[Se3Controller]: preferred output mode has to be {0, 1, 2, 3}!");
-    ros::shutdown();
+    return false;
   }
 
   // initialize the integrals
@@ -323,8 +336,8 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
   drs_params_.kpz              = kpz_;
   drs_params_.kvz              = kvz_;
   drs_params_.kaz              = kaz_;
-  drs_params_.kqxy             = kqxy_;
-  drs_params_.kqz              = kqz_;
+  drs_params_.kq_roll_pitch    = kq_roll_pitch_;
+  drs_params_.kq_yaw           = kq_yaw_;
   drs_params_.kiwxy_lim        = kiwxy_lim_;
   drs_params_.kibxy_lim        = kibxy_lim_;
   drs_params_.km               = km_;
@@ -345,13 +358,15 @@ void Se3Controller::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(nh_, "Se3Controller", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(common_handlers_->parent_nh, "Se3Controller", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[Se3Controller]: initialized, version %s", VERSION);
+  ROS_INFO("[Se3Controller]: initialized");
 
   is_initialized_ = true;
+
+  return true;
 }
 
 //}
@@ -806,12 +821,12 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     }
 
     if (!tracker_command.use_attitude_rate) {
-      Kq << kqxy_, kqxy_, kqz_;
+      Kq << kq_roll_pitch_, kq_roll_pitch_, kq_yaw_;
     }
 
-    Kw[0] = kwp_roll_pitch_;
-    Kw[1] = kwp_roll_pitch_;
-    Kw[2] = kwp_yaw_;
+    Kw[0] = kw_roll_pitch;
+    Kw[1] = kw_roll_pitch;
+    Kw[2] = kw_yaw;
   }
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
@@ -1677,17 +1692,17 @@ void Se3Controller::filterGains(const bool mute_gains, const double dt) {
 
     bool updated = false;
 
-    kpxy_  = calculateGainChange(dt, kpxy_, drs_params_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
-    kvxy_  = calculateGainChange(dt, kvxy_, drs_params_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
-    kaxy_  = calculateGainChange(dt, kaxy_, drs_params_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
-    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
-    kibxy_ = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
-    kpz_   = calculateGainChange(dt, kpz_, drs_params_.kpz * gain_coeff, bypass_filter, "kpz", updated);
-    kvz_   = calculateGainChange(dt, kvz_, drs_params_.kvz * gain_coeff, bypass_filter, "kvz", updated);
-    kaz_   = calculateGainChange(dt, kaz_, drs_params_.kaz * gain_coeff, bypass_filter, "kaz", updated);
-    kqxy_  = calculateGainChange(dt, kqxy_, drs_params_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
-    kqz_   = calculateGainChange(dt, kqz_, drs_params_.kqz * gain_coeff, bypass_filter, "kqz", updated);
-    km_    = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
+    kpxy_          = calculateGainChange(dt, kpxy_, drs_params_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
+    kvxy_          = calculateGainChange(dt, kvxy_, drs_params_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
+    kaxy_          = calculateGainChange(dt, kaxy_, drs_params_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
+    kiwxy_         = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+    kibxy_         = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+    kpz_           = calculateGainChange(dt, kpz_, drs_params_.kpz * gain_coeff, bypass_filter, "kpz", updated);
+    kvz_           = calculateGainChange(dt, kvz_, drs_params_.kvz * gain_coeff, bypass_filter, "kvz", updated);
+    kaz_           = calculateGainChange(dt, kaz_, drs_params_.kaz * gain_coeff, bypass_filter, "kaz", updated);
+    kq_roll_pitch_ = calculateGainChange(dt, kq_roll_pitch_, drs_params_.kq_roll_pitch * gain_coeff, bypass_filter, "kqxy", updated);
+    kq_yaw_        = calculateGainChange(dt, kq_yaw_, drs_params_.kq_yaw * gain_coeff, bypass_filter, "kqz", updated);
+    km_            = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
 
     kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_params_.kiwxy_lim, false, "kiwxy_lim", updated);
     kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_params_.kibxy_lim, false, "kibxy_lim", updated);
@@ -1699,20 +1714,20 @@ void Se3Controller::filterGains(const bool mute_gains, const double dt) {
 
       DrsConfig_t new_drs_params = drs_params_;
 
-      new_drs_params.kpxy      = kpxy_;
-      new_drs_params.kvxy      = kvxy_;
-      new_drs_params.kaxy      = kaxy_;
-      new_drs_params.kiwxy     = kiwxy_;
-      new_drs_params.kibxy     = kibxy_;
-      new_drs_params.kpz       = kpz_;
-      new_drs_params.kvz       = kvz_;
-      new_drs_params.kaz       = kaz_;
-      new_drs_params.kqxy      = kqxy_;
-      new_drs_params.kqz       = kqz_;
-      new_drs_params.kiwxy_lim = kiwxy_lim_;
-      new_drs_params.kibxy_lim = kibxy_lim_;
-      new_drs_params.km        = km_;
-      new_drs_params.km_lim    = km_lim_;
+      new_drs_params.kpxy          = kpxy_;
+      new_drs_params.kvxy          = kvxy_;
+      new_drs_params.kaxy          = kaxy_;
+      new_drs_params.kiwxy         = kiwxy_;
+      new_drs_params.kibxy         = kibxy_;
+      new_drs_params.kpz           = kpz_;
+      new_drs_params.kvz           = kvz_;
+      new_drs_params.kaz           = kaz_;
+      new_drs_params.kq_roll_pitch = kq_roll_pitch_;
+      new_drs_params.kq_yaw        = kq_yaw_;
+      new_drs_params.kiwxy_lim     = kiwxy_lim_;
+      new_drs_params.kibxy_lim     = kibxy_lim_;
+      new_drs_params.km            = km_;
+      new_drs_params.km_lim        = km_lim_;
 
       drs_->updateConfig(new_drs_params);
     }

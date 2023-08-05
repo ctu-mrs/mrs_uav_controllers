@@ -1,8 +1,7 @@
-#define VERSION "1.0.4.0"
-
 /* includes //{ */
 
 #include <ros/ros.h>
+#include <ros/package.h>
 
 #include <common.h>
 
@@ -26,8 +25,8 @@ namespace midair_activation_controller
 class MidairActivationController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
-                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
+  bool initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   bool activate(const ControlOutput &last_control_output);
 
@@ -46,12 +45,13 @@ public:
   const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
 
 private:
-  std::string _version_;
+  ros::NodeHandle nh_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
 
-  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers_;
 
   // | ------------------------ uav state ----------------------- |
 
@@ -83,39 +83,51 @@ private:
 
 /* initialize() //{ */
 
-void MidairActivationController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                                            std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
+bool MidairActivationController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                                            std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
-  ros::NodeHandle nh_(parent_nh, name_space);
+  nh_ = nh;
 
-  common_handlers_ = common_handlers;
-  _uav_mass_       = common_handlers->getMass();
+  common_handlers_  = common_handlers;
+  private_handlers_ = private_handlers;
+
+  _uav_mass_ = common_handlers->getMass();
 
   ros::Time::waitForValid();
 
   // | ------------------- loading parameters ------------------- |
 
-  mrs_lib::ParamLoader param_loader(nh_, "MidairActivationController");
+  bool success = true;
 
-  param_loader.loadParam("version", _version_);
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/midair_activation_controller.yaml");
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/midair_activation_controller.yaml");
 
-  if (_version_ != VERSION) {
+  if (!success) {
+    return false;
+  }
 
-    ROS_ERROR("[MidairActivationController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
-    ros::shutdown();
+  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
+
+  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
+
+  if (!param_loader_parent.loadedSuccessfully()) {
+    ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
+    return false;
   }
 
   uav_mass_difference_ = 0;
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(nh_, "MidairActivationController", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(common_handlers->parent_nh, "MidairActivationController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[MidairActivationController]: initialized, version %s", VERSION);
+  ROS_INFO("[MidairActivationController]: initialized");
 
   is_initialized_ = true;
+
+  return true;
 }
 
 //}

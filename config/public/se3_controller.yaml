@@ -1,0 +1,46 @@
+mrs_uav_controllers:
+
+  se3_controller:
+
+    se3:
+
+      constraints:
+
+        throttle_saturation: 0.9 # [-], range from 0 to 1
+
+        # When the controller wants to output tilt larger than this,
+        # it will return an empty command instead, which should trigger
+        # a failsafe in the control manager.
+        tilt_angle_failsafe:
+          enabled: true
+          limit: deg(90.0) # [rad]
+
+      angular_rate_feedforward:
+
+        # compensation of a parasitic heading rate due to pitch and roll rate
+        parasitic_pitch_roll: true
+
+        # jerk feed forward
+        jerk: true
+
+      rotation_matrix: 1 # {0 = lee, 1 = baca (oblique projection)}
+
+      # preferred output mode:
+      # - choose this one if more output modes are available
+      preferred_output: 2 # {0 = actuators,
+                          #  1 = control_group,
+                          #  2 = attitude_rate,
+                          #  3 = attitude,}
+
+    # PID gains for the position controller
+    # used only when outputing desired "velocity"
+    position_controller:
+
+      translation_gains:
+        p: 2.0
+        d: 0.15
+        i: 0.2
+      heading_gains:
+        p: 1.0
+        d: 0.1
+        i: 0.01

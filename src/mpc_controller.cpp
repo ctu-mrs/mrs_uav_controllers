@@ -1,8 +1,7 @@
-#define VERSION "1.0.4.0"
-
 /* includes //{ */
 
 #include <ros/ros.h>
+#include <ros/package.h>
 
 #include <common.h>
 #include <pid.hpp>
@@ -43,8 +42,8 @@ namespace mpc_controller
 class MpcController : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle &parent_nh, const std::string name, const std::string name_space,
-                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
+  bool initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   bool activate(const ControlOutput &last_control_output);
 
@@ -63,14 +62,15 @@ public:
   const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
 
 private:
-  std::string _version_;
+  ros::NodeHandle nh_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
 
   std::string name_;
 
-  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers_;
+  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers_;
 
   // | ------------------------ uav state ----------------------- |
 
@@ -109,16 +109,16 @@ private:
   // | ------------------- configurable gains ------------------- |
 
   // gains that are used and already filtered
-  double kiwxy_;           // world xy integral gain
-  double kibxy_;           // body xy integral gain
-  double kiwxy_lim_;       // world xy integral limit
-  double kibxy_lim_;       // body xy integral limit
-  double km_;              // mass estimator gain
-  double km_lim_;          // mass estimator limit
-  double kqxy_;            // pitch/roll attitude gain
-  double kqz_;             // yaw attitude gain
-  double kwp_roll_pitch_;  // attitude rate gain
-  double kwp_yaw_;         // attitude rate gain
+  double kiwxy_;      // world xy integral gain
+  double kibxy_;      // body xy integral gain
+  double kiwxy_lim_;  // world xy integral limit
+  double kibxy_lim_;  // body xy integral limit
+  double km_;         // mass estimator gain
+  double km_lim_;     // mass estimator limit
+  double kq_rp_;      // pitch/roll attitude gain
+  double kq_y_;       // yaw attitude gain
+  double kw_rp_;      // attitude rate gain
+  double kw_y_;       // attitude rate gain
 
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
@@ -198,7 +198,7 @@ private:
   // | ------------------------ profiler ------------------------ |
 
   mrs_lib::Profiler profiler;
-  bool              profiler_enabled_ = false;
+  bool              _profiler_enabled_ = false;
 
   // | ------------------------ integrals ----------------------- |
 
@@ -242,120 +242,134 @@ private:
 
 /* //{ initialize() */
 
-void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                               std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
+bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                               std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
-  ros::NodeHandle nh_(parent_nh, name_space);
+  nh_ = nh;
 
-  common_handlers_ = common_handlers;
-  _uav_mass_       = common_handlers->getMass();
-  name_            = name;
+  common_handlers_  = common_handlers;
+  private_handlers_ = private_handlers;
+
+  _uav_mass_ = common_handlers_->getMass();
+  name_      = private_handlers_->runtime_name;
 
   ros::Time::waitForValid();
 
   // | ------------------- loading parameters ------------------- |
 
-  mrs_lib::ParamLoader param_loader(nh_, "MpcController");
+  bool success = true;
 
-  param_loader.loadParam("version", _version_);
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/mpc_controller.yaml");
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/mpc_controller.yaml");
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/" + private_handlers->name_space + ".yaml");
+  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/" + private_handlers->name_space + ".yaml");
 
-  if (_version_ != VERSION) {
-
-    ROS_ERROR("[%s]: the version of the binary (%s) does not match the config file (%s), please build me!", name_.c_str(), VERSION, _version_.c_str());
-    ros::shutdown();
+  if (!success) {
+    return false;
   }
 
-  param_loader.loadParam("enable_profiler", profiler_enabled_);
+  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
+
+  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
+
+  if (!param_loader_parent.loadedSuccessfully()) {
+    ROS_ERROR("[MpcController]: Could not load all parameters!");
+    return false;
+  }
+
+  mrs_lib::ParamLoader param_loader(nh_, "MpcController");
+
+  const std::string yaml_namespace = "mrs_uav_controllers/" + private_handlers_->name_space + "/";
 
   // load the dynamicall model parameters
-  param_loader.loadParam("mpc/mpc_model/number_of_states", _n_states_);
-  param_loader.loadParam("mpc/mpc_model/dt1", _dt1_);
-  param_loader.loadParam("mpc/mpc_model/dt2", _dt2_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_model/number_of_states", _n_states_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_model/dt1", _dt1_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_model/dt2", _dt2_);
 
-  param_loader.loadParam("mpc/mpc_parameters/horizon_length", _horizon_length_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizon_length", _horizon_length_);
 
-  param_loader.loadParam("mpc/mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
-  param_loader.loadParam("mpc/mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
-  param_loader.loadParam("mpc/mpc_parameters/horizontal/max_jerk", _max_jerk_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_jerk", _max_jerk_);
 
-  param_loader.loadParam("mpc/mpc_parameters/horizontal/Q", _mat_Q_);
-  param_loader.loadParam("mpc/mpc_parameters/horizontal/S", _mat_S_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/Q", _mat_Q_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/S", _mat_S_);
 
-  param_loader.loadParam("mpc/mpc_parameters/vertical/max_speed", _max_speed_vertical_);
-  param_loader.loadParam("mpc/mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
-  param_loader.loadParam("mpc/mpc_parameters/vertical/max_u", _max_u_vertical_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_speed", _max_speed_vertical_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_u", _max_u_vertical_);
 
-  param_loader.loadParam("mpc/mpc_parameters/vertical/Q", _mat_Q_z_);
-  param_loader.loadParam("mpc/mpc_parameters/vertical/S", _mat_S_z_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/Q", _mat_Q_z_);
+  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/S", _mat_S_z_);
 
-  param_loader.loadParam("mpc/solver/verbose", _mpc_solver_verbose_);
-  param_loader.loadParam("mpc/solver/max_iterations", _mpc_solver_max_iterations_);
+  param_loader.loadParam(yaml_namespace + "mpc/solver/verbose", _mpc_solver_verbose_);
+  param_loader.loadParam(yaml_namespace + "mpc/solver/max_iterations", _mpc_solver_max_iterations_);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.loadParam("so3/rampup/enabled", _rampup_enabled_);
-  param_loader.loadParam("so3/rampup/speed", _rampup_speed_);
+  param_loader.loadParam(yaml_namespace + "so3/rampup/enabled", _rampup_enabled_);
+  param_loader.loadParam(yaml_namespace + "so3/rampup/speed", _rampup_speed_);
 
   // | --------------------- integral gains --------------------- |
 
-  param_loader.loadParam("so3/default_gains/integral_gains/kiw", kiwxy_);
-  param_loader.loadParam("so3/default_gains/integral_gains/kib", kibxy_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw", kiwxy_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib", kibxy_);
 
   // integrator limits
-  param_loader.loadParam("so3/default_gains/integral_gains/kiw_lim", kiwxy_lim_);
-  param_loader.loadParam("so3/default_gains/integral_gains/kib_lim", kibxy_lim_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw_lim", kiwxy_lim_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib_lim", kibxy_lim_);
 
   // | ------------- height and attitude controller ------------- |
 
   // attitude gains
-  param_loader.loadParam("so3/default_gains/attitude_feedback/horizontal/attitude/kq", kqxy_);
-  param_loader.loadParam("so3/default_gains/attitude_feedback/vertical/attitude/kq", kqz_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/roll_pitch", kq_rp_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/yaw", kq_y_);
 
   // attitude rate gains
-  param_loader.loadParam("so3/default_gains/attitude_rate/kp_roll_pitch", kwp_roll_pitch_);
-  param_loader.loadParam("so3/default_gains/attitude_rate/kp_yaw", kwp_yaw_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/roll_pitch", kw_rp_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/yaw", kw_y_);
 
   // mass estimator
-  param_loader.loadParam("so3/mass_estimator/km", km_);
-  param_loader.loadParam("so3/mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km", km_);
+  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km_lim", km_lim_);
 
   // constraints
-  param_loader.loadParam("so3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  param_loader.loadParam("so3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  param_loader.loadParam(yaml_namespace + "so3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  param_loader.loadParam(yaml_namespace + "so3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
 
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[%s]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low", name_.c_str());
-    ros::shutdown();
+    return false;
   }
 
-  param_loader.loadParam("so3/constraints/throttle_saturation", _throttle_saturation_);
+  param_loader.loadParam(yaml_namespace + "so3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam("so3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam("so3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam(yaml_namespace + "so3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam(yaml_namespace + "so3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
 
   // gain muting
-  param_loader.loadParam("so3/gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam(yaml_namespace + "so3/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // angular rate feed forward
-  param_loader.loadParam("so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  param_loader.loadParam(yaml_namespace + "so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
 
   // output mode
-  param_loader.loadParam("so3/preferred_output", drs_params_.preferred_output_mode);
+  param_loader.loadParam(yaml_namespace + "so3/preferred_output", drs_params_.preferred_output_mode);
 
   // | ------------------- position pid params ------------------ |
 
-  param_loader.loadParam("position_controller/translation_gains/p", _pos_pid_p_);
-  param_loader.loadParam("position_controller/translation_gains/i", _pos_pid_i_);
-  param_loader.loadParam("position_controller/translation_gains/d", _pos_pid_d_);
+  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/p", _pos_pid_p_);
+  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/i", _pos_pid_i_);
+  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/d", _pos_pid_d_);
 
-  param_loader.loadParam("position_controller/heading_gains/p", _hdg_pid_p_);
-  param_loader.loadParam("position_controller/heading_gains/i", _hdg_pid_i_);
-  param_loader.loadParam("position_controller/heading_gains/d", _hdg_pid_d_);
+  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/p", _hdg_pid_p_);
+  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
+  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
 
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
-    ros::shutdown();
+    return false;
   }
 
   // | ---------------- prepare stuff from params --------------- |
@@ -363,7 +377,7 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
   if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
         drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
     ROS_ERROR("[%s]: preferred output mode has to be {0, 1, 2, 3}!", this->name_.c_str());
-    ros::shutdown();
+    return false;
   }
 
   uav_mass_difference_ = 0;
@@ -383,8 +397,8 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   drs_params_.kiwxy     = kiwxy_;
   drs_params_.kibxy     = kibxy_;
-  drs_params_.kqxy      = kqxy_;
-  drs_params_.kqz       = kqz_;
+  drs_params_.kqxy      = kq_rp_;
+  drs_params_.kqz       = kq_y_;
   drs_params_.km        = km_;
   drs_params_.km_lim    = km_lim_;
   drs_params_.kiwxy_lim = kiwxy_lim_;
@@ -408,13 +422,15 @@ void MpcController::initialize(const ros::NodeHandle &parent_nh, [[maybe_unused]
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler = mrs_lib::Profiler(nh_, "MpcController", profiler_enabled_);
+  profiler = mrs_lib::Profiler(common_handlers->parent_nh, "MpcController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[%s]: initialized, version %s", this->name_.c_str(), VERSION);
+  ROS_INFO("[%s]: initialized", this->name_.c_str());
 
   is_initialized_ = true;
+
+  return true;
 }
 
 //}
@@ -962,11 +978,11 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   {
     std::scoped_lock lock(mutex_gains_);
 
-    Kq << kqxy_, kqxy_, kqz_;
+    Kq << kq_rp_, kq_rp_, kq_y_;
 
-    Kw[0] = kwp_roll_pitch_;
-    Kw[1] = kwp_roll_pitch_;
-    Kw[2] = kwp_yaw_;
+    Kw[0] = kw_rp_;
+    Kw[1] = kw_rp_;
+    Kw[2] = kw_y_;
   }
 
   // | ---------- desired orientation matrix and force ---------- |
@@ -1915,8 +1931,8 @@ void MpcController::filterGains(const bool mute_gains, const double dt) {
 
     bool updated = false;
 
-    kqxy_  = calculateGainChange(dt, kqxy_, drs_params_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
-    kqz_   = calculateGainChange(dt, kqz_, drs_params_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    kq_rp_ = calculateGainChange(dt, kq_rp_, drs_params_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kq_y_  = calculateGainChange(dt, kq_y_, drs_params_.kqz * gain_coeff, bypass_filter, "kqz", updated);
     km_    = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
     kiwxy_ = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
     kibxy_ = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
@@ -1933,8 +1949,8 @@ void MpcController::filterGains(const bool mute_gains, const double dt) {
 
       new_drs_params_.kiwxy     = kiwxy_;
       new_drs_params_.kibxy     = kibxy_;
-      new_drs_params_.kqxy      = kqxy_;
-      new_drs_params_.kqz       = kqz_;
+      new_drs_params_.kqxy      = kq_rp_;
+      new_drs_params_.kqz       = kq_y_;
       new_drs_params_.km        = km_;
       new_drs_params_.km_lim    = km_lim_;
       new_drs_params_.kiwxy_lim = kiwxy_lim_;

@@ -1,18 +1,20 @@
 cmake_minimum_required(VERSION 3.1.2)
 project(mrs_uav_controllers)
 
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  sensor_msgs
-  geometry_msgs
-  std_msgs
-  nav_msgs
+set(CATKIN_DEPENDENCIES
   cmake_modules
-  mrs_msgs
+  roscpp
+  rospy
+  pluginlib
+  geometry_msgs
   dynamic_reconfigure
   mrs_uav_managers
+  mrs_msgs
   mrs_lib
-  tf
+  )
+
+find_package(catkin REQUIRED COMPONENTS
+  ${CATKIN_DEPENDENCIES}
   )
 
 generate_dynamic_reconfigure_options(
@@ -35,7 +37,7 @@ set(LIBRARIES
 
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf
+  CATKIN_DEPENDS ${CATKIN_DEPENDENCIES}
   LIBRARIES ${LIBRARIES}
   DEPENDS Eigen
   )
@@ -154,15 +156,20 @@ install(DIRECTORY config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   )
 
-install(DIRECTORY include/
-  DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}
-  )
-
 install(FILES ${MPC_CONTROLLER_SOLVER_BIN}
   DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   )
 
-install(DIRECTORY ./
+install(FILES plugins.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-  FILES_MATCHING PATTERN "*.xml"
+  )
+
+install(DIRECTORY scripts/
+  USE_SOURCE_PERMISSIONS
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+
+install(DIRECTORY scripts
+  USE_SOURCE_PERMISSIONS
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   )

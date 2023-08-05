@@ -127,7 +127,7 @@ Eigen::Matrix3d so3transform(const Eigen::Vector3d& body_z, const ::Eigen::Vecto
 
 /* getLowestOutput() //{ */
 
-std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::ControlOutputModalities_t& outputs) {
+std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t& outputs) {
 
   if (outputs.actuators) {
     return ACTUATORS_CMD;
@@ -172,7 +172,7 @@ std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::ControlOutp
 
 /* getHighestOutput() //{ */
 
-std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::ControlOutputModalities_t& outputs) {
+std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t& outputs) {
 
   if (outputs.position) {
     return POSITION;

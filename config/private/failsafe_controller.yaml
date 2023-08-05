@@ -1,0 +1,11 @@
+mrs_uav_controllers:
+
+  failsafe_controller:
+
+    attitude_controller:
+      gains:
+        kp: 3.0
+
+    rate_controller:
+      gains:
+        kp: 3.0

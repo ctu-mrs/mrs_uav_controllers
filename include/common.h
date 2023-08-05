@@ -32,9 +32,9 @@ std::optional<Eigen::Vector3d> sanitizeDesiredForce(const Eigen::Vector3d& desir
 
 Eigen::Matrix3d so3transform(const Eigen::Vector3d& body_z, const ::Eigen::Vector3d& heading, const bool& preserve_heading);
 
-std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::ControlOutputModalities_t& outputs);
+std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t& outputs);
 
-std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::ControlOutputModalities_t& outputs);
+std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t& outputs);
 
 std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs::UavState& uav_state, const mrs_msgs::HwApiAttitudeCmd& reference,
                                                                  const Eigen::Vector3d& ff_rate, const Eigen::Vector3d& rate_saturation,

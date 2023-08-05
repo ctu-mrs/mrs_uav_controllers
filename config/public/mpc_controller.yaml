@@ -1,0 +1,51 @@
+mrs_uav_controllers:
+
+  mpc_controller:
+
+    so3:
+
+      rampup:
+        enabled: true
+        speed: 0.75 # [1/s]
+
+      mass_estimator:
+        km: 0.5 # [kg/s], mass estimator max rate
+        km_lim: 5.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
+
+      # preferred output mode:
+      # - choose this one if more output modes are available
+      preferred_output: 2 # {0 = actuators,
+                          #  1 = control_group,
+                          #  2 = attitude_rate,
+                          #  3 = attitude,}
+
+      gains:
+
+        integral_gains:
+
+          kiw: 0.1
+          kib: 0.1
+
+          kiw_lim: 10.0
+          kib_lim: 10.0
+
+        attitude:
+          roll_pitch: 5.0
+          yaw: 1.0
+
+        attitude_rate:
+          roll_pitch: 4.0
+          yaw: 4.0
+
+    # PID gains for the position controller
+    # used only when outputing desired "velocity"
+    position_controller:
+
+      translation_gains:
+        p: 2.0
+        d: 0.15
+        i: 0.2
+      heading_gains:
+        p: 1.0
+        d: 0.1
+        i: 0.01
