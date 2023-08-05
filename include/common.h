@@ -2,7 +2,7 @@
 #define MRS_UAV_CONTROLLERS_COMMON_H
 
 #include <eigen3/Eigen/Eigen>
-#include <mrs_uav_managers/common_handlers.h>
+#include <mrs_uav_managers/control_manager/common_handlers.h>
 #include <mrs_uav_managers/controller.h>
 #include <mrs_lib/attitude_converter.h>
 
