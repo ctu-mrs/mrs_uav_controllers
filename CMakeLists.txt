@@ -1,16 +1,16 @@
-cmake_minimum_required(VERSION 3.1.2)
+cmake_minimum_required(VERSION 3.5)
 project(mrs_uav_controllers)
 
 set(CATKIN_DEPENDENCIES
   cmake_modules
+  dynamic_reconfigure
+  geometry_msgs
+  mrs_lib
+  mrs_msgs
+  mrs_uav_managers
+  pluginlib
   roscpp
   rospy
-  pluginlib
-  geometry_msgs
-  dynamic_reconfigure
-  mrs_uav_managers
-  mrs_msgs
-  mrs_lib
   )
 
 find_package(catkin REQUIRED COMPONENTS
@@ -32,7 +32,10 @@ set(Eigen_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIRS})
 set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 
 set(LIBRARIES
-  Se3Controller MpcController FailsafeController MidairActivationController
+  MrsUavControllers_Se3Controller
+  MrsUavControllers_MpcController
+  MrsUavControllers_FailsafeController
+  MrsUavControllers_MidairActivationController
   )
 
 catkin_package(
@@ -77,68 +80,68 @@ endif()
 
 # SE3 controller
 
-add_library(Se3Controller
+add_library(MrsUavControllers_Se3Controller
   src/se3_controller.cpp
   src/common.cpp
   )
 
-add_dependencies(Se3Controller
+add_dependencies(MrsUavControllers_Se3Controller
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(Se3Controller
+target_link_libraries(MrsUavControllers_Se3Controller
   ${catkin_LIBRARIES}
   )
 
 # Mpc controller
 
-add_library(MpcController
+add_library(MrsUavControllers_MpcController
   src/mpc_controller.cpp
   src/common.cpp
   )
 
-add_dependencies(MpcController
+add_dependencies(MrsUavControllers_MpcController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(MpcController
+target_link_libraries(MrsUavControllers_MpcController
   ${catkin_LIBRARIES}
   ${MPC_CONTROLLER_SOLVER_BIN}
   )
 
 # Failsafe controller
 
-add_library(FailsafeController
+add_library(MrsUavControllers_FailsafeController
   src/failsafe_controller.cpp
   src/common.cpp
   )
 
-add_dependencies(FailsafeController
+add_dependencies(MrsUavControllers_FailsafeController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   )
 
-target_link_libraries(FailsafeController
+target_link_libraries(MrsUavControllers_FailsafeController
   ${catkin_LIBRARIES}
   )
 
 # Midair Activation Controller
 
-add_library(MidairActivationController
+add_library(MrsUavControllers_MidairActivationController
   src/midair_activation_controller.cpp
   src/common.cpp
   )
 
-add_dependencies(MidairActivationController
+add_dependencies(MrsUavControllers_MidairActivationController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   )
 
-target_link_libraries(MidairActivationController
+target_link_libraries(MrsUavControllers_MidairActivationController
   ${catkin_LIBRARIES}
   )
 
