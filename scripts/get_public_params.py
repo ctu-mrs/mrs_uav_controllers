@@ -17,7 +17,8 @@ class ParamsGetter:
 
         for path, subdirs, files in os.walk(package_path + "/config/public/"):
             for name in files:
-                file_paths.append(os.path.join(path, name))
+                if name.endswith(".yaml") or name.endswith(".yml"):
+                  file_paths.append(os.path.join(path, name))
 
         for file_path in file_paths:
 
@@ -25,7 +26,11 @@ class ParamsGetter:
                 continue
 
             with open(file_path, 'r') as file:
-                print(file.read())
+                try:
+                    print(file.read())
+                except:
+                    print("There was a problem while opening the file '{}'".format(file_path))
+                    break
 
 if __name__ == '__main__':
     params_getter = ParamsGetter()
