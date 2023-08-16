@@ -116,6 +116,8 @@ bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<m
   common_handlers_  = common_handlers;
   private_handlers_ = private_handlers;
 
+  _uav_mass_ = common_handlers->getMass();
+
   ros::Time::waitForValid();
 
   // | ------------------- loading parameters ------------------- |
