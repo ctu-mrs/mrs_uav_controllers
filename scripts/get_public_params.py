@@ -27,7 +27,12 @@ class ParamsGetter:
 
             with open(file_path, 'r') as file:
                 try:
-                    print(file.read())
+                    contents = file.read()
+                    print("######################################")
+                    print("# The following section was take from:")
+                    print("# {}".format(file_path))
+                    print("")
+                    print(contents)
                 except:
                     print("There was a problem while opening the file '{}'".format(file_path))
                     break
