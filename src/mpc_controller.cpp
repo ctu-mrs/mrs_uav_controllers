@@ -769,18 +769,18 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
   if (tracker_command.use_full_state_prediction) {
 
-    max_speed_horizontal = constraints.horizontal_speed;
-    max_speed_vertical   = constraints.vertical_ascending_speed < constraints.vertical_descending_speed ? constraints.vertical_ascending_speed
-                                                                                                      : constraints.vertical_descending_speed;
+    max_speed_horizontal = 1.5 * (constraints.horizontal_speed);
+    max_speed_vertical   = 1.5 * (constraints.vertical_ascending_speed < constraints.vertical_descending_speed ? constraints.vertical_ascending_speed
+                                                                                                             : constraints.vertical_descending_speed);
 
-    max_acceleration_horizontal = constraints.horizontal_acceleration;
-    max_acceleration_vertical   = constraints.vertical_ascending_acceleration < constraints.vertical_descending_acceleration
-                                    ? constraints.vertical_ascending_acceleration
-                                    : constraints.vertical_descending_acceleration;
+    max_acceleration_horizontal = 1.5 * (constraints.horizontal_acceleration);
+    max_acceleration_vertical =
+        1.5 * (constraints.vertical_ascending_acceleration < constraints.vertical_descending_acceleration ? constraints.vertical_ascending_acceleration
+                                                                                                          : constraints.vertical_descending_acceleration);
 
-    max_jerk = constraints.horizontal_jerk;
-    max_u_vertical =
-        constraints.vertical_ascending_jerk < constraints.vertical_descending_jerk ? constraints.vertical_ascending_jerk : constraints.vertical_descending_jerk;
+    max_jerk       = 1.5 * constraints.horizontal_jerk;
+    max_u_vertical = 1.5 * (constraints.vertical_ascending_jerk < constraints.vertical_descending_jerk ? constraints.vertical_ascending_jerk
+                                                                                                       : constraints.vertical_descending_jerk);
   }
 
   // --------------------------------------------------------------
@@ -933,21 +933,21 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     // with the MpcTracker. Rework this please.
 
     for (int i = 1; i < _horizon_length_; i++) {
-      mpc_reference_x((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[ceil(double(i) * 0.25)].x;
-      mpc_reference_y((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[ceil(double(i) * 0.25)].y;
-      mpc_reference_z((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[ceil(double(i) * 0.25)].z;
+      mpc_reference_x((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[i].x;
+      mpc_reference_y((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[i].y;
+      mpc_reference_z((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[i].z;
     }
 
     for (int i = 1; i < _horizon_length_; i++) {
-      mpc_reference_x((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[ceil(double(i) * 0.25)].x;
-      mpc_reference_y((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[ceil(double(i) * 0.25)].y;
-      mpc_reference_z((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[ceil(double(i) * 0.25)].z;
+      mpc_reference_x((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[i].x;
+      mpc_reference_y((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[i].y;
+      mpc_reference_z((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[i].z;
     }
 
     for (int i = 1; i < _horizon_length_; i++) {
-      mpc_reference_x((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[ceil(double(i) * 0.25)].x;
-      mpc_reference_y((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[ceil(double(i) * 0.25)].y;
-      mpc_reference_z((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[ceil(double(i) * 0.25)].z;
+      mpc_reference_x((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[i].x;
+      mpc_reference_y((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[i].y;
+      mpc_reference_z((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[i].z;
     }
 
   } else {
@@ -985,6 +985,11 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   if (!tracker_command.use_velocity_vertical) {
     temp_Q_vertical[1] = 0;
     temp_S_vertical[1] = 0;
+  }
+
+  if (tracker_command.use_full_state_prediction) {
+    temp_Q_vertical[2] = 0;
+    temp_S_vertical[2] = 0;
   }
 
   // | ------------------------ optimize ------------------------ |

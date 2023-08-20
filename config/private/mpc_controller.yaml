@@ -9,7 +9,7 @@ mrs_uav_controllers:
         number_of_states: 3
 
         dt1: 0.01
-        dt2: 0.05
+        dt2: 0.20
 
       mpc_parameters:
 
@@ -36,7 +36,7 @@ mrs_uav_controllers:
       solver:
 
         verbose: false
-        max_iterations: 30
+        max_iterations: 45
 
     so3:
 
