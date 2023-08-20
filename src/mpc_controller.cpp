@@ -987,11 +987,6 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     temp_S_vertical[1] = 0;
   }
 
-  if (tracker_command.use_full_state_prediction) {
-    temp_Q_vertical[2] = 0;
-    temp_S_vertical[2] = 0;
-  }
-
   // | ------------------------ optimize ------------------------ |
 
   mpc_solver_x_->setQ(temp_Q_horizontal);
