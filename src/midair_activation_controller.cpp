@@ -32,9 +32,9 @@ public:
 
   void deactivate(void);
 
-  void update(const mrs_msgs::UavState &uav_state);
+  void updateInactive(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
 
-  MidairActivationController::ControlOutput update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+  ControlOutput updateActive(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
@@ -163,15 +163,19 @@ void MidairActivationController::deactivate(void) {
 
 //}
 
-/* update() //{ */
+/* updateInactive() //{ */
 
-void MidairActivationController::update(const mrs_msgs::UavState &uav_state) {
+void MidairActivationController::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 }
 
-MidairActivationController::ControlOutput MidairActivationController::update([[maybe_unused]] const mrs_msgs::UavState &      uav_state,
-                                                                             [[maybe_unused]] const mrs_msgs::TrackerCommand &tracker_command) {
+//}
+
+/* //{ updateWhenAcctive() */
+
+MidairActivationController::ControlOutput MidairActivationController::updateActive(const mrs_msgs::UavState &      uav_state,
+                                                                                   const mrs_msgs::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer =

@@ -45,9 +45,9 @@ public:
 
   void deactivate(void);
 
-  void update(const mrs_msgs::UavState& uav_state);
+  void updateInactive(const mrs_msgs::UavState& uav_state, const std::optional<mrs_msgs::TrackerCommand>& tracker_command);
 
-  ControlOutput update(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command);
+  ControlOutput updateActive(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
@@ -453,9 +453,9 @@ void Se3Controller::deactivate(void) {
 
 //}
 
-/* update(const mrs_msgs::UavState& uav_state) //{ */
+/* updateInactive() //{ */
 
-void Se3Controller::update(const mrs_msgs::UavState& uav_state) {
+void Se3Controller::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -466,9 +466,9 @@ void Se3Controller::update(const mrs_msgs::UavState& uav_state) {
 
 //}
 
-/* //{ update(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) */
+/* //{ updateWhenAcctive() */
 
-Se3Controller::ControlOutput Se3Controller::update(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
+Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);

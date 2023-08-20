@@ -31,9 +31,9 @@ public:
   bool activate(const ControlOutput &last_control_output);
   void deactivate(void);
 
-  void update(const mrs_msgs::UavState &uav_state);
+  void updateInactive(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
 
-  ControlOutput update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+  ControlOutput updateActive(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
@@ -241,9 +241,9 @@ void FailsafeController::deactivate(void) {
 
 //}
 
-/* update() //{ */
+/* updateInactive() //{ */
 
-void FailsafeController::update(const mrs_msgs::UavState &uav_state) {
+void FailsafeController::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -252,8 +252,12 @@ void FailsafeController::update(const mrs_msgs::UavState &uav_state) {
   first_iteration_ = false;
 }
 
-FailsafeController::ControlOutput FailsafeController::update(const mrs_msgs::UavState &                       uav_state,
-                                                             [[maybe_unused]] const mrs_msgs::TrackerCommand &tracker_command) {
+//}
+
+/* //{ updateWhenAcctive() */
+
+FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msgs::UavState &                       uav_state,
+                                                                   [[maybe_unused]] const mrs_msgs::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);

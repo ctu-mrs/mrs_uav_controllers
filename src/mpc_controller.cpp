@@ -49,9 +49,9 @@ public:
 
   void deactivate(void);
 
-  void update(const mrs_msgs::UavState &uav_state);
+  void updateInactive(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
 
-  ControlOutput update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+  ControlOutput updateActive(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
 
   const mrs_msgs::ControllerStatus getStatus();
 
@@ -517,9 +517,9 @@ void MpcController::deactivate(void) {
 
 //}
 
-/* //{ update() */
+/* updateInactive() //{ */
 
-void MpcController::update(const mrs_msgs::UavState &uav_state) {
+void MpcController::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -528,7 +528,11 @@ void MpcController::update(const mrs_msgs::UavState &uav_state) {
   first_iteration_ = false;
 }
 
-MpcController::ControlOutput MpcController::update(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
+//}
+
+/* //{ updateWhenAcctive() */
+
+MpcController::ControlOutput MpcController::updateActive(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("MpcController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
