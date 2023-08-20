@@ -758,6 +758,31 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
   double uav_heading = getHeadingSafely(uav_state, tracker_command);
 
+  // | ------------------- prepare constraints ------------------ |
+
+  double max_speed_horizontal        = _max_speed_horizontal_;
+  double max_speed_vertical          = _max_speed_vertical_;
+  double max_acceleration_horizontal = _max_acceleration_horizontal_;
+  double max_acceleration_vertical   = _max_acceleration_vertical_;
+  double max_jerk                    = _max_jerk_;
+  double max_u_vertical              = _max_u_vertical_;
+
+  if (tracker_command.use_full_state_prediction) {
+
+    max_speed_horizontal = constraints.horizontal_speed;
+    max_speed_vertical   = constraints.vertical_ascending_speed < constraints.vertical_descending_speed ? constraints.vertical_ascending_speed
+                                                                                                      : constraints.vertical_descending_speed;
+
+    max_acceleration_horizontal = constraints.horizontal_acceleration;
+    max_acceleration_vertical   = constraints.vertical_ascending_acceleration < constraints.vertical_descending_acceleration
+                                    ? constraints.vertical_ascending_acceleration
+                                    : constraints.vertical_descending_acceleration;
+
+    max_jerk = constraints.horizontal_jerk;
+    max_u_vertical =
+        constraints.vertical_ascending_jerk < constraints.vertical_descending_jerk ? constraints.vertical_ascending_jerk : constraints.vertical_descending_jerk;
+  }
+
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -808,22 +833,22 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     double velocity;
     double coef = 1.5;
 
-    if (fabs(uav_state.acceleration.linear.x) < coef * _max_acceleration_horizontal_) {
+    if (fabs(uav_state.acceleration.linear.x) < coef * max_acceleration_horizontal) {
       acceleration = uav_state.acceleration.linear.x;
     } else {
       acceleration = tracker_command.acceleration.x;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.acceleration.linear.x), coef, _max_acceleration_horizontal_);
+                         fabs(uav_state.acceleration.linear.x), coef, max_acceleration_horizontal);
     }
 
-    if (fabs(uav_state.velocity.linear.x) < coef * _max_speed_horizontal_) {
+    if (fabs(uav_state.velocity.linear.x) < coef * max_speed_horizontal) {
       velocity = uav_state.velocity.linear.x;
     } else {
       velocity = tracker_command.velocity.x;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.velocity.linear.x), coef, _max_speed_horizontal_);
+                         fabs(uav_state.velocity.linear.x), coef, max_speed_horizontal);
     }
 
     initial_x << uav_state.pose.position.x, velocity, acceleration;
@@ -838,22 +863,22 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     double velocity;
     double coef = 1.5;
 
-    if (fabs(uav_state.acceleration.linear.y) < coef * _max_acceleration_horizontal_) {
+    if (fabs(uav_state.acceleration.linear.y) < coef * max_acceleration_horizontal) {
       acceleration = uav_state.acceleration.linear.y;
     } else {
       acceleration = tracker_command.acceleration.y;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.acceleration.linear.y), coef, _max_acceleration_horizontal_);
+                         fabs(uav_state.acceleration.linear.y), coef, max_acceleration_horizontal);
     }
 
-    if (fabs(uav_state.velocity.linear.y) < coef * _max_speed_horizontal_) {
+    if (fabs(uav_state.velocity.linear.y) < coef * max_speed_horizontal) {
       velocity = uav_state.velocity.linear.y;
     } else {
       velocity = tracker_command.velocity.y;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.velocity.linear.y), coef, _max_speed_horizontal_);
+                         fabs(uav_state.velocity.linear.y), coef, max_speed_horizontal);
     }
 
     initial_y << uav_state.pose.position.y, velocity, acceleration;
@@ -868,22 +893,22 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     double velocity;
     double coef = 1.5;
 
-    if (fabs(uav_state.acceleration.linear.z) < coef * _max_acceleration_horizontal_) {
+    if (fabs(uav_state.acceleration.linear.z) < coef * max_acceleration_horizontal) {
       acceleration = uav_state.acceleration.linear.z;
     } else {
       acceleration = tracker_command.acceleration.z;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.acceleration.linear.z), coef, _max_acceleration_horizontal_);
+                         fabs(uav_state.acceleration.linear.z), coef, max_acceleration_horizontal);
     }
 
-    if (fabs(uav_state.velocity.linear.z) < coef * _max_speed_vertical_) {
+    if (fabs(uav_state.velocity.linear.z) < coef * max_speed_vertical) {
       velocity = uav_state.velocity.linear.z;
     } else {
       velocity = tracker_command.velocity.z;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.velocity.linear.z), coef, _max_speed_vertical_);
+                         fabs(uav_state.velocity.linear.z), coef, max_speed_vertical);
     }
 
     initial_z << uav_state.pose.position.z, velocity, acceleration;
@@ -898,11 +923,40 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   Eigen::MatrixXd mpc_reference_z = Eigen::MatrixXd::Zero(_horizon_length_ * _n_states_, 1);
 
   // prepare the full reference vector
-  for (int i = 0; i < _horizon_length_; i++) {
+  if (tracker_command.use_full_state_prediction) {
 
-    mpc_reference_x((i * _n_states_) + 0, 0) = tracker_command.position.x;
-    mpc_reference_y((i * _n_states_) + 0, 0) = tracker_command.position.y;
-    mpc_reference_z((i * _n_states_) + 0, 0) = tracker_command.position.z;
+    mpc_reference_x(0, 0) = tracker_command.position.x;
+    mpc_reference_y(0, 0) = tracker_command.position.y;
+    mpc_reference_z(0, 0) = tracker_command.position.z;
+
+    // TODO !! this is a very crude way of sampling from the desired full-state prediction, which only works
+    // with the MpcTracker. Rework this please.
+
+    for (int i = 1; i < _horizon_length_; i++) {
+      mpc_reference_x((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[ceil(double(i) * 0.25)].x;
+      mpc_reference_y((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[ceil(double(i) * 0.25)].y;
+      mpc_reference_z((i * _n_states_) + 0, 0) = tracker_command.full_state_prediction.position[ceil(double(i) * 0.25)].z;
+    }
+
+    for (int i = 1; i < _horizon_length_; i++) {
+      mpc_reference_x((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[ceil(double(i) * 0.25)].x;
+      mpc_reference_y((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[ceil(double(i) * 0.25)].y;
+      mpc_reference_z((i * _n_states_) + 1, 0) = tracker_command.full_state_prediction.velocity[ceil(double(i) * 0.25)].z;
+    }
+
+    for (int i = 1; i < _horizon_length_; i++) {
+      mpc_reference_x((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[ceil(double(i) * 0.25)].x;
+      mpc_reference_y((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[ceil(double(i) * 0.25)].y;
+      mpc_reference_z((i * _n_states_) + 2, 0) = tracker_command.full_state_prediction.acceleration[ceil(double(i) * 0.25)].z;
+    }
+
+  } else {
+
+    for (int i = 0; i < _horizon_length_; i++) {
+      mpc_reference_x((i * _n_states_) + 0, 0) = tracker_command.position.x;
+      mpc_reference_y((i * _n_states_) + 0, 0) = tracker_command.position.y;
+      mpc_reference_z((i * _n_states_) + 0, 0) = tracker_command.position.z;
+    }
   }
 
   // | ------------------ set the penalizations ----------------- |
@@ -940,7 +994,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   mpc_solver_x_->setParams();
   mpc_solver_x_->setLastInput(mpc_solver_x_u_);
   mpc_solver_x_->loadReference(mpc_reference_x);
-  mpc_solver_x_->setLimits(_max_speed_horizontal_, 999, _max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
+  mpc_solver_x_->setLimits(max_speed_horizontal, 999, max_acceleration_horizontal, max_jerk, _dt1_, _dt2_);
   mpc_solver_x_->setInitialState(initial_x);
   [[maybe_unused]] int iters_x = mpc_solver_x_->solveMPC();
   mpc_solver_x_u_              = mpc_solver_x_->getFirstControlInput();
@@ -950,7 +1004,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   mpc_solver_y_->setParams();
   mpc_solver_y_->setLastInput(mpc_solver_y_u_);
   mpc_solver_y_->loadReference(mpc_reference_y);
-  mpc_solver_y_->setLimits(_max_speed_horizontal_, 999, _max_acceleration_horizontal_, _max_jerk_, _dt1_, _dt2_);
+  mpc_solver_y_->setLimits(max_speed_horizontal, 999, max_acceleration_horizontal, max_jerk, _dt1_, _dt2_);
   mpc_solver_y_->setInitialState(initial_y);
   [[maybe_unused]] int iters_y = mpc_solver_y_->solveMPC();
   mpc_solver_y_u_              = mpc_solver_y_->getFirstControlInput();
@@ -960,7 +1014,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   mpc_solver_z_->setParams();
   mpc_solver_z_->setLastInput(mpc_solver_z_u_);
   mpc_solver_z_->loadReference(mpc_reference_z);
-  mpc_solver_z_->setLimits(_max_speed_vertical_, _max_acceleration_vertical_, _max_u_vertical_, 999.0, _dt1_, _dt2_);
+  mpc_solver_z_->setLimits(max_speed_vertical, max_acceleration_vertical, max_u_vertical, 999.0, _dt1_, _dt2_);
   mpc_solver_z_->setInitialState(initial_z);
   [[maybe_unused]] int iters_z = mpc_solver_z_->solveMPC();
   mpc_solver_z_u_              = mpc_solver_z_->getFirstControlInput();
@@ -1017,7 +1071,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
   // construct the desired force vector
 
-  if (tracker_command.use_acceleration) {
+  if (tracker_command.use_acceleration && !tracker_command.use_full_state_prediction) {
     Ra << tracker_command.acceleration.x + mpc_solver_x_u_, tracker_command.acceleration.y + mpc_solver_y_u_, tracker_command.acceleration.z + mpc_solver_z_u_;
   } else {
     Ra << mpc_solver_x_u_, mpc_solver_y_u_, mpc_solver_z_u_;
@@ -1056,7 +1110,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (!tracker_command.disable_antiwindups) {
       if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
         temp_gain = 0;
-        ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
+        ROS_DEBUG_THROTTLE(1.0, "[%s]: anti-windup for world integral kicks in", this->name_.c_str());
       }
     }
 
@@ -1161,7 +1215,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (!tracker_command.disable_antiwindups) {
       if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
         temp_gain = 0;
-        ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
+        ROS_DEBUG_THROTTLE(1.0, "[%s]: anti-windup for body integral kicks in", this->name_.c_str());
       }
     }
 
@@ -1296,16 +1350,16 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_[0];
     last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_[1];
 
-    last_control_output_.diagnostics.controller_enforcing_constraints = true;
+    last_control_output_.diagnostics.controller_enforcing_constraints = !tracker_command.use_full_state_prediction;
 
-    last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
-    last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
+    last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * max_speed_horizontal;
+    last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * max_acceleration_horizontal;
 
-    last_control_output_.diagnostics.vertical_asc_speed_constraint = 0.5 * _max_speed_vertical_;
-    last_control_output_.diagnostics.vertical_asc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+    last_control_output_.diagnostics.vertical_asc_speed_constraint = 0.5 * max_speed_vertical;
+    last_control_output_.diagnostics.vertical_asc_acc_constraint   = 0.5 * max_acceleration_vertical;
 
-    last_control_output_.diagnostics.vertical_desc_speed_constraint = 0.5 * _max_speed_vertical_;
-    last_control_output_.diagnostics.vertical_desc_acc_constraint   = 0.5 * _max_acceleration_vertical_;
+    last_control_output_.diagnostics.vertical_desc_speed_constraint = 0.5 * max_speed_vertical;
+    last_control_output_.diagnostics.vertical_desc_acc_constraint   = 0.5 * max_acceleration_vertical;
 
     last_control_output_.diagnostics.controller = name_;
 
@@ -1326,7 +1380,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (rampup_active_ ||
         (fabs(uav_state.velocity.linear.z) > 0.3 && ((Ep[2] > 0 && uav_state.velocity.linear.z > 0) || (Ep[2] < 0 && uav_state.velocity.linear.z < 0)))) {
       temp_gain = 0;
-      ROS_INFO_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
+      ROS_DEBUG_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
 
     if (tracker_command.use_position_vertical) {
@@ -1554,7 +1608,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_[0];
   last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_[1];
 
-  last_control_output_.diagnostics.controller_enforcing_constraints = true;
+  last_control_output_.diagnostics.controller_enforcing_constraints = !tracker_command.use_full_state_prediction;
 
   last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
   last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
@@ -1724,7 +1778,7 @@ void MpcController::positionPassthrough(const mrs_msgs::UavState &uav_state, con
   last_control_output_.diagnostics.disturbance_wx_w = 0;
   last_control_output_.diagnostics.disturbance_wy_w = 0;
 
-  last_control_output_.diagnostics.controller_enforcing_constraints = true;
+  last_control_output_.diagnostics.controller_enforcing_constraints = !tracker_command.use_full_state_prediction;
 
   last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
   last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
@@ -1860,7 +1914,7 @@ void MpcController::PIDVelocityOutput(const mrs_msgs::UavState &uav_state, const
   last_control_output_.diagnostics.disturbance_wx_w = 0;
   last_control_output_.diagnostics.disturbance_wy_w = 0;
 
-  last_control_output_.diagnostics.controller_enforcing_constraints = true;
+  last_control_output_.diagnostics.controller_enforcing_constraints = !tracker_command.use_full_state_prediction;
 
   last_control_output_.diagnostics.horizontal_speed_constraint = 0.5 * _max_speed_horizontal_;
   last_control_output_.diagnostics.horizontal_acc_constraint   = 0.5 * _max_acceleration_horizontal_;
