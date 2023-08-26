@@ -1,8 +1,9 @@
-#ifndef MPC_CONTROLLER_SOLVER_H
-#define MPC_CONTROLLER_SOLVER_H
+#ifndef MPC_CONTROLLER_SOLVER
+#define MPC_CONTROLLER_SOLVER
 
+#include <ros/ros.h>
 #include <eigen3/Eigen/Eigen>
-#include "solver/solver.h"
+#include <mutex>
 
 namespace mrs_mpc_solvers
 {
@@ -26,9 +27,10 @@ public:
   double getFirstControlInput();
   void   setLastInput(double last_input);
   void   setParams(void);
+  void   lock(void);
+  void   unlock(void);
 
 private:
-  QPSolver qp_solver_;
 
   std::string _name_;
 
@@ -43,6 +45,8 @@ private:
   int    vel_q_persistent_;
   bool   _verbose_;
   int    _max_iters_;
+
+  static std::mutex mutex_main_;
 };
 
 }  // namespace mpc_controller
