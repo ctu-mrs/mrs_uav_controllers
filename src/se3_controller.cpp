@@ -1714,8 +1714,6 @@ void Se3Controller::timerGains(const ros::TimerEvent& event) {
 
   const double dt = (event.current_real - event.last_real).toSec();
 
-  ROS_INFO("[Se3Controller]: dt for gain change = %.2f", dt);
-
   bool updated = false;
 
   gains.kpxy          = calculateGainChange(dt, gains.kpxy, drs_params.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
