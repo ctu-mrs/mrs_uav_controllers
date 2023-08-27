@@ -33,6 +33,30 @@ namespace mrs_uav_controllers
 namespace se3_controller
 {
 
+/* structs //{ */ /*//{*/
+
+typedef struct
+{
+  double kpxy;           // position xy gain
+  double kvxy;           // velocity xy gain
+  double kaxy;           // acceleration xy gain (feed forward, =1)
+  double kiwxy;          // world xy integral gain
+  double kibxy;          // body xy integral gain
+  double kiwxy_lim;      // world xy integral limit
+  double kibxy_lim;      // body xy integral limit
+  double kpz;            // position z gain
+  double kvz;            // velocity z gain
+  double kaz;            // acceleration z gain (feed forward, =1)
+  double km;             // mass estimator gain
+  double km_lim;         // mass estimator limit
+  double kq_roll_pitch;  // pitch/roll attitude gain
+  double kq_yaw;         // yaw attitude gain
+  double kw_roll_pitch;  // attitude rate gain
+  double kw_yaw;         // attitude rate gain
+} Gains_t;
+
+//}//}
+
 /* //{ class Se3Controller */
 
 class Se3Controller : public mrs_uav_managers::Controller {
@@ -100,35 +124,23 @@ private:
   double _uav_mass_;
   double uav_mass_difference_;
 
-  // gains that are used and already filtered
-  double kpxy_;           // position xy gain
-  double kvxy_;           // velocity xy gain
-  double kaxy_;           // acceleration xy gain (feed forward, =1)
-  double kiwxy_;          // world xy integral gain
-  double kibxy_;          // body xy integral gain
-  double kiwxy_lim_;      // world xy integral limit
-  double kibxy_lim_;      // body xy integral limit
-  double kpz_;            // position z gain
-  double kvz_;            // velocity z gain
-  double kaz_;            // acceleration z gain (feed forward, =1)
-  double km_;             // mass estimator gain
-  double km_lim_;         // mass estimator limit
-  double kq_roll_pitch_;  // pitch/roll attitude gain
-  double kq_yaw_;         // yaw attitude gain
-  double kw_roll_pitch;   // attitude rate gain
-  double kw_yaw;          // attitude rate gain
+  Gains_t gains_;
 
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
+  ros::Timer timer_gains_;
+  void       timerGains(const ros::TimerEvent& event);
+
+  double _gain_filtering_rate_;
+
   // | ----------------------- gain muting ---------------------- |
 
-  bool   gains_muted_ = false;  // the current state (may be initialized in activate())
-  double _gain_mute_coefficient_;
+  std::atomic<bool> mute_gains_            = false;
+  std::atomic<bool> mute_gains_by_tracker_ = false;
+  double            _gain_mute_coefficient_;
 
   // | --------------------- gain filtering --------------------- |
-
-  void filterGains(const bool mute_gains, const double dt);
 
   double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
 
@@ -236,12 +248,12 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   const std::string yaml_namespace = "mrs_uav_controllers/se3_controller/";
 
   // lateral gains
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kp", kpxy_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kv", kvxy_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/ka", kaxy_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kp", gains_.kpxy);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kv", gains_.kvxy);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/ka", gains_.kaxy);
 
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw", kiwxy_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib", kibxy_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw", gains_.kiwxy);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib", gains_.kibxy);
 
   // | ------------------------- rampup ------------------------- |
 
@@ -249,25 +261,25 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   param_loader.loadParam(yaml_namespace + "se3/rampup/speed", _rampup_speed_);
 
   // height gains
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kp", kpz_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kv", kvz_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/ka", kaz_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kp", gains_.kpz);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kv", gains_.kvz);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/ka", gains_.kaz);
 
   // attitude gains
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_roll_pitch", kq_roll_pitch_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_yaw", kq_yaw_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_roll_pitch", gains_.kq_roll_pitch);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_yaw", gains_.kq_yaw);
 
   // attitude rate gains
-  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_roll_pitch", kw_roll_pitch);
-  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_yaw", kw_yaw);
+  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_roll_pitch", gains_.kw_roll_pitch);
+  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_yaw", gains_.kw_yaw);
 
   // mass estimator
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", km_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", gains_.km);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
 
   // integrator limits
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw_lim", kiwxy_lim_);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib_lim", kibxy_lim_);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw_lim", gains_.kiwxy_lim);
+  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib_lim", gains_.kibxy_lim);
 
   // constraints
   param_loader.loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
@@ -281,11 +293,10 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   param_loader.loadParam(yaml_namespace + "se3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam(yaml_namespace + "se3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam(yaml_namespace + "se3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
-
-  // gain muting
-  param_loader.loadParam(yaml_namespace + "se3/gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/rate", _gain_filtering_rate_);
+  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
   param_loader.loadParam(yaml_namespace + "se3/preferred_output", drs_params_.preferred_output_mode);
@@ -328,26 +339,30 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_params_.kpxy             = kpxy_;
-  drs_params_.kvxy             = kvxy_;
-  drs_params_.kaxy             = kaxy_;
-  drs_params_.kiwxy            = kiwxy_;
-  drs_params_.kibxy            = kibxy_;
-  drs_params_.kpz              = kpz_;
-  drs_params_.kvz              = kvz_;
-  drs_params_.kaz              = kaz_;
-  drs_params_.kq_roll_pitch    = kq_roll_pitch_;
-  drs_params_.kq_yaw           = kq_yaw_;
-  drs_params_.kiwxy_lim        = kiwxy_lim_;
-  drs_params_.kibxy_lim        = kibxy_lim_;
-  drs_params_.km               = km_;
-  drs_params_.km_lim           = km_lim_;
+  drs_params_.kpxy             = gains_.kpxy;
+  drs_params_.kvxy             = gains_.kvxy;
+  drs_params_.kaxy             = gains_.kaxy;
+  drs_params_.kiwxy            = gains_.kiwxy;
+  drs_params_.kibxy            = gains_.kibxy;
+  drs_params_.kpz              = gains_.kpz;
+  drs_params_.kvz              = gains_.kvz;
+  drs_params_.kaz              = gains_.kaz;
+  drs_params_.kq_roll_pitch    = gains_.kq_roll_pitch;
+  drs_params_.kq_yaw           = gains_.kq_yaw;
+  drs_params_.kiwxy_lim        = gains_.kiwxy_lim;
+  drs_params_.kibxy_lim        = gains_.kibxy_lim;
+  drs_params_.km               = gains_.km;
+  drs_params_.km_lim           = gains_.km_lim;
   drs_params_.jerk_feedforward = true;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
   Drs_t::CallbackType f = boost::bind(&Se3Controller::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
+
+  // | ------------------------- timers ------------------------- |
+
+  timer_gains_ = nh_.createTimer(ros::Rate(_gain_filtering_rate_), &Se3Controller::timerGains, this, false, false);
 
   // | ---------------------- position pid ---------------------- |
 
@@ -429,7 +444,11 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
   }
 
   first_iteration_ = true;
-  gains_muted_     = true;
+  mute_gains_      = true;
+
+  timer_gains_.start();
+
+  // | ------------------ finish the activation ----------------- |
 
   ROS_INFO("[Se3Controller]: activated");
 
@@ -448,6 +467,8 @@ void Se3Controller::deactivate(void) {
   first_iteration_     = false;
   uav_mass_difference_ = 0;
 
+  timer_gains_.stop();
+
   ROS_INFO("[Se3Controller]: deactivated");
 }
 
@@ -455,7 +476,7 @@ void Se3Controller::deactivate(void) {
 
 /* updateInactive() //{ */
 
-void Se3Controller::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
+void Se3Controller::updateInactive(const mrs_msgs::UavState& uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand>& tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -466,7 +487,7 @@ void Se3Controller::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_
 
 //}
 
-/* //{ updateWhenAcctive() */
+/* //{ updateWhenActive() */
 
 Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
 
@@ -481,10 +502,6 @@ Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavStat
   last_control_output_.desired_orientation           = {};
   last_control_output_.desired_unbiased_acceleration = {};
   last_control_output_.control_output                = {};
-
-  if (!is_active_) {
-    return last_control_output_;
-  }
 
   // | -------------------- calculate the dt -------------------- |
 
@@ -688,6 +705,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+  auto gains       = mrs_lib::get_mutexed(mutex_gains_, gains_);
 
   // | ----------------- get the current heading ---------------- |
 
@@ -774,7 +792,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // | --------------------- load the gains --------------------- |
 
-  filterGains(tracker_command.disable_position_gains, dt);
+  mute_gains_by_tracker_ = tracker_command.disable_position_gains;
 
   Eigen::Vector3d Ka(0, 0, 0);
   Eigen::Array3d  Kp(0, 0, 0);
@@ -786,22 +804,22 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     std::scoped_lock lock(mutex_gains_);
 
     if (tracker_command.use_position_horizontal) {
-      Kp[0] = kpxy_;
-      Kp[1] = kpxy_;
+      Kp[0] = gains.kpxy;
+      Kp[1] = gains.kpxy;
     } else {
       Kp[0] = 0;
       Kp[1] = 0;
     }
 
     if (tracker_command.use_position_vertical) {
-      Kp[2] = kpz_;
+      Kp[2] = gains.kpz;
     } else {
       Kp[2] = 0;
     }
 
     if (tracker_command.use_velocity_horizontal) {
-      Kv[0] = kvxy_;
-      Kv[1] = kvxy_;
+      Kv[0] = gains.kvxy;
+      Kv[1] = gains.kvxy;
     } else {
       Kv[0] = 0;
       Kv[1] = 0;
@@ -809,24 +827,24 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     // special case: if want to control z-pos but not the velocity => at least provide z dampening, therefore kvz_
     if (tracker_command.use_velocity_vertical || tracker_command.use_position_vertical) {
-      Kv[2] = kvz_;
+      Kv[2] = gains.kvz;
     } else {
       Kv[2] = 0;
     }
 
     if (tracker_command.use_acceleration) {
-      Ka << kaxy_, kaxy_, kaz_;
+      Ka << gains.kaxy, gains.kaxy, gains.kaz;
     } else {
       Ka << 0, 0, 0;
     }
 
     if (!tracker_command.use_attitude_rate) {
-      Kq << kq_roll_pitch_, kq_roll_pitch_, kq_yaw_;
+      Kq << gains.kq_roll_pitch, gains.kq_roll_pitch, gains.kq_yaw;
     }
 
-    Kw[0] = kw_roll_pitch;
-    Kw[1] = kw_roll_pitch;
-    Kw[2] = kw_yaw;
+    Kw[0] = gains.kw_roll_pitch;
+    Kw[1] = gains.kw_roll_pitch;
+    Kw[2] = gains.kw_yaw;
   }
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
@@ -888,9 +906,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     // integrate the world error
     if (tracker_command.use_position_horizontal) {
-      Iw_w_ += kiwxy_ * Ep.head(2) * dt;
+      Iw_w_ += gains.kiwxy * Ep.head(2) * dt;
     } else if (tracker_command.use_velocity_horizontal) {
-      Iw_w_ += kiwxy_ * Ev.head(2) * dt;
+      Iw_w_ += gains.kiwxy * Ev.head(2) * dt;
     }
 
     // saturate the world X
@@ -898,15 +916,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (!std::isfinite(Iw_w_[0])) {
       Iw_w_[0] = 0;
       ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
-    } else if (Iw_w_[0] > kiwxy_lim_) {
-      Iw_w_[0]                 = kiwxy_lim_;
+    } else if (Iw_w_[0] > gains.kiwxy_lim) {
+      Iw_w_[0]                 = gains.kiwxy_lim;
       world_integral_saturated = true;
-    } else if (Iw_w_[0] < -kiwxy_lim_) {
-      Iw_w_[0]                 = -kiwxy_lim_;
+    } else if (Iw_w_[0] < -gains.kiwxy_lim) {
+      Iw_w_[0]                 = -gains.kiwxy_lim;
       world_integral_saturated = true;
     }
 
-    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
+    if (gains.kiwxy_lim >= 0 && world_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's world X integral is being saturated!");
     }
 
@@ -915,15 +933,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (!std::isfinite(Iw_w_[1])) {
       Iw_w_[1] = 0;
       ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!");
-    } else if (Iw_w_[1] > kiwxy_lim_) {
-      Iw_w_[1]                 = kiwxy_lim_;
+    } else if (Iw_w_[1] > gains.kiwxy_lim) {
+      Iw_w_[1]                 = gains.kiwxy_lim;
       world_integral_saturated = true;
-    } else if (Iw_w_[1] < -kiwxy_lim_) {
-      Iw_w_[1]                 = -kiwxy_lim_;
+    } else if (Iw_w_[1] < -gains.kiwxy_lim) {
+      Iw_w_[1]                 = -gains.kiwxy_lim;
       world_integral_saturated = true;
     }
 
-    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
+    if (gains.kiwxy_lim >= 0 && world_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's world Y integral is being saturated!");
     }
   }
@@ -985,9 +1003,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     // integrate the body error
     if (tracker_command.use_position_horizontal) {
-      Ib_b_ += kibxy_ * Ep_fcu_untilted * dt;
+      Ib_b_ += gains.kibxy * Ep_fcu_untilted * dt;
     } else if (tracker_command.use_velocity_horizontal) {
-      Ib_b_ += kibxy_ * Ev_fcu_untilted * dt;
+      Ib_b_ += gains.kibxy * Ev_fcu_untilted * dt;
     }
 
     // saturate the body
@@ -995,15 +1013,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (!std::isfinite(Ib_b_[0])) {
       Ib_b_[0] = 0;
       ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
-    } else if (Ib_b_[0] > kibxy_lim_) {
-      Ib_b_[0]                = kibxy_lim_;
+    } else if (Ib_b_[0] > gains.kibxy_lim) {
+      Ib_b_[0]                = gains.kibxy_lim;
       body_integral_saturated = true;
-    } else if (Ib_b_[0] < -kibxy_lim_) {
-      Ib_b_[0]                = -kibxy_lim_;
+    } else if (Ib_b_[0] < -gains.kibxy_lim) {
+      Ib_b_[0]                = -gains.kibxy_lim;
       body_integral_saturated = true;
     }
 
-    if (kibxy_lim_ > 0 && body_integral_saturated) {
+    if (gains.kibxy_lim > 0 && body_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's body pitch integral is being saturated!");
     }
 
@@ -1012,15 +1030,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (!std::isfinite(Ib_b_[1])) {
       Ib_b_[1] = 0;
       ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!");
-    } else if (Ib_b_[1] > kibxy_lim_) {
-      Ib_b_[1]                = kibxy_lim_;
+    } else if (Ib_b_[1] > gains.kibxy_lim) {
+      Ib_b_[1]                = gains.kibxy_lim;
       body_integral_saturated = true;
-    } else if (Ib_b_[1] < -kibxy_lim_) {
-      Ib_b_[1]                = -kibxy_lim_;
+    } else if (Ib_b_[1] < -gains.kibxy_lim) {
+      Ib_b_[1]                = -gains.kibxy_lim;
       body_integral_saturated = true;
     }
 
-    if (kibxy_lim_ > 0 && body_integral_saturated) {
+    if (gains.kibxy_lim > 0 && body_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's body roll integral is being saturated!");
     }
   }
@@ -1132,7 +1150,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     std::scoped_lock lock(mutex_gains_);
 
     if (tracker_command.use_position_vertical && !rampup_active_) {
-      uav_mass_difference_ += km_ * Ep[2] * dt;
+      uav_mass_difference_ += gains.km * Ep[2] * dt;
     }
 
     // saturate the mass estimator
@@ -1140,11 +1158,11 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
       ROS_WARN_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
-    } else if (uav_mass_difference_ > km_lim_) {
-      uav_mass_difference_ = km_lim_;
+    } else if (uav_mass_difference_ > gains.km_lim) {
+      uav_mass_difference_ = gains.km_lim;
       uav_mass_saturated   = true;
-    } else if (uav_mass_difference_ < -km_lim_) {
-      uav_mass_difference_ = -km_lim_;
+    } else if (uav_mass_difference_ < -gains.km_lim) {
+      uav_mass_difference_ = -gains.km_lim;
       uav_mass_saturated   = true;
     }
 
@@ -1530,6 +1548,7 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
   }
 
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+  auto gains       = mrs_lib::get_mutexed(mutex_gains_, gains_);
 
   Eigen::Vector3d pos_ref = Eigen::Vector3d(tracker_command.position.x, tracker_command.position.y, tracker_command.position.z);
   Eigen::Vector3d pos     = Eigen::Vector3d(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
@@ -1552,7 +1571,7 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
   {
     std::scoped_lock lock(mutex_gains_);
 
-    Kp << kpxy_, kpxy_, kpz_;
+    Kp << gains.kpxy, gains.kpxy, gains.kpz;
   }
 
   // | --------------------- control errors --------------------- |
@@ -1658,7 +1677,7 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 
 // --------------------------------------------------------------
 // |                          callbacks                         |
-// --------------------------------------------------------------
+
 
 /* //{ callbackDrs() */
 
@@ -1672,69 +1691,82 @@ void Se3Controller::callbackDrs(mrs_uav_controllers::se3_controllerConfig& confi
 //}
 
 // --------------------------------------------------------------
-// |                       other routines                       |
+// |                           timers                           |
 // --------------------------------------------------------------
 
-/* filterGains() //{ */
+/* timerGains() //{ */
 
-void Se3Controller::filterGains(const bool mute_gains, const double dt) {
+void Se3Controller::timerGains(const ros::TimerEvent& event) {
+
+  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains", _gain_filtering_rate_, 1.0, event);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer("ControlManager::timerHwApiCapabilities", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+  auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);
 
   // When muting the gains, we want to bypass the filter,
   // so it happens immediately.
-  bool   bypass_filter = (mute_gains || gains_muted_);
-  double gain_coeff    = (mute_gains || gains_muted_) ? _gain_mute_coefficient_ : 1.0;
+  bool   bypass_filter = (mute_gains_ || mute_gains_by_tracker_);
+  double gain_coeff    = (mute_gains_ || mute_gains_by_tracker_) ? _gain_mute_coefficient_ : 1.0;
 
-  gains_muted_ = mute_gains;
+  mute_gains_ = false;
 
-  // calculate the difference
-  {
-    std::scoped_lock lock(mutex_gains_, mutex_drs_params_);
+  const double dt = (event.current_real - event.last_real).toSec();
 
-    bool updated = false;
+  ROS_INFO("[Se3Controller]: dt for gain change = %.2f", dt);
 
-    kpxy_          = calculateGainChange(dt, kpxy_, drs_params_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
-    kvxy_          = calculateGainChange(dt, kvxy_, drs_params_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
-    kaxy_          = calculateGainChange(dt, kaxy_, drs_params_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
-    kiwxy_         = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
-    kibxy_         = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
-    kpz_           = calculateGainChange(dt, kpz_, drs_params_.kpz * gain_coeff, bypass_filter, "kpz", updated);
-    kvz_           = calculateGainChange(dt, kvz_, drs_params_.kvz * gain_coeff, bypass_filter, "kvz", updated);
-    kaz_           = calculateGainChange(dt, kaz_, drs_params_.kaz * gain_coeff, bypass_filter, "kaz", updated);
-    kq_roll_pitch_ = calculateGainChange(dt, kq_roll_pitch_, drs_params_.kq_roll_pitch * gain_coeff, bypass_filter, "kqxy", updated);
-    kq_yaw_        = calculateGainChange(dt, kq_yaw_, drs_params_.kq_yaw * gain_coeff, bypass_filter, "kqz", updated);
-    km_            = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
+  bool updated = false;
 
-    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_params_.kiwxy_lim, false, "kiwxy_lim", updated);
-    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_params_.kibxy_lim, false, "kibxy_lim", updated);
-    km_lim_    = calculateGainChange(dt, km_lim_, drs_params_.km_lim, false, "km_lim", updated);
+  gains.kpxy          = calculateGainChange(dt, gains.kpxy, drs_params.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
+  gains.kvxy          = calculateGainChange(dt, gains.kvxy, drs_params.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
+  gains.kaxy          = calculateGainChange(dt, gains.kaxy, drs_params.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
+  gains.kiwxy         = calculateGainChange(dt, gains.kiwxy, drs_params.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+  gains.kibxy         = calculateGainChange(dt, gains.kibxy, drs_params.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+  gains.kpz           = calculateGainChange(dt, gains.kpz, drs_params.kpz * gain_coeff, bypass_filter, "kpz", updated);
+  gains.kvz           = calculateGainChange(dt, gains.kvz, drs_params.kvz * gain_coeff, bypass_filter, "kvz", updated);
+  gains.kaz           = calculateGainChange(dt, gains.kaz, drs_params.kaz * gain_coeff, bypass_filter, "kaz", updated);
+  gains.kq_roll_pitch = calculateGainChange(dt, gains.kq_roll_pitch, drs_params.kq_roll_pitch * gain_coeff, bypass_filter, "kq_roll_pitch", updated);
+  gains.kq_yaw        = calculateGainChange(dt, gains.kq_yaw, drs_params.kq_yaw * gain_coeff, bypass_filter, "kq_yaw", updated);
+  gains.km            = calculateGainChange(dt, gains.km, drs_params.km * gain_coeff, bypass_filter, "km", updated);
 
-    // set the gains back to dynamic reconfigure
-    // and only do it when some filtering occurs
-    if (updated) {
+  // do not apply muting on these gains
+  gains.kiwxy_lim = calculateGainChange(dt, gains.kiwxy_lim, drs_params.kiwxy_lim, false, "kiwxy_lim", updated);
+  gains.kibxy_lim = calculateGainChange(dt, gains.kibxy_lim, drs_params.kibxy_lim, false, "kibxy_lim", updated);
+  gains.km_lim    = calculateGainChange(dt, gains.km_lim, drs_params.km_lim, false, "km_lim", updated);
 
-      DrsConfig_t new_drs_params = drs_params_;
+  mrs_lib::set_mutexed(mutex_gains_, gains, gains_);
 
-      new_drs_params.kpxy          = kpxy_;
-      new_drs_params.kvxy          = kvxy_;
-      new_drs_params.kaxy          = kaxy_;
-      new_drs_params.kiwxy         = kiwxy_;
-      new_drs_params.kibxy         = kibxy_;
-      new_drs_params.kpz           = kpz_;
-      new_drs_params.kvz           = kvz_;
-      new_drs_params.kaz           = kaz_;
-      new_drs_params.kq_roll_pitch = kq_roll_pitch_;
-      new_drs_params.kq_yaw        = kq_yaw_;
-      new_drs_params.kiwxy_lim     = kiwxy_lim_;
-      new_drs_params.kibxy_lim     = kibxy_lim_;
-      new_drs_params.km            = km_;
-      new_drs_params.km_lim        = km_lim_;
+  // set the gains back to dynamic reconfigure
+  // and only do it when some filtering occurs
+  if (updated) {
 
-      drs_->updateConfig(new_drs_params);
-    }
+    drs_params.kpxy          = gains.kpxy;
+    drs_params.kvxy          = gains.kvxy;
+    drs_params.kaxy          = gains.kaxy;
+    drs_params.kiwxy         = gains.kiwxy;
+    drs_params.kibxy         = gains.kibxy;
+    drs_params.kpz           = gains.kpz;
+    drs_params.kvz           = gains.kvz;
+    drs_params.kaz           = gains.kaz;
+    drs_params.kq_roll_pitch = gains.kq_roll_pitch;
+    drs_params.kq_yaw        = gains.kq_yaw;
+    drs_params.kiwxy_lim     = gains.kiwxy_lim;
+    drs_params.kibxy_lim     = gains.kibxy_lim;
+    drs_params.km            = gains.km;
+    drs_params.km_lim        = gains.km_lim;
+
+    drs_->updateConfig(drs_params);
+
+    ROS_INFO_THROTTLE(0.5, "[Se3Controller]: gains have been updated");
   }
 }
 
 //}
+
+// --------------------------------------------------------------
+// |                       other routines                       |
+// --------------------------------------------------------------
 
 /* calculateGainChange() //{ */
 
@@ -1775,7 +1807,7 @@ double Se3Controller::calculateGainChange(const double dt, const double current_
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[Se3Controller]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    ROS_DEBUG("[Se3Controller]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
     updated = true;
   }
 

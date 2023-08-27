@@ -40,9 +40,16 @@ mrs_uav_controllers:
 
     so3:
 
-      gains_filter:
-        perc_change_rate: 1.0
-        min_change_rate: 0.1 # perc of the difference
+      gain_filtering:
+
+        rate: 10.0 # [Hz]
+
+        perc_change_rate: 1.0 # [100%/s]
+        min_change_rate: 0.2 # perc of the difference
+
+        # gains can be muted by the tracker by this factor
+        # gains are also muting just after activation
+        gain_mute_coefficient: 0.5
 
       # saturations and limits
       constraints:
@@ -55,10 +62,6 @@ mrs_uav_controllers:
         tilt_angle_failsafe:
           enabled: true
           limit: deg(90.0)
-
-      # gains can be muted by the tracker by this factor
-      # gains are also muting just after activation
-      gain_mute_coefficient: 0.5
 
       angular_rate_feedforward:
 

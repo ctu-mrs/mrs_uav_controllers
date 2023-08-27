@@ -37,6 +37,24 @@ namespace mrs_uav_controllers
 namespace mpc_controller
 {
 
+/* structs //{ */
+
+typedef struct
+{
+  double kiwxy;          // world xy integral gain
+  double kibxy;          // body xy integral gain
+  double kiwxy_lim;      // world xy integral limit
+  double kibxy_lim;      // body xy integral limit
+  double km;             // mass estimator gain
+  double km_lim;         // mass estimator limit
+  double kq_roll_pitch;  // pitch/roll attitude gain
+  double kq_yaw;         // yaw attitude gain
+  double kw_rp;          // attitude rate gain
+  double kw_y;           // attitude rate gain
+} Gains_t;
+
+//}
+
 /* //{ class MpcController */
 
 class MpcController : public mrs_uav_managers::Controller {
@@ -106,26 +124,19 @@ private:
   double _uav_mass_;
   double uav_mass_difference_;
 
-  // | ------------------- configurable gains ------------------- |
+  Gains_t gains_;
 
-  // gains that are used and already filtered
-  double kiwxy_;      // world xy integral gain
-  double kibxy_;      // body xy integral gain
-  double kiwxy_lim_;  // world xy integral limit
-  double kibxy_lim_;  // body xy integral limit
-  double km_;         // mass estimator gain
-  double km_lim_;     // mass estimator limit
-  double kq_rp_;      // pitch/roll attitude gain
-  double kq_y_;       // yaw attitude gain
-  double kw_rp_;      // attitude rate gain
-  double kw_y_;       // attitude rate gain
+  // | ------------------- configurable gains ------------------- |
 
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
-  // | --------------------- gain filtering --------------------- |
+  ros::Timer timer_gains_;
+  void       timerGains(const ros::TimerEvent &event);
 
-  void filterGains(const bool mute_gains, const double dt);
+  double _gain_filtering_rate_;
+
+  // | --------------------- gain filtering --------------------- |
 
   double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
 
@@ -136,8 +147,9 @@ private:
 
   // | ----------------------- gain muting ---------------------- |
 
-  bool   gains_muted_ = false;  // the current state (may be initialized in activate())
-  double _gain_mute_coefficient_;
+  std::atomic<bool> mute_gains_            = false;
+  std::atomic<bool> mute_gains_by_tracker_ = false;
+  double            _gain_mute_coefficient_;
 
   // | ------------ controller limits and saturations ----------- |
 
@@ -197,7 +209,7 @@ private:
 
   // | ------------------------ profiler ------------------------ |
 
-  mrs_lib::Profiler profiler;
+  mrs_lib::Profiler profiler_;
   bool              _profiler_enabled_ = false;
 
   // | ------------------------ integrals ----------------------- |
@@ -273,11 +285,11 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
   param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
 
   if (!param_loader_parent.loadedSuccessfully()) {
-    ROS_ERROR("[MpcController]: Could not load all parameters!");
+    ROS_ERROR("[%s]: Could not load all parameters!", name_.c_str());
     return false;
   }
 
-  mrs_lib::ParamLoader param_loader(nh_, "MpcController");
+  mrs_lib::ParamLoader param_loader(nh_, name_);
 
   const std::string yaml_namespace = "mrs_uav_controllers/" + private_handlers_->name_space + "/";
 
@@ -312,26 +324,26 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   // | --------------------- integral gains --------------------- |
 
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw", kiwxy_);
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib", kibxy_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw", gains_.kiwxy);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib", gains_.kibxy);
 
   // integrator limits
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw_lim", kiwxy_lim_);
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib_lim", kibxy_lim_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw_lim", gains_.kiwxy_lim);
+  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib_lim", gains_.kibxy_lim);
 
   // | ------------- height and attitude controller ------------- |
 
   // attitude gains
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/roll_pitch", kq_rp_);
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/yaw", kq_y_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/roll_pitch", gains_.kq_roll_pitch);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/yaw", gains_.kq_yaw);
 
   // attitude rate gains
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/roll_pitch", kw_rp_);
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/yaw", kw_y_);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/roll_pitch", gains_.kw_rp);
+  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/yaw", gains_.kw_y);
 
   // mass estimator
-  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km", km_);
-  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km_lim", km_lim_);
+  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km", gains_.km);
+  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km_lim", gains_.km_lim);
 
   // constraints
   param_loader.loadParam(yaml_namespace + "so3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
@@ -345,11 +357,10 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
   param_loader.loadParam(yaml_namespace + "so3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam(yaml_namespace + "so3/gains_filter/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam(yaml_namespace + "so3/gains_filter/min_change_rate", _gains_filter_min_change_rate_);
-
-  // gain muting
-  param_loader.loadParam(yaml_namespace + "so3/gain_mute_coefficient", _gain_mute_coefficient_);
+  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
+  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
+  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/rate", _gain_filtering_rate_);
+  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // angular rate feed forward
   param_loader.loadParam(yaml_namespace + "so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
@@ -395,14 +406,14 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_params_.kiwxy     = kiwxy_;
-  drs_params_.kibxy     = kibxy_;
-  drs_params_.kqxy      = kq_rp_;
-  drs_params_.kqz       = kq_y_;
-  drs_params_.km        = km_;
-  drs_params_.km_lim    = km_lim_;
-  drs_params_.kiwxy_lim = kiwxy_lim_;
-  drs_params_.kibxy_lim = kibxy_lim_;
+  drs_params_.kiwxy         = gains_.kiwxy;
+  drs_params_.kibxy         = gains_.kibxy;
+  drs_params_.kq_roll_pitch = gains_.kq_roll_pitch;
+  drs_params_.kq_yaw        = gains_.kq_yaw;
+  drs_params_.km            = gains_.km;
+  drs_params_.km_lim        = gains_.km_lim;
+  drs_params_.kiwxy_lim     = gains_.kiwxy_lim;
+  drs_params_.kibxy_lim     = gains_.kibxy_lim;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
@@ -413,6 +424,10 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   service_set_integral_terms_ = nh_.advertiseService("set_integral_terms_in", &MpcController::callbackSetIntegralTerms, this);
 
+  // | ------------------------- timers ------------------------- |
+
+  timer_gains_ = nh_.createTimer(ros::Rate(_gain_filtering_rate_), &MpcController::timerGains, this, false, false);
+
   // | ---------------------- position pid ---------------------- |
 
   position_pid_x_.setParams(_pos_pid_p_, _pos_pid_d_, _pos_pid_i_, -1, 1.0);
@@ -422,7 +437,7 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler = mrs_lib::Profiler(common_handlers->parent_nh, "MpcController", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(common_handlers->parent_nh, "MpcController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
@@ -493,7 +508,9 @@ bool MpcController::activate(const ControlOutput &last_control_output) {
   }
 
   first_iteration_ = true;
-  gains_muted_     = true;
+  mute_gains_      = true;
+
+  timer_gains_.start();
 
   ROS_INFO("[%s]: activated", this->name_.c_str());
 
@@ -511,6 +528,8 @@ void MpcController::deactivate(void) {
   is_active_           = false;
   first_iteration_     = false;
   uav_mass_difference_ = 0;
+
+  timer_gains_.stop();
 
   ROS_INFO("[%s]: deactivated", this->name_.c_str());
 }
@@ -534,7 +553,7 @@ void MpcController::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_
 
 MpcController::ControlOutput MpcController::updateActive(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
 
-  mrs_lib::Routine    profiler_routine = profiler.createRoutine("update");
+  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("MpcController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
@@ -753,6 +772,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
   auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+  auto gains       = mrs_lib::get_mutexed(mutex_gains_, gains_);
 
   // | ----------------- get the current heading ---------------- |
 
@@ -1028,7 +1048,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
   // | --------------------- load the gains --------------------- |
 
-  filterGains(tracker_command.disable_position_gains, dt);
+  mute_gains_by_tracker_ = tracker_command.disable_position_gains;
 
   Eigen::Array3d Kw(0, 0, 0);
   Eigen::Array3d Kq;
@@ -1036,11 +1056,11 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   {
     std::scoped_lock lock(mutex_gains_);
 
-    Kq << kq_rp_, kq_rp_, kq_y_;
+    Kq << gains.kq_roll_pitch, gains.kq_roll_pitch, gains.kq_yaw;
 
-    Kw[0] = kw_rp_;
-    Kw[1] = kw_rp_;
-    Kw[2] = kw_y_;
+    Kw[0] = gains.kw_rp;
+    Kw[1] = gains.kw_rp;
+    Kw[2] = gains.kw_y;
   }
 
   // | ---------- desired orientation matrix and force ---------- |
@@ -1106,7 +1126,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     // integrate the world error
 
     // antiwindup
-    double temp_gain = kiwxy_;
+    double temp_gain = gains.kiwxy;
     if (!tracker_command.disable_antiwindups) {
       if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
         temp_gain = 0;
@@ -1127,15 +1147,15 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (!std::isfinite(Iw_w_[0])) {
       Iw_w_[0] = 0;
       ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!", this->name_.c_str());
-    } else if (Iw_w_[0] > kiwxy_lim_) {
-      Iw_w_[0]                 = kiwxy_lim_;
+    } else if (Iw_w_[0] > gains.kiwxy_lim) {
+      Iw_w_[0]                 = gains.kiwxy_lim;
       world_integral_saturated = true;
-    } else if (Iw_w_[0] < -kiwxy_lim_) {
-      Iw_w_[0]                 = -kiwxy_lim_;
+    } else if (Iw_w_[0] < -gains.kiwxy_lim) {
+      Iw_w_[0]                 = -gains.kiwxy_lim;
       world_integral_saturated = true;
     }
 
-    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
+    if (gains.kiwxy_lim >= 0 && world_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[%s]: MPC's world X integral is being saturated!", this->name_.c_str());
     }
 
@@ -1144,15 +1164,15 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (!std::isfinite(Iw_w_[1])) {
       Iw_w_[1] = 0;
       ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!", this->name_.c_str());
-    } else if (Iw_w_[1] > kiwxy_lim_) {
-      Iw_w_[1]                 = kiwxy_lim_;
+    } else if (Iw_w_[1] > gains.kiwxy_lim) {
+      Iw_w_[1]                 = gains.kiwxy_lim;
       world_integral_saturated = true;
-    } else if (Iw_w_[1] < -kiwxy_lim_) {
-      Iw_w_[1]                 = -kiwxy_lim_;
+    } else if (Iw_w_[1] < -gains.kiwxy_lim) {
+      Iw_w_[1]                 = -gains.kiwxy_lim;
       world_integral_saturated = true;
     }
 
-    if (kiwxy_lim_ >= 0 && world_integral_saturated) {
+    if (gains.kiwxy_lim >= 0 && world_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[%s]: MPC's world Y integral is being saturated!", this->name_.c_str());
     }
   }
@@ -1211,7 +1231,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     // integrate the body error
 
     // antiwindup
-    double temp_gain = kibxy_;
+    double temp_gain = gains.kibxy;
     if (!tracker_command.disable_antiwindups) {
       if (rampup_active_ || sqrt(pow(uav_state.velocity.linear.x, 2) + pow(uav_state.velocity.linear.y, 2)) > 0.3) {
         temp_gain = 0;
@@ -1232,15 +1252,15 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (!std::isfinite(Ib_b_[0])) {
       Ib_b_[0] = 0;
       ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!", this->name_.c_str());
-    } else if (Ib_b_[0] > kibxy_lim_) {
-      Ib_b_[0]                = kibxy_lim_;
+    } else if (Ib_b_[0] > gains.kibxy_lim) {
+      Ib_b_[0]                = gains.kibxy_lim;
       body_integral_saturated = true;
-    } else if (Ib_b_[0] < -kibxy_lim_) {
-      Ib_b_[0]                = -kibxy_lim_;
+    } else if (Ib_b_[0] < -gains.kibxy_lim) {
+      Ib_b_[0]                = -gains.kibxy_lim;
       body_integral_saturated = true;
     }
 
-    if (kibxy_lim_ > 0 && body_integral_saturated) {
+    if (gains.kibxy_lim > 0 && body_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[%s]: MPC's body pitch integral is being saturated!", this->name_.c_str());
     }
 
@@ -1249,15 +1269,15 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (!std::isfinite(Ib_b_[1])) {
       Ib_b_[1] = 0;
       ROS_ERROR_THROTTLE(1.0, "[%s]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!", this->name_.c_str());
-    } else if (Ib_b_[1] > kibxy_lim_) {
-      Ib_b_[1]                = kibxy_lim_;
+    } else if (Ib_b_[1] > gains.kibxy_lim) {
+      Ib_b_[1]                = gains.kibxy_lim;
       body_integral_saturated = true;
-    } else if (Ib_b_[1] < -kibxy_lim_) {
-      Ib_b_[1]                = -kibxy_lim_;
+    } else if (Ib_b_[1] < -gains.kibxy_lim) {
+      Ib_b_[1]                = -gains.kibxy_lim;
       body_integral_saturated = true;
     }
 
-    if (kibxy_lim_ > 0 && body_integral_saturated) {
+    if (gains.kibxy_lim > 0 && body_integral_saturated) {
       ROS_WARN_THROTTLE(1.0, "[%s]: MPC's body roll integral is being saturated!", this->name_.c_str());
     }
   }
@@ -1376,7 +1396,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     std::scoped_lock lock(mutex_gains_);
 
     // antiwindup
-    double temp_gain = km_;
+    double temp_gain = gains.km;
     if (rampup_active_ ||
         (fabs(uav_state.velocity.linear.z) > 0.3 && ((Ep[2] > 0 && uav_state.velocity.linear.z > 0) || (Ep[2] < 0 && uav_state.velocity.linear.z < 0)))) {
       temp_gain = 0;
@@ -1392,11 +1412,11 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
       ROS_WARN_THROTTLE(1.0, "[%s]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!", this->name_.c_str());
-    } else if (uav_mass_difference_ > km_lim_) {
-      uav_mass_difference_ = km_lim_;
+    } else if (uav_mass_difference_ > gains.km_lim) {
+      uav_mass_difference_ = gains.km_lim;
       uav_mass_saturated   = true;
-    } else if (uav_mass_difference_ < -km_lim_) {
-      uav_mass_difference_ = -km_lim_;
+    } else if (uav_mass_difference_ < -gains.km_lim) {
+      uav_mass_difference_ = -gains.km_lim;
       uav_mass_saturated   = true;
     }
 
@@ -1969,57 +1989,68 @@ bool MpcController::callbackSetIntegralTerms(std_srvs::SetBool::Request &req, st
 //}
 
 // --------------------------------------------------------------
-// |                       other routines                       |
+// |                           timers                           |
 // --------------------------------------------------------------
 
-/* filterGains() //{ */
+/* timerGains() //{ */
 
-void MpcController::filterGains(const bool mute_gains, const double dt) {
+void MpcController::timerGains(const ros::TimerEvent &event) {
+
+  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains", _gain_filtering_rate_, 1.0, event);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer("ControlManager::timerHwApiCapabilities", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+  auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);
 
   // When muting the gains, we want to bypass the filter,
   // so it happens immediately.
-  bool   bypass_filter = (mute_gains || gains_muted_);
-  double gain_coeff    = (mute_gains || gains_muted_) ? _gain_mute_coefficient_ : 1.0;
+  bool   bypass_filter = (mute_gains_ || mute_gains_by_tracker_);
+  double gain_coeff    = (mute_gains_ || mute_gains_by_tracker_) ? _gain_mute_coefficient_ : 1.0;
 
-  gains_muted_ = mute_gains;
+  mute_gains_ = false;
 
-  // calculate the difference
-  {
-    std::scoped_lock lock(mutex_gains_, mutex_drs_params_);
+  const double dt = (event.current_real - event.last_real).toSec();
 
-    bool updated = false;
+  bool updated = false;
 
-    kq_rp_ = calculateGainChange(dt, kq_rp_, drs_params_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
-    kq_y_  = calculateGainChange(dt, kq_y_, drs_params_.kqz * gain_coeff, bypass_filter, "kqz", updated);
-    km_    = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
-    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
-    kibxy_ = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+  gains.kq_roll_pitch = calculateGainChange(dt, gains.kq_roll_pitch, drs_params.kq_roll_pitch * gain_coeff, bypass_filter, "kq_roll_pitch", updated);
+  gains.kq_yaw        = calculateGainChange(dt, gains.kq_yaw, drs_params.kq_yaw * gain_coeff, bypass_filter, "kq_yaw", updated);
+  gains.km            = calculateGainChange(dt, gains.km, drs_params.km * gain_coeff, bypass_filter, "km", updated);
+  gains.kiwxy         = calculateGainChange(dt, gains.kiwxy, drs_params.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+  gains.kibxy         = calculateGainChange(dt, gains.kibxy, drs_params.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
 
-    km_lim_    = calculateGainChange(dt, km_lim_, drs_params_.km_lim, false, "km_lim", updated);
-    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_params_.kiwxy_lim, false, "kiwxy_lim", updated);
-    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_params_.kibxy_lim, false, "kibxy_lim", updated);
+  // do not apply muting on these gains
+  gains.kiwxy_lim = calculateGainChange(dt, gains.kiwxy_lim, drs_params.kiwxy_lim, false, "kiwxy_lim", updated);
+  gains.kibxy_lim = calculateGainChange(dt, gains.kibxy_lim, drs_params.kibxy_lim, false, "kibxy_lim", updated);
+  gains.km_lim    = calculateGainChange(dt, gains.km_lim, drs_params.km_lim, false, "km_lim", updated);
 
-    // set the gains back to dynamic reconfigure
-    // and only do it when some filtering occurs
-    if (updated) {
+  mrs_lib::set_mutexed(mutex_gains_, gains, gains_);
 
-      DrsConfig_t new_drs_params_ = drs_params_;
+  // set the gains back to dynamic reconfigure
+  // and only do it when some filtering occurs
+  if (updated) {
 
-      new_drs_params_.kiwxy     = kiwxy_;
-      new_drs_params_.kibxy     = kibxy_;
-      new_drs_params_.kqxy      = kq_rp_;
-      new_drs_params_.kqz       = kq_y_;
-      new_drs_params_.km        = km_;
-      new_drs_params_.km_lim    = km_lim_;
-      new_drs_params_.kiwxy_lim = kiwxy_lim_;
-      new_drs_params_.kibxy_lim = kibxy_lim_;
+    drs_params.kiwxy         = gains.kiwxy;
+    drs_params.kibxy         = gains.kibxy;
+    drs_params.kq_roll_pitch = gains.kq_roll_pitch;
+    drs_params.kq_yaw        = gains.kq_yaw;
+    drs_params.km            = gains.km;
+    drs_params.km_lim        = gains.km_lim;
+    drs_params.kiwxy_lim     = gains.kiwxy_lim;
+    drs_params.kibxy_lim     = gains.kibxy_lim;
 
-      drs_->updateConfig(new_drs_params_);
-    }
+    drs_->updateConfig(drs_params);
+
+    ROS_INFO_THROTTLE(0.5, "[%s]: gains have been updated", name_.c_str());
   }
 }
 
 //}
+
+// --------------------------------------------------------------
+// |                       other routines                       |
+// --------------------------------------------------------------
 
 /* calculateGainChange() //{ */
 
@@ -2060,7 +2091,7 @@ double MpcController::calculateGainChange(const double dt, const double current_
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[%s]: changing gain '%s' from %.2f to %.2f", name_.c_str(), name.c_str(), current_value, desired_value);
+    ROS_DEBUG("[%s]: changing gain '%s' from %.2f to %.2f", name_.c_str(), name.c_str(), current_value, desired_value);
     updated = true;
   }
 

@@ -40,14 +40,17 @@ mrs_uav_controllers:
         kw_roll_pitch: 4.0
         kw_yaw: 4.0
 
-      # gains can be muted by the tracker by this factor
-      # gains are also muting just after activation
-      gain_mute_coefficient: 0.5
-
       rampup:
         enabled: true
         speed: 0.75 # [1/s]
 
-      gains_filter:
-        perc_change_rate: 1.0
-        min_change_rate: 0.1 # perc of the difference
+      gain_filtering:
+
+        rate: 10.0 # [Hz]
+
+        perc_change_rate: 1.0 # [100%/s]
+        min_change_rate: 0.2 # perc of the difference
+
+        # gains can be muted by the tracker by this factor
+        # gains are also muting just after activation
+        gain_mute_coefficient: 0.5 # [-]
