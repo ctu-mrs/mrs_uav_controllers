@@ -95,6 +95,7 @@ add_dependencies(MrsUavControllers_Se3Controller
 
 target_link_libraries(MrsUavControllers_Se3Controller
   ${catkin_LIBRARIES}
+  ${Eigen_LIBRARIES}
   )
 
 # Mpc controller
@@ -113,6 +114,7 @@ add_dependencies(MrsUavControllers_MpcController
 target_link_libraries(MrsUavControllers_MpcController
   ${catkin_LIBRARIES}
   ${MPC_CONTROLLER_SOLVER_BIN}
+  ${Eigen_LIBRARIES}
   )
 
 # Failsafe controller
@@ -129,6 +131,7 @@ add_dependencies(MrsUavControllers_FailsafeController
 
 target_link_libraries(MrsUavControllers_FailsafeController
   ${catkin_LIBRARIES}
+  ${Eigen_LIBRARIES}
   )
 
 # Midair Activation Controller
@@ -145,6 +148,7 @@ add_dependencies(MrsUavControllers_MidairActivationController
 
 target_link_libraries(MrsUavControllers_MidairActivationController
   ${catkin_LIBRARIES}
+  ${Eigen_LIBRARIES}
   )
 
 ## --------------------------------------------------------------
