@@ -5,9 +5,6 @@ on:
   push:
     branches: [ hw_api ]
 
-  pull_request:
-    branches: [ hw_api ]
-
   workflow_dispatch:
 
 concurrency:
