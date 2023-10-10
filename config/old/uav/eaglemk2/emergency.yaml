@@ -1,7 +1,0 @@
-integral_gains:
-
-  kiw: 0.5
-  kib: 0.1
-
-  kiw_lim: 10.0
-  kib_lim: 10.0
