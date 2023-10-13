@@ -13,7 +13,7 @@ mrs_uav_controllers:
         # a failsafe in the control manager.
         tilt_angle_failsafe:
           enabled: true
-          limit: deg(90.0) # [rad]
+          limit: 90.0 # [deg]
 
       angular_rate_feedforward:
 

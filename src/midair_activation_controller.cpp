@@ -95,22 +95,23 @@ bool MidairActivationController::initialize(const ros::NodeHandle &nh, std::shar
 
   ros::Time::waitForValid();
 
-  // | ------------------- loading parameters ------------------- |
-
-  bool success = true;
-
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/midair_activation_controller.yaml");
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/midair_activation_controller.yaml");
-
-  if (!success) {
-    return false;
-  }
+  // | ---------- loading params using the parent's nh ---------- |
 
   mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
 
   param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
 
   if (!param_loader_parent.loadedSuccessfully()) {
+    ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
+    return false;
+  }
+
+  // | -------------------- loading my params ------------------- |
+
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/midair_activation_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/midair_activation_controller.yaml");
+
+  if (!private_handlers->param_loader->loadedSuccessfully()) {
     ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
     return false;
   }
@@ -165,7 +166,8 @@ void MidairActivationController::deactivate(void) {
 
 /* updateInactive() //{ */
 
-void MidairActivationController::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
+void MidairActivationController::updateInactive(const mrs_msgs::UavState &                                      uav_state,
+                                                [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 }

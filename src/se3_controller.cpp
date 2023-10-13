@@ -12,7 +12,6 @@
 #include <mrs_uav_controllers/se3_controllerConfig.h>
 
 #include <mrs_lib/profiler.h>
-#include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
@@ -223,16 +222,7 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   ros::Time::waitForValid();
 
-  // | ------------------- loading parameters ------------------- |
-
-  bool success = true;
-
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
-
-  if (!success) {
-    return false;
-  }
+  // | ---------- loading params using the parent's nh ---------- |
 
   mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
 
@@ -243,83 +233,89 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
     return false;
   }
 
-  mrs_lib::ParamLoader param_loader(nh_, "Se3Controller");
+  // | -------------------- loading my params ------------------- |
+
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
 
   const std::string yaml_namespace = "mrs_uav_controllers/se3_controller/";
 
   // lateral gains
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kp", gains_.kpxy);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kv", gains_.kvxy);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/ka", gains_.kaxy);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kp", gains_.kpxy);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kv", gains_.kvxy);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/ka", gains_.kaxy);
 
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw", gains_.kiwxy);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib", gains_.kibxy);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw", gains_.kiwxy);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kib", gains_.kibxy);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.loadParam(yaml_namespace + "se3/rampup/enabled", _rampup_enabled_);
-  param_loader.loadParam(yaml_namespace + "se3/rampup/speed", _rampup_speed_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/rampup/enabled", _rampup_enabled_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/rampup/speed", _rampup_speed_);
 
   // height gains
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kp", gains_.kpz);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/kv", gains_.kvz);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/vertical/ka", gains_.kaz);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/vertical/kp", gains_.kpz);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/vertical/kv", gains_.kvz);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/vertical/ka", gains_.kaz);
 
   // attitude gains
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_roll_pitch", gains_.kq_roll_pitch);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/attitude/kq_yaw", gains_.kq_yaw);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/attitude/kq_roll_pitch", gains_.kq_roll_pitch);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/attitude/kq_yaw", gains_.kq_yaw);
 
   // attitude rate gains
-  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_roll_pitch", gains_.kw_roll_pitch);
-  param_loader.loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_yaw", gains_.kw_yaw);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_roll_pitch", gains_.kw_roll_pitch);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_yaw", gains_.kw_yaw);
 
   // mass estimator
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", gains_.km);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", gains_.km);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
 
   // integrator limits
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw_lim", gains_.kiwxy_lim);
-  param_loader.loadParam(yaml_namespace + "se3/default_gains/horizontal/kib_lim", gains_.kibxy_lim);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw_lim", gains_.kiwxy_lim);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kib_lim", gains_.kibxy_lim);
 
   // constraints
-  param_loader.loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  param_loader.loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+
+  _tilt_angle_failsafe_ = M_PI * (_tilt_angle_failsafe_ / 180.0);
 
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[Se3Controller]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
     return false;
   }
 
-  param_loader.loadParam(yaml_namespace + "se3/constraints/throttle_saturation", _throttle_saturation_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
-  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/rate", _gain_filtering_rate_);
-  param_loader.loadParam(yaml_namespace + "se3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/rate", _gain_filtering_rate_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  param_loader.loadParam(yaml_namespace + "se3/preferred_output", drs_params_.preferred_output_mode);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/preferred_output", drs_params_.preferred_output_mode);
 
-  param_loader.loadParam(yaml_namespace + "se3/rotation_matrix", drs_params_.rotation_type);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/rotation_matrix", drs_params_.rotation_type);
 
   // angular rate feed forward
-  param_loader.loadParam(yaml_namespace + "se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
-  param_loader.loadParam(yaml_namespace + "se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/angular_rate_feedforward/parasitic_pitch_roll",
+                                            drs_params_.pitch_roll_heading_rate_compensation);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
 
   // | ------------------- position pid params ------------------ |
 
-  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/p", _pos_pid_p_);
-  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/i", _pos_pid_i_);
-  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/d", _pos_pid_d_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/p", _pos_pid_p_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/i", _pos_pid_i_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/d", _pos_pid_d_);
 
-  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/p", _hdg_pid_p_);
-  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
-  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/p", _hdg_pid_p_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
 
   // | ------------------ finish loading params ----------------- |
 
-  if (!param_loader.loadedSuccessfully()) {
+  if (!private_handlers->param_loader->loadedSuccessfully()) {
     ROS_ERROR("[Se3Controller]: could not load all parameters!");
     return false;
   }

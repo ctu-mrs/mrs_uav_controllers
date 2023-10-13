@@ -8,7 +8,6 @@
 #include <mrs_uav_managers/controller.h>
 
 #include <mrs_lib/profiler.h>
-#include <mrs_lib/param_loader.h>
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/mutex.h>
 
@@ -120,16 +119,7 @@ bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<m
 
   ros::Time::waitForValid();
 
-  // | ------------------- loading parameters ------------------- |
-
-  bool success = true;
-
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
-
-  if (!success) {
-    return false;
-  }
+  // | ---------- loading params using the parent's nh ---------- |
 
   mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
 
@@ -140,21 +130,24 @@ bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<m
     return false;
   }
 
-  mrs_lib::ParamLoader param_loader(nh_, "FailsafeController");
+  // | -------------------- loading my params ------------------- |
+
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
 
   const std::string yaml_namespace = "mrs_uav_controllers/failsafe_controller/";
 
-  param_loader.loadParam(yaml_namespace + "throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
-  param_loader.loadParam(yaml_namespace + "throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
 
-  param_loader.loadParam(yaml_namespace + "attitude_controller/gains/kp", _kq_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "attitude_controller/gains/kp", _kq_);
 
-  param_loader.loadParam(yaml_namespace + "rate_controller/gains/kp", _kw_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "rate_controller/gains/kp", _kw_);
 
-  param_loader.loadParam(yaml_namespace + "velocity_output/descend_speed", _descend_speed_);
-  param_loader.loadParam(yaml_namespace + "acceleration_output/descend_acceleration", _descend_acceleration_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "velocity_output/descend_speed", _descend_speed_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "acceleration_output/descend_acceleration", _descend_acceleration_);
 
-  if (!param_loader.loadedSuccessfully()) {
+  if (!private_handlers->param_loader->loadedSuccessfully()) {
     ROS_ERROR("[FailsafeController]: Could not load all parameters!");
     return false;
   }

@@ -16,7 +16,6 @@
 #include <std_srvs/SetBool.h>
 
 #include <mrs_lib/profiler.h>
-#include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
@@ -267,18 +266,7 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   ros::Time::waitForValid();
 
-  // | ------------------- loading parameters ------------------- |
-
-  bool success = true;
-
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/mpc_controller.yaml");
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/mpc_controller.yaml");
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/" + private_handlers->name_space + ".yaml");
-  success *= private_handlers->loadConfigFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/" + private_handlers->name_space + ".yaml");
-
-  if (!success) {
-    return false;
-  }
+  // | ---------- loading params using the parent's nh ---------- |
 
   mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
 
@@ -289,96 +277,103 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
     return false;
   }
 
-  mrs_lib::ParamLoader param_loader(nh_, name_);
+  // | -------------------- loading my params ------------------- |
+
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/mpc_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/mpc_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/" + private_handlers->name_space + ".yaml");
+  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/" + private_handlers->name_space + ".yaml");
 
   const std::string yaml_namespace = "mrs_uav_controllers/" + private_handlers_->name_space + "/";
 
   // load the dynamicall model parameters
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_model/number_of_states", _n_states_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_model/dt1", _dt1_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_model/dt2", _dt2_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_model/number_of_states", _n_states_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_model/dt1", _dt1_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_model/dt2", _dt2_);
 
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizon_length", _horizon_length_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/horizon_length", _horizon_length_);
 
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_jerk", _max_jerk_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_speed", _max_speed_horizontal_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_acceleration", _max_acceleration_horizontal_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/max_jerk", _max_jerk_);
 
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/Q", _mat_Q_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/S", _mat_S_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/Q", _mat_Q_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/horizontal/S", _mat_S_);
 
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_speed", _max_speed_vertical_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_u", _max_u_vertical_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_speed", _max_speed_vertical_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_acceleration", _max_acceleration_vertical_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/max_u", _max_u_vertical_);
 
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/Q", _mat_Q_z_);
-  param_loader.loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/S", _mat_S_z_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/Q", _mat_Q_z_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_parameters/vertical/S", _mat_S_z_);
 
-  param_loader.loadParam(yaml_namespace + "mpc/solver/verbose", _mpc_solver_verbose_);
-  param_loader.loadParam(yaml_namespace + "mpc/solver/max_iterations", _mpc_solver_max_iterations_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/solver/verbose", _mpc_solver_verbose_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "mpc/solver/max_iterations", _mpc_solver_max_iterations_);
 
   // | ------------------------- rampup ------------------------- |
 
-  param_loader.loadParam(yaml_namespace + "so3/rampup/enabled", _rampup_enabled_);
-  param_loader.loadParam(yaml_namespace + "so3/rampup/speed", _rampup_speed_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/rampup/enabled", _rampup_enabled_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/rampup/speed", _rampup_speed_);
 
   // | --------------------- integral gains --------------------- |
 
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw", gains_.kiwxy);
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib", gains_.kibxy);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/integral_gains/kiw", gains_.kiwxy);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/integral_gains/kib", gains_.kibxy);
 
   // integrator limits
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kiw_lim", gains_.kiwxy_lim);
-  param_loader.loadParam(yaml_namespace + "so3/gains/integral_gains/kib_lim", gains_.kibxy_lim);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/integral_gains/kiw_lim", gains_.kiwxy_lim);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/integral_gains/kib_lim", gains_.kibxy_lim);
 
   // | ------------- height and attitude controller ------------- |
 
   // attitude gains
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/roll_pitch", gains_.kq_roll_pitch);
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude/yaw", gains_.kq_yaw);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/attitude/roll_pitch", gains_.kq_roll_pitch);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/attitude/yaw", gains_.kq_yaw);
 
   // attitude rate gains
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/roll_pitch", gains_.kw_rp);
-  param_loader.loadParam(yaml_namespace + "so3/gains/attitude_rate/yaw", gains_.kw_y);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/attitude_rate/roll_pitch", gains_.kw_rp);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gains/attitude_rate/yaw", gains_.kw_y);
 
   // mass estimator
-  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km", gains_.km);
-  param_loader.loadParam(yaml_namespace + "so3/mass_estimator/km_lim", gains_.km_lim);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/km", gains_.km);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/km_lim", gains_.km_lim);
 
   // constraints
-  param_loader.loadParam(yaml_namespace + "so3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  param_loader.loadParam(yaml_namespace + "so3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+
+  _tilt_angle_failsafe_ = M_PI * (_tilt_angle_failsafe_ / 180.0);
 
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[%s]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low", name_.c_str());
     return false;
   }
 
-  param_loader.loadParam(yaml_namespace + "so3/constraints/throttle_saturation", _throttle_saturation_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
-  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
-  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/rate", _gain_filtering_rate_);
-  param_loader.loadParam(yaml_namespace + "so3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gain_filtering/rate", _gain_filtering_rate_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // angular rate feed forward
-  param_loader.loadParam(yaml_namespace + "so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
 
   // output mode
-  param_loader.loadParam(yaml_namespace + "so3/preferred_output", drs_params_.preferred_output_mode);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/preferred_output", drs_params_.preferred_output_mode);
 
   // | ------------------- position pid params ------------------ |
 
-  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/p", _pos_pid_p_);
-  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/i", _pos_pid_i_);
-  param_loader.loadParam(yaml_namespace + "position_controller/translation_gains/d", _pos_pid_d_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/p", _pos_pid_p_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/i", _pos_pid_i_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/d", _pos_pid_d_);
 
-  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/p", _hdg_pid_p_);
-  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
-  param_loader.loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/p", _hdg_pid_p_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
+  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
 
-  if (!param_loader.loadedSuccessfully()) {
+  if (!private_handlers->param_loader->loadedSuccessfully()) {
     ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
     return false;
   }
