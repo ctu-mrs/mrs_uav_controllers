@@ -1752,7 +1752,7 @@ void Se3Controller::timerGains(const ros::TimerEvent& event) {
 
     drs_->updateConfig(drs_params);
 
-    ROS_INFO_THROTTLE(0.5, "[Se3Controller]: gains have been updated");
+    ROS_INFO_THROTTLE(10.0, "[Se3Controller]: gains have been updated");
   }
 }
 

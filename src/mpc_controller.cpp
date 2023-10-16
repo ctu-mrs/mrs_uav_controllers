@@ -2037,7 +2037,7 @@ void MpcController::timerGains(const ros::TimerEvent &event) {
 
     drs_->updateConfig(drs_params);
 
-    ROS_INFO_THROTTLE(0.5, "[%s]: gains have been updated", name_.c_str());
+    ROS_INFO_THROTTLE(10.0, "[%s]: gains have been updated", name_.c_str());
   }
 }
 
