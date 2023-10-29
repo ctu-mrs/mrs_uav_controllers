@@ -1221,7 +1221,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
         Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command.heading);
       }
       catch (...) {
-        ROS_ERROR("[Se3Controller]: could not set the desired heading");
+        ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not set the desired heading");
       }
     }
 
@@ -1232,7 +1232,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (tracker_command.use_heading) {
       bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: desired heading was not specified, using current heading instead!");
+      ROS_WARN_THROTTLE(10.0, "[Se3Controller]: desired heading was not specified, using current heading instead!");
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
