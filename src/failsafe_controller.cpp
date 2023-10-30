@@ -10,6 +10,7 @@
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/mutex.h>
+#include <mrs_lib/subscribe_handler.h>
 
 //}
 
@@ -42,7 +43,7 @@ public:
 
   const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
 
-  double getHeadingSafely(const mrs_msgs::UavState &uav_state);
+  double getHeadingSafely(const geometry_msgs::Quaternion &quaternion);
 
 private:
   ros::NodeHandle nh_;
@@ -79,6 +80,8 @@ private:
   // | ----------------------- yaw control ---------------------- |
 
   double heading_setpoint_;
+
+  mrs_lib::SubscribeHandler<geometry_msgs::QuaternionStamped> sh_hw_api_orientation_;
 
   // | ------------------ activation and output ----------------- |
 
@@ -157,6 +160,19 @@ bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<m
 
   uav_mass_difference_ = 0;
 
+  // | ----------------------- subscribers ---------------------- |
+
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.nh                 = nh_;
+  shopts.node_name          = "FailsafeController";
+  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
+  shopts.queue_size         = 10;
+  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
+
+  sh_hw_api_orientation_ = mrs_lib::SubscribeHandler<geometry_msgs::QuaternionStamped>(shopts, "/" + common_handlers->uav_name + "/" + "hw_api/orientation");
+
   // | ----------- calculate the default hover throttle ----------- |
 
   hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g);
@@ -190,11 +206,22 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
 
   } else {
 
-    // | --------------- calculate the euler angles --------------- |
+    // | -------------- calculate the initial heading ------------- |
 
-    heading_setpoint_ = getHeadingSafely(uav_state);
+    if (sh_hw_api_orientation_.getMsg()) {
 
-    ROS_INFO("[FailsafeController]: activated with heading: %.2f rad", heading_setpoint_);
+      auto hw_api_orientation = sh_hw_api_orientation_.getMsg();
+
+      heading_setpoint_ = getHeadingSafely(hw_api_orientation->quaternion);
+
+      ROS_INFO("[FailsafeController]: activated with heading = %.2f rad", heading_setpoint_);
+
+    } else {
+
+      ROS_ERROR("[FailsafeController]: missing orientation from HW API, activated with heading = 0 rad");
+
+      heading_setpoint_ = 0;
+    }
 
     activation_control_output_ = last_control_output;
 
@@ -497,16 +524,16 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr FailsafeController::set
 
 /* getHeadingSafely() //{ */
 
-double FailsafeController::getHeadingSafely(const mrs_msgs::UavState &uav_state) {
+double FailsafeController::getHeadingSafely(const geometry_msgs::Quaternion &quaternion) {
 
   try {
-    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
+    return mrs_lib::AttitudeConverter(quaternion).getHeading();
   }
   catch (...) {
   }
 
   try {
-    return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getYaw();
+    return mrs_lib::AttitudeConverter(quaternion).getYaw();
   }
   catch (...) {
   }
