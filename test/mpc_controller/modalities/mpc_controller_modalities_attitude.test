@@ -1,0 +1,9 @@
+<launch>
+
+  <include file="$(find mrs_uav_controllers)/test/mpc_controller/modalities/launch/mrs_uav_system.launch">
+    <arg name="modality" value="attitude" />
+  </include>
+
+  <test pkg="mrs_uav_controllers" type="MpcController_Modalities" test-name="mpc_controller_modalities_attitude" time-limit="60.0" />
+
+</launch>

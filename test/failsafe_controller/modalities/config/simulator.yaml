@@ -1,0 +1,20 @@
+simulation_rate: 250.0
+clock_rate: 250.0
+realtime_factor: 1.0
+
+iterate_without_input: true
+
+individual_takeoff_platform:
+  enabled: true
+
+uav_names: [
+  "uav1",
+]
+
+uav1:
+  type: "x500"
+  spawn:
+    x: 10.0
+    y: 15.0
+    z: 2.0
+    heading: 0
