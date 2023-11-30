@@ -4,6 +4,6 @@
     <arg name="modality" value="acceleration_hdg" />
   </include>
 
-  <test pkg="mrs_uav_controllers" type="FailsafeController_Modalities" test-name="failsafe_controller_modalities_acceleration_hdg" time-limit="60.0" />
+  <test pkg="mrs_uav_controllers" type="FailsafeController_acceleration_hdg" test-name="failsafe_controller_modalities_acceleration_hdg" time-limit="60.0" />
 
 </launch>

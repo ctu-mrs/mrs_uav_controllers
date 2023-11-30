@@ -4,6 +4,6 @@
     <arg name="modality" value="control_group" />
   </include>
 
-  <test pkg="mrs_uav_controllers" type="MpcController_Modalities" test-name="mpc_controller_modalities_control_group" time-limit="60.0" />
+  <test pkg="mrs_uav_controllers" type="MpcController_control_group" test-name="mpc_controller_modalities_control_group" time-limit="60.0" />
 
 </launch>

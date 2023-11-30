@@ -4,6 +4,6 @@
     <arg name="modality" value="velocity_hdg" />
   </include>
 
-  <test pkg="mrs_uav_controllers" type="Se3Controller_Modalities" test-name="se3_controller_modalities_velocity_hdg" time-limit="60.0" />
+  <test pkg="mrs_uav_controllers" type="Se3Controller_velocity_hdg" test-name="se3_controller_modalities_velocity_hdg" time-limit="60.0" />
 
 </launch>

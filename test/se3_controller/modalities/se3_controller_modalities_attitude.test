@@ -4,6 +4,6 @@
     <arg name="modality" value="attitude" />
   </include>
 
-  <test pkg="mrs_uav_controllers" type="Se3Controller_Modalities" test-name="se3_controller_modalities_attitude" time-limit="60.0" />
+  <test pkg="mrs_uav_controllers" type="Se3Controller_attitude" test-name="se3_controller_modalities_attitude" time-limit="60.0" />
 
 </launch>

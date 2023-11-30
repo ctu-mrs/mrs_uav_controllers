@@ -20,7 +20,7 @@ TEST_RESULT_PATH=$(realpath /tmp/$RANDOM)
 mkdir -p $TEST_RESULT_PATH
 
 # run the test
-rostest $PACKAGE failsafe_controller_modalities_position.test $TEXT_OUTPUT --results-filename=$PACKAGE.test --results-base-dir="$TEST_RESULT_PATH"
+rostest ./failsafe_controller/modalities/failsafe_controller_modalities_velocity_hdg_rate.test $TEXT_OUTPUT --results-filename=$PACKAGE.test --results-base-dir="$TEST_RESULT_PATH"
 
 # evaluate the test results
 echo test result path is $TEST_RESULT_PATH
