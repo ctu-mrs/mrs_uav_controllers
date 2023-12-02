@@ -1,9 +1,0 @@
-<launch>
-
-  <include file="$(find mrs_uav_controllers)/test/failsafe_controller/modalities/launch/mrs_uav_system.launch">
-    <arg name="modality" value="velocity_hdg_rate" />
-  </include>
-
-  <test pkg="mrs_uav_controllers" type="FailsafeController_velocity_hdg_rate" test-name="failsafe_controller_modalities_velocity_hdg_rate" time-limit="60.0" />
-
-</launch>

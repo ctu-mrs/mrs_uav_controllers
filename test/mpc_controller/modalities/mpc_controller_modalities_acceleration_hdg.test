@@ -1,9 +1,0 @@
-<launch>
-
-  <include file="$(find mrs_uav_controllers)/test/mpc_controller/modalities/launch/mrs_uav_system.launch">
-    <arg name="modality" value="acceleration_hdg" />
-  </include>
-
-  <test pkg="mrs_uav_controllers" type="MpcController_acceleration_hdg" test-name="mpc_controller_modalities_acceleration_hdg" time-limit="60.0" />
-
-</launch>

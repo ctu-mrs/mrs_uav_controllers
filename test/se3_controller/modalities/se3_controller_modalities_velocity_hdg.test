@@ -1,9 +1,0 @@
-<launch>
-
-  <include file="$(find mrs_uav_controllers)/test/se3_controller/modalities/launch/mrs_uav_system.launch">
-    <arg name="modality" value="velocity_hdg" />
-  </include>
-
-  <test pkg="mrs_uav_controllers" type="Se3Controller_velocity_hdg" test-name="se3_controller_modalities_velocity_hdg" time-limit="60.0" />
-
-</launch>

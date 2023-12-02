@@ -1,9 +1,0 @@
-<launch>
-
-  <include file="$(find mrs_uav_controllers)/test/failsafe_controller/modalities/launch/mrs_uav_system.launch">
-    <arg name="modality" value="actuators" />
-  </include>
-
-  <test pkg="mrs_uav_controllers" type="FailsafeController_actuators" test-name="failsafe_controller_modalities_actuators" time-limit="60.0" />
-
-</launch>

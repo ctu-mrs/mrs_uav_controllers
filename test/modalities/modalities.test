@@ -1,0 +1,13 @@
+<launch>
+
+  <arg name="modality" default="" />
+  <arg name="controller" default="" />
+
+  <include file="$(find mrs_uav_controllers)/test/modalities/launch/mrs_uav_system.launch">
+    <arg name="modality" default="$(arg modality)" />
+    <arg name="controller" default="$(arg controller)" />
+  </include>
+
+  <test pkg="mrs_uav_controllers" type="test_modalities" test-name="modality_$(arg controller)_$(arg modality)" time-limit="60.0" />
+
+</launch>
