@@ -32,7 +32,7 @@ namespace mrs_uav_controllers
 namespace se3_controller
 {
 
-/* structs //{ */ /*//{*/
+/* structs //{ */
 
 typedef struct
 {
@@ -54,7 +54,7 @@ typedef struct
   double kw_yaw;         // attitude rate gain
 } Gains_t;
 
-//}//}
+//}
 
 /* //{ class Se3Controller */
 
