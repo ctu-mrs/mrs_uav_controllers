@@ -1,7 +1,5 @@
 #!/bin/bash
 
-PACKAGE_NAME=mrs_uav_controllers
-
 while [ ! -e ".catkin_tools" ]; do
   cd ..
   if [[ `pwd` == "/" ]]; then
@@ -11,11 +9,13 @@ while [ ! -e ".catkin_tools" ]; do
   fi
 done
 
+WORKSPACE_NAME=${PWD##*/}
+
 cd build
 
 lcov --capture --directory . --output-file coverage.info
 lcov --remove coverage.info "*/test/*" --output-file coverage.info.removed
-lcov --extract coverage.info.removed "*/mrs_uav_autostart/*" --output-file coverage.info.cleaned
+lcov --extract coverage.info.removed "*/${WORKSPACE_NAME}/src/*" --output-file coverage.info.cleaned
 genhtml -o coverage_html coverage.info.cleaned | tee /tmp/genhtml.log
 
 COVERAGE_PCT=`cat /tmp/genhtml.log | tail -n 1 | awk '{print $2}'`
