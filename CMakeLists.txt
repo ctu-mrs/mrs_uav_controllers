@@ -11,6 +11,7 @@ set(CATKIN_DEPENDENCIES
   pluginlib
   roscpp
   rospy
+  mrs_uav_testing
   )
 
 find_package(catkin REQUIRED COMPONENTS

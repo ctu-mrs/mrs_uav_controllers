@@ -21,6 +21,7 @@
   <depend>pluginlib</depend>
   <depend>roscpp</depend>
   <depend>rospy</depend>
+  <depend>mrs_uav_testing</depend>
 
   <export>
     <mrs_uav_managers plugin="${prefix}/plugins.xml" />
