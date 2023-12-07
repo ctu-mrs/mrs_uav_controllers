@@ -23,6 +23,8 @@
   <depend>rospy</depend>
   <depend>mrs_uav_testing</depend>
 
+  <test_depend>mrs_uav_gazebo_simulation</test_depend>
+
   <export>
     <mrs_uav_managers plugin="${prefix}/plugins.xml" />
   </export>
