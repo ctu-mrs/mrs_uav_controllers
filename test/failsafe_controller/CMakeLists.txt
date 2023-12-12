@@ -29,8 +29,6 @@ foreach(MODALITY ${MODALITIES})
 
   add_rostest(${TEST_NAME}.test
     ARGS
-    package_name:=${PROJECT_NAME}
-    test_name:=${TEST_NAME}
     modality:=${MODALITY}
     )
 

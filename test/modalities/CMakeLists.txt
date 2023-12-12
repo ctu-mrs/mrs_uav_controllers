@@ -36,8 +36,6 @@ foreach(CONTROLLER ${CONTROLLERS})
 
     add_rostest(${TEST_NAME}.test
       ARGS
-      package_name:=${PROJECT_NAME}
-      test_name:=${TEST_NAME}
       controller:=${CONTROLLER}
       modality:=${MODALITY}
       )
