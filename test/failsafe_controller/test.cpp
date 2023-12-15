@@ -64,7 +64,7 @@ bool Tester::test() {
       }
     }
 
-    sleep(0.1);
+    sleep(0.01);
   }
 
   // | ----------------- wait till the UAV lands ---------------- |
@@ -79,7 +79,7 @@ bool Tester::test() {
       return true;
     }
 
-    sleep(0.1);
+    sleep(0.01);
   }
 
   return false;
