@@ -16,7 +16,7 @@ cd build
 lcov --capture --directory . --output-file coverage.info
 lcov --remove coverage.info "*/test/*" --output-file coverage.info.removed
 lcov --extract coverage.info.removed "*/${WORKSPACE_NAME}/src/*" --output-file coverage.info.cleaned
-genhtml -o coverage_html coverage.info.cleaned | tee /tmp/genhtml.log
+genhtml --title "MRS UAV System - Test coverage report" --demangle-cpp --legend --frames --show-details -o coverage_html coverage.info.cleaned | tee /tmp/genhtml.log
 
 COVERAGE_PCT=`cat /tmp/genhtml.log | tail -n 1 | awk '{print $2}'`
 
