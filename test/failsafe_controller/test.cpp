@@ -23,8 +23,21 @@ Tester::Tester() : mrs_uav_testing::TestGeneric() {
 
 bool Tester::test() {
 
+  std::shared_ptr<mrs_uav_testing::UAVHandler> uh;
+
   {
-    auto [success, message] = activateMidAir();
+    auto [uhopt, message] = getUAVHandler(_uav_name_);
+
+    if (!uhopt) {
+      ROS_ERROR("[%s]: Failed obtain handler for '%s': '%s'", ros::this_node::getName().c_str(), _uav_name_.c_str(), message.c_str());
+      return false;
+    }
+
+    uh = uhopt.value();
+  }
+
+  {
+    auto [success, message] = uh->activateMidAir();
 
     if (!success) {
       ROS_ERROR("[%s]: midair activation failed with message: '%s'", ros::this_node::getName().c_str(), message.c_str());
@@ -55,11 +68,11 @@ bool Tester::test() {
     }
 
     if (_modality_ == "position") {
-      if (sh_control_manager_diag_.getMsg()->active_controller == "EmergencyController") {
+      if (uh->sh_control_manager_diag_.getMsg()->active_controller == "EmergencyController") {
         break;
       }
     } else {
-      if (sh_control_manager_diag_.getMsg()->active_controller == "FailsafeController") {
+      if (uh->sh_control_manager_diag_.getMsg()->active_controller == "FailsafeController") {
         break;
       }
     }
@@ -75,7 +88,7 @@ bool Tester::test() {
       return false;
     }
 
-    if (!isOutputEnabled()) {
+    if (!uh->isOutputEnabled()) {
       return true;
     }
 
