@@ -1696,7 +1696,7 @@ void Se3Controller::timerGains(const ros::TimerEvent& event) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains", _gain_filtering_rate_, 1.0, event);
   mrs_lib::ScopeTimer timer =
-      mrs_lib::ScopeTimer("ControlManager::timerHwApiCapabilities", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+      mrs_lib::ScopeTimer("Se3Controller::timerHwApiCapabilities", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);
