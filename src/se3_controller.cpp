@@ -783,14 +783,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   Eigen::Vector3d Ev(0, 0, 0);
 
   if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
-      tracker_command.use_position_vertical) {  // use_position_vertical = true, not a mistake, this provides dampening
+      tracker_command.use_position_vertical) {  // use_position_vertical == true, not a mistake, this provides dampening
     Ev = Rv - Ov;
   }
 
   // acceleration control error
   Eigen::Vector3d Ea(0, 0, 0);
 
-  if (tracker_command.use_acceleration) {  // use_position_vertical = true, not a mistake, this provides dampening
+  if (tracker_command.use_acceleration) {
     Ea = Ra - Oa;
   }
 
@@ -1155,10 +1155,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     if (tracker_command.use_position_vertical && !rampup_active_) {
       uav_mass_difference_ += gains.km * Ep[2] * dt;
-    } else if (tracker_command.use_velocity_vertical && !rampup_active_) {
+    }
+
+    if (tracker_command.use_velocity_vertical && !rampup_active_) {
       uav_mass_difference_ += gains.km * Ev[2] * dt;
-    } else if (tracker_command.use_acceleration && !rampup_active_) {
-      uav_mass_difference_ += - 10 * gains.km * Ea[2] * dt;
+    }
+
+    if (tracker_command.use_acceleration && !rampup_active_) {
+      uav_mass_difference_ += -10 * gains.km * Ea[2] * dt;
     }
 
     // saturate the mass estimator
