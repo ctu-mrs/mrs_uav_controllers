@@ -1158,7 +1158,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     } else if (tracker_command.use_velocity_vertical && !rampup_active_) {
       uav_mass_difference_ += gains.km * Ev[2] * dt;
     } else if (tracker_command.use_acceleration && !rampup_active_) {
-      uav_mass_difference_ += gains.km * Ea[2] * dt;
+      uav_mass_difference_ += - 10 * gains.km * Ea[2] * dt;
     }
 
     // saturate the mass estimator
@@ -1707,8 +1707,7 @@ void Se3Controller::callbackDrs(mrs_uav_controllers::se3_controllerConfig& confi
 void Se3Controller::timerGains(const ros::TimerEvent& event) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains", _gain_filtering_rate_, 1.0, event);
-  mrs_lib::ScopeTimer timer =
-      mrs_lib::ScopeTimer("Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);
