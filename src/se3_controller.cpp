@@ -762,6 +762,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // Ov - velocity in global frame
   Eigen::Vector3d Op(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
   Eigen::Vector3d Ov(uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z);
+  Eigen::Vector3d Oa(uav_state.acceleration.linear.x, uav_state.acceleration.linear.y, uav_state.acceleration.linear.z);
 
   // R - current uav attitude
   Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state.pose.orientation);
@@ -784,6 +785,13 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
       tracker_command.use_position_vertical) {  // use_position_vertical = true, not a mistake, this provides dampening
     Ev = Rv - Ov;
+  }
+
+  // acceleration control error
+  Eigen::Vector3d Ea(0, 0, 0);
+
+  if (tracker_command.use_acceleration) {  // use_position_vertical = true, not a mistake, this provides dampening
+    Ea = Ra - Oa;
   }
 
   // | --------------------- load the gains --------------------- |
@@ -1147,6 +1155,10 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     if (tracker_command.use_position_vertical && !rampup_active_) {
       uav_mass_difference_ += gains.km * Ep[2] * dt;
+    } else if (tracker_command.use_velocity_vertical && !rampup_active_) {
+      uav_mass_difference_ += gains.km * Ev[2] * dt;
+    } else if (tracker_command.use_acceleration && !rampup_active_) {
+      uav_mass_difference_ += gains.km * Ea[2] * dt;
     }
 
     // saturate the mass estimator
