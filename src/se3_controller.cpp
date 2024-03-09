@@ -765,12 +765,12 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // Op - position in global frame
   // Ov - velocity in global frame
   // Oa - acceleration in global frame
-  Eigen::Vector3d Op(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
-  Eigen::Vector3d Ov(uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z);
-  Eigen::Vector3d Oa(uav_state.acceleration.linear.x, uav_state.acceleration.linear.y, uav_state.acceleration.linear.z);
+  const Eigen::Vector3d Op(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
+  const Eigen::Vector3d Ov(uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z);
+  const Eigen::Vector3d Oa(uav_state.acceleration.linear.x, uav_state.acceleration.linear.y, uav_state.acceleration.linear.z);
 
   // R - current uav attitude
-  Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state.pose.orientation);
+  const Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state.pose.orientation);
 
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state.velocity.angular.x, uav_state.velocity.angular.y, uav_state.velocity.angular.z);
@@ -1163,11 +1163,18 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     } else if (tracker_command.use_acceleration && !rampup_active_) {
       // acceleration in the drone's coordinate frame
       const Eigen::Vector3d Oa_fcu = R.transpose()*Oa;
+      const Eigen::Vector3d g_fcu = R.transpose()*Eigen::Vector3d(0, 0, common_handlers_->g);
       // F = m*a, m = F / a
       const double last_actual_thrust_force = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_);
-      const double calc_mass = last_actual_thrust_force / Oa_fcu.z();
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: Calculated mass: %.2fkg", calc_mass);
-      uav_mass_difference_ = (calc_mass - _uav_mass_) * dt;
+      const double z_acc = Oa_fcu.z() + g_fcu.z();
+      // ignore too small or negative accelerations
+      if (z_acc > 1e-2)
+      {
+        const double calc_mass = last_actual_thrust_force / z_acc;
+        ROS_WARN_THROTTLE(1.0, "[Se3Controller]: Calculated mass: %.2fkg", calc_mass);
+        // temporal filter to prevent too large changes
+        uav_mass_difference_ += (calc_mass - _uav_mass_) * dt;
+      }
     }
 
     // saturate the mass estimator
