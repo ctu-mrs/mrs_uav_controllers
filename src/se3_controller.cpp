@@ -1155,13 +1155,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     if (tracker_command.use_position_vertical && !rampup_active_) {
       uav_mass_difference_ += gains.km * Ep[2] * dt;
-    }
-
-    if (tracker_command.use_velocity_vertical && !rampup_active_) {
+    } else if (tracker_command.use_velocity_vertical && !rampup_active_) {
       uav_mass_difference_ += gains.km * Ev[2] * dt;
-    }
-
-    if (tracker_command.use_acceleration && !rampup_active_) {
+    } else if (tracker_command.use_acceleration && !rampup_active_) {
       uav_mass_difference_ += -10 * gains.km * Ea[2] * dt;
     }
 
