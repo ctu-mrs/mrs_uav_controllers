@@ -122,6 +122,8 @@ private:
 
   double _uav_mass_;
   double uav_mass_difference_;
+  double last_thrust_force_;
+  double last_throttle_;
 
   Gains_t gains_;
 
@@ -330,6 +332,8 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // initialize the integrals
   uav_mass_difference_ = 0;
+  last_thrust_force_ = 0;
+  last_throttle_ = 0;
   Iw_w_                = Eigen::Vector2d::Zero(2);
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
@@ -760,6 +764,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // Op - position in global frame
   // Ov - velocity in global frame
+  // Oa - acceleration in global frame
   Eigen::Vector3d Op(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
   Eigen::Vector3d Ov(uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z);
   Eigen::Vector3d Oa(uav_state.acceleration.linear.x, uav_state.acceleration.linear.y, uav_state.acceleration.linear.z);
@@ -881,7 +886,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // construct the desired force vector
 
-  double total_mass = _uav_mass_ + uav_mass_difference_;
+  const double total_mass = _uav_mass_ + uav_mass_difference_;
 
   Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
   Eigen::Vector3d position_feedback = Kp * Ep.array();
@@ -1156,7 +1161,13 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (tracker_command.use_position_vertical && !rampup_active_) {
       uav_mass_difference_ += gains.km * Ep[2] * dt;
     } else if (tracker_command.use_acceleration && !rampup_active_) {
-      uav_mass_difference_ += -10 * gains.km * Ea[2] * dt;
+      // acceleration in the drone's coordinate frame
+      const Eigen::Vector3d Oa_fcu = R.transpose()*Oa;
+      // F = m*a, m = F / a
+      const double last_actual_thrust_force = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_);
+      const double calc_mass = last_actual_thrust_force / Oa_fcu.z();
+      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: Calculated mass: %.2fkg", calc_mass);
+      uav_mass_difference_ = (calc_mass - _uav_mass_) * dt;
     }
 
     // saturate the mass estimator
@@ -1251,7 +1262,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // | -------------------- desired throttle -------------------- |
 
-  double desired_thrust_force = f.dot(R.col(2));
+  const double desired_thrust_force = f.dot(R.col(2));
+  last_thrust_force_ = desired_thrust_force;
   double throttle             = 0;
 
   if (tracker_command.use_throttle) {
@@ -1385,6 +1397,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   attitude_cmd.stamp       = ros::Time::now();
   attitude_cmd.orientation = mrs_lib::AttitudeConverter(Rd);
   attitude_cmd.throttle    = throttle;
+  last_throttle_ = throttle;
 
   if (output_modality == common::ATTITUDE) {
 
