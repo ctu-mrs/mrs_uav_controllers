@@ -1178,25 +1178,13 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     auto imu = sh_imu_.getMsg();
 
-    geometry_msgs::Vector3Stamped gravity_acc;
-    gravity_acc.header.frame_id = "";
-    gravity_acc.header.stamp    = imu->header.stamp;
-    gravity_acc.vector.x        = 0;
-    gravity_acc.vector.y        = 0;
-    gravity_acc.vector.z        = -common_handlers_->g;
+    const double measured_bodyz_acc = imu->linear_acceleration.z;
 
-    auto gravity_acc_body = common_handlers_->transformer->transformSingle(gravity_acc, "fcu");
+    const double desired_bodyz_acc = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
 
-    if (gravity_acc_body) {
+    uav_mass_difference_ += 10*gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
 
-      const double measured_bodyz_acc = imu->linear_acceleration.z;
-
-      const double desired_bodyz_acc = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
-
-      uav_mass_difference_ += 10*gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
-
-      ROS_INFO("[Se3Controller]: mes %.2f, des %.2f, mass_diff %.3f", measured_bodyz_acc, desired_bodyz_acc, uav_mass_difference_);
-    }
+    ROS_INFO("[Se3Controller]: mes %.2f, des %.2f, mass_diff %.3f", measured_bodyz_acc, desired_bodyz_acc, uav_mass_difference_);
 
     // saturate the mass estimator
     bool uav_mass_saturated = false;
