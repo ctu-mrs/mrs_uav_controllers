@@ -1182,7 +1182,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     const double desired_bodyz_acc = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
 
-    uav_mass_difference_ += 10*gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+    if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
+      uav_mass_difference_ += 2 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+    }
 
     ROS_INFO("[Se3Controller]: mes %.2f, des %.2f, mass_diff %.3f", measured_bodyz_acc, desired_bodyz_acc, uav_mass_difference_);
 
