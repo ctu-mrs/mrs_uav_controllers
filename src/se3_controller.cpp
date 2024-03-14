@@ -1173,20 +1173,30 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // |                integrate the mass difference               |
   // --------------------------------------------------------------
 
+  if (!rampup_active_)
   {
     std::scoped_lock lock(mutex_gains_);
 
-    auto imu = sh_imu_.getMsg();
+    if (tracker_command.use_position_vertical)
+    {
+      uav_mass_difference_ += gains.km * Ep[2] * dt;
+    }
+    else if (tracker_command.use_velocity_vertical)
+    {
+      uav_mass_difference_ += gains.km * Ev[2] * dt;
+    }
+    else if (tracker_command.use_acceleration)
+    {
+      auto imu = sh_imu_.getMsg();
+      const double measured_bodyz_acc = imu->linear_acceleration.z;
+      const double desired_bodyz_acc = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
 
-    const double measured_bodyz_acc = imu->linear_acceleration.z;
-
-    const double desired_bodyz_acc = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
-
-    if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
-      uav_mass_difference_ += 2 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+      if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
+        uav_mass_difference_ += 2 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+      }
     }
 
-    ROS_INFO("[Se3Controller]: mes %.2f, des %.2f, mass_diff %.3f", measured_bodyz_acc, desired_bodyz_acc, uav_mass_difference_);
+    /* ROS_INFO("[Se3Controller]: mes %.2f, des %.2f, mass_diff %.3f", measured_bodyz_acc, desired_bodyz_acc, uav_mass_difference_); */
 
     // saturate the mass estimator
     bool uav_mass_saturated = false;
