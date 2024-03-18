@@ -29,7 +29,7 @@ class ParamsGetter:
                 try:
                     contents = file.read()
                     print("######################################")
-                    print("# The following section was take from:")
+                    print("# The following section was taken from:")
                     print("# {}".format(file_path))
                     print("")
                     print(contents)
