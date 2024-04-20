@@ -399,16 +399,16 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
   if (activation_control_output_.diagnostics.disturbance_estimator) {
-    Ib_b_[0] = -activation_control_output_.diagnostics.disturbance_bx_b;
-    Ib_b_[1] = -activation_control_output_.diagnostics.disturbance_by_b;
+    Ib_b_(0) = -activation_control_output_.diagnostics.disturbance_bx_b;
+    Ib_b_(1) = -activation_control_output_.diagnostics.disturbance_by_b;
 
-    Iw_w_[0] = -activation_control_output_.diagnostics.disturbance_wx_w;
-    Iw_w_[1] = -activation_control_output_.diagnostics.disturbance_wy_w;
+    Iw_w_(0) = -activation_control_output_.diagnostics.disturbance_wx_w;
+    Iw_w_(1) = -activation_control_output_.diagnostics.disturbance_wy_w;
 
     ROS_INFO(
         "[Se3Controller]: setting disturbances from the last control output: Ib_b_: %.2f, %.2f N, Iw_w_: "
         "%.2f, %.2f N",
-        Ib_b_[0], Ib_b_[1], Iw_w_[0], Iw_w_[1]);
+        Ib_b_(0), Ib_b_(1), Iw_w_(0), Iw_w_(1));
   }
 
   // did the last controller use manual throttle control?
@@ -630,8 +630,8 @@ void Se3Controller::switchOdometrySource(const mrs_msgs::UavState& new_uav_state
   world_integrals.header.stamp    = ros::Time::now();
   world_integrals.header.frame_id = uav_state.header.frame_id;
 
-  world_integrals.vector.x = Iw_w_[0];
-  world_integrals.vector.y = Iw_w_[1];
+  world_integrals.vector.x = Iw_w_(0);
+  world_integrals.vector.y = Iw_w_(1);
   world_integrals.vector.z = 0;
 
   auto res = common_handlers_->transformer->transformSingle(world_integrals, new_uav_state.header.frame_id);
@@ -640,8 +640,8 @@ void Se3Controller::switchOdometrySource(const mrs_msgs::UavState& new_uav_state
 
     std::scoped_lock lock(mutex_integrals_);
 
-    Iw_w_[0] = res.value().vector.x;
-    Iw_w_[1] = res.value().vector.y;
+    Iw_w_(0) = res.value().vector.x;
+    Iw_w_(1) = res.value().vector.y;
 
   } else {
 
@@ -649,8 +649,8 @@ void Se3Controller::switchOdometrySource(const mrs_msgs::UavState& new_uav_state
 
     std::scoped_lock lock(mutex_integrals_);
 
-    Iw_w_[0] = 0;
-    Iw_w_[1] = 0;
+    Iw_w_(0) = 0;
+    Iw_w_(1) = 0;
   }
 }
 
@@ -722,32 +722,32 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   if (tracker_command.use_position_vertical || tracker_command.use_position_horizontal) {
 
     if (tracker_command.use_position_horizontal) {
-      Rp[0] = tracker_command.position.x;
-      Rp[1] = tracker_command.position.y;
+      Rp(0) = tracker_command.position.x;
+      Rp(1) = tracker_command.position.y;
     } else {
-      Rv[0] = 0;
-      Rv[1] = 0;
+      Rv(0) = 0;
+      Rv(1) = 0;
     }
 
     if (tracker_command.use_position_vertical) {
-      Rp[2] = tracker_command.position.z;
+      Rp(2) = tracker_command.position.z;
     } else {
-      Rv[2] = 0;
+      Rv(2) = 0;
     }
   }
 
   if (tracker_command.use_velocity_horizontal) {
-    Rv[0] = tracker_command.velocity.x;
-    Rv[1] = tracker_command.velocity.y;
+    Rv(0) = tracker_command.velocity.x;
+    Rv(1) = tracker_command.velocity.y;
   } else {
-    Rv[0] = 0;
-    Rv[1] = 0;
+    Rv(0) = 0;
+    Rv(1) = 0;
   }
 
   if (tracker_command.use_velocity_vertical) {
-    Rv[2] = tracker_command.velocity.z;
+    Rv(2) = tracker_command.velocity.z;
   } else {
-    Rv[2] = 0;
+    Rv(2) = 0;
   }
 
   if (tracker_command.use_acceleration) {
@@ -800,32 +800,32 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     std::scoped_lock lock(mutex_gains_);
 
     if (tracker_command.use_position_horizontal) {
-      Kp[0] = gains.kpxy;
-      Kp[1] = gains.kpxy;
+      Kp(0) = gains.kpxy;
+      Kp(1) = gains.kpxy;
     } else {
-      Kp[0] = 0;
-      Kp[1] = 0;
+      Kp(0) = 0;
+      Kp(1) = 0;
     }
 
     if (tracker_command.use_position_vertical) {
-      Kp[2] = gains.kpz;
+      Kp(2) = gains.kpz;
     } else {
-      Kp[2] = 0;
+      Kp(2) = 0;
     }
 
     if (tracker_command.use_velocity_horizontal) {
-      Kv[0] = gains.kvxy;
-      Kv[1] = gains.kvxy;
+      Kv(0) = gains.kvxy;
+      Kv(1) = gains.kvxy;
     } else {
-      Kv[0] = 0;
-      Kv[1] = 0;
+      Kv(0) = 0;
+      Kv(1) = 0;
     }
 
     // special case: if want to control z-pos but not the velocity => at least provide z dampening, therefore kvz_
     if (tracker_command.use_velocity_vertical || tracker_command.use_position_vertical) {
-      Kv[2] = gains.kvz;
+      Kv(2) = gains.kvz;
     } else {
-      Kv[2] = 0;
+      Kv(2) = 0;
     }
 
     if (tracker_command.use_acceleration) {
@@ -838,9 +838,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       Kq << gains.kq_roll_pitch, gains.kq_roll_pitch, gains.kq_yaw;
     }
 
-    Kw[0] = gains.kw_roll_pitch;
-    Kw[1] = gains.kw_roll_pitch;
-    Kw[2] = gains.kw_yaw;
+    Kw(0) = gains.kw_roll_pitch;
+    Kw(1) = gains.kw_roll_pitch;
+    Kw(2) = gains.kw_yaw;
   }
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
@@ -864,8 +864,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     auto res = common_handlers_->transformer->transformSingle(Ib_b_stamped, uav_state_.header.frame_id);
 
     if (res) {
-      Ib_w[0] = res.value().vector.x;
-      Ib_w[1] = res.value().vector.y;
+      Ib_w(0) = res.value().vector.x;
+      Ib_w(1) = res.value().vector.y;
     } else {
       ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform the Ib_b_ to the world frame");
     }
@@ -882,7 +882,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   {
     std::scoped_lock lock(mutex_integrals_);
 
-    integral_feedback << Ib_w[0] + Iw_w_[0], Ib_w[1] + Iw_w_[1], 0;
+    integral_feedback << Ib_w(0) + Iw_w_(0), Ib_w(1) + Iw_w_(1), 0;
   }
 
   // --------------------------------------------------------------
@@ -909,14 +909,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     // saturate the world X
     bool world_integral_saturated = false;
-    if (!std::isfinite(Iw_w_[0])) {
-      Iw_w_[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
-    } else if (Iw_w_[0] > gains.kiwxy_lim) {
-      Iw_w_[0]                 = gains.kiwxy_lim;
+    if (!std::isfinite(Iw_w_(0))) {
+      Iw_w_(0) = 0;
+      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_(0)', setting it to 0!!!");
+    } else if (Iw_w_(0) > gains.kiwxy_lim) {
+      Iw_w_(0)                 = gains.kiwxy_lim;
       world_integral_saturated = true;
-    } else if (Iw_w_[0] < -gains.kiwxy_lim) {
-      Iw_w_[0]                 = -gains.kiwxy_lim;
+    } else if (Iw_w_(0) < -gains.kiwxy_lim) {
+      Iw_w_(0)                 = -gains.kiwxy_lim;
       world_integral_saturated = true;
     }
 
@@ -926,14 +926,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     // saturate the world Y
     world_integral_saturated = false;
-    if (!std::isfinite(Iw_w_[1])) {
-      Iw_w_[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!");
-    } else if (Iw_w_[1] > gains.kiwxy_lim) {
-      Iw_w_[1]                 = gains.kiwxy_lim;
+    if (!std::isfinite(Iw_w_(1))) {
+      Iw_w_(1) = 0;
+      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_(1)', setting it to 0!!!");
+    } else if (Iw_w_(1) > gains.kiwxy_lim) {
+      Iw_w_(1)                 = gains.kiwxy_lim;
       world_integral_saturated = true;
-    } else if (Iw_w_[1] < -gains.kiwxy_lim) {
-      Iw_w_[1]                 = -gains.kiwxy_lim;
+    } else if (Iw_w_(1) < -gains.kiwxy_lim) {
+      Iw_w_(1)                 = -gains.kiwxy_lim;
       world_integral_saturated = true;
     }
 
@@ -970,8 +970,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       auto res = common_handlers_->transformer->transformSingle(Ep_stamped, "fcu_untilted");
 
       if (res) {
-        Ep_fcu_untilted[0] = res.value().vector.x;
-        Ep_fcu_untilted[1] = res.value().vector.y;
+        Ep_fcu_untilted(0) = res.value().vector.x;
+        Ep_fcu_untilted(1) = res.value().vector.y;
       } else {
         ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform the position error to fcu_untilted");
       }
@@ -990,8 +990,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       auto res = common_handlers_->transformer->transformSingle(Ev_stamped, "fcu_untilted");
 
       if (res) {
-        Ev_fcu_untilted[0] = res.value().vector.x;
-        Ev_fcu_untilted[1] = res.value().vector.x;
+        Ev_fcu_untilted(0) = res.value().vector.x;
+        Ev_fcu_untilted(1) = res.value().vector.x;
       } else {
         ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform the velocity error to fcu_untilted");
       }
@@ -1006,14 +1006,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     // saturate the body
     bool body_integral_saturated = false;
-    if (!std::isfinite(Ib_b_[0])) {
-      Ib_b_[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
-    } else if (Ib_b_[0] > gains.kibxy_lim) {
-      Ib_b_[0]                = gains.kibxy_lim;
+    if (!std::isfinite(Ib_b_(0))) {
+      Ib_b_(0) = 0;
+      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_(0)', setting it to 0!!!");
+    } else if (Ib_b_(0) > gains.kibxy_lim) {
+      Ib_b_(0)                = gains.kibxy_lim;
       body_integral_saturated = true;
-    } else if (Ib_b_[0] < -gains.kibxy_lim) {
-      Ib_b_[0]                = -gains.kibxy_lim;
+    } else if (Ib_b_(0) < -gains.kibxy_lim) {
+      Ib_b_(0)                = -gains.kibxy_lim;
       body_integral_saturated = true;
     }
 
@@ -1023,14 +1023,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     // saturate the body
     body_integral_saturated = false;
-    if (!std::isfinite(Ib_b_[1])) {
-      Ib_b_[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!");
-    } else if (Ib_b_[1] > gains.kibxy_lim) {
-      Ib_b_[1]                = gains.kibxy_lim;
+    if (!std::isfinite(Ib_b_(1))) {
+      Ib_b_(1) = 0;
+      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_(1)', setting it to 0!!!");
+    } else if (Ib_b_(1) > gains.kibxy_lim) {
+      Ib_b_(1)                = gains.kibxy_lim;
       body_integral_saturated = true;
-    } else if (Ib_b_[1] < -gains.kibxy_lim) {
-      Ib_b_[1]                = -gains.kibxy_lim;
+    } else if (Ib_b_(1) < -gains.kibxy_lim) {
+      Ib_b_(1)                = -gains.kibxy_lim;
       body_integral_saturated = true;
     }
 
@@ -1049,9 +1049,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
       mrs_msgs::HwApiAccelerationHdgCmd cmd;
 
-      cmd.acceleration.x = des_acc[0];
-      cmd.acceleration.y = des_acc[1];
-      cmd.acceleration.z = des_acc[2];
+      cmd.acceleration.x = des_acc(0);
+      cmd.acceleration.y = des_acc(1);
+      cmd.acceleration.z = des_acc(2);
 
       cmd.heading = tracker_command.heading;
 
@@ -1067,9 +1067,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
       mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
 
-      cmd.acceleration.x = des_acc[0];
-      cmd.acceleration.y = des_acc[1];
-      cmd.acceleration.z = des_acc[2];
+      cmd.acceleration.x = des_acc(0);
+      cmd.acceleration.y = des_acc(1);
+      cmd.acceleration.z = des_acc(2);
 
       position_pid_heading_.setSaturation(constraints.heading_speed);
 
@@ -1096,9 +1096,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
       world_accel.header.stamp    = ros::Time::now();
       world_accel.header.frame_id = uav_state.header.frame_id;
-      world_accel.vector.x        = unbiased_des_acc_world[0];
-      world_accel.vector.y        = unbiased_des_acc_world[1];
-      world_accel.vector.z        = unbiased_des_acc_world[2];
+      world_accel.vector.x        = unbiased_des_acc_world(0);
+      world_accel.vector.y        = unbiased_des_acc_world(1);
+      world_accel.vector.z        = unbiased_des_acc_world(2);
 
       auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
 
@@ -1120,14 +1120,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     last_control_output_.diagnostics.disturbance_estimator = true;
 
-    last_control_output_.diagnostics.disturbance_bx_b = -Ib_b_[0];
-    last_control_output_.diagnostics.disturbance_by_b = -Ib_b_[1];
+    last_control_output_.diagnostics.disturbance_bx_b = -Ib_b_(0);
+    last_control_output_.diagnostics.disturbance_by_b = -Ib_b_(1);
 
-    last_control_output_.diagnostics.disturbance_bx_w = -Ib_w[0];
-    last_control_output_.diagnostics.disturbance_by_w = -Ib_w[1];
+    last_control_output_.diagnostics.disturbance_bx_w = -Ib_w(0);
+    last_control_output_.diagnostics.disturbance_by_w = -Ib_w(1);
 
-    last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_[0];
-    last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_[1];
+    last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_(0);
+    last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_(1);
 
     last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
@@ -1146,7 +1146,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     std::scoped_lock lock(mutex_gains_);
 
     if (tracker_command.use_position_vertical && !rampup_active_) {
-      uav_mass_difference_ += gains.km * Ep[2] * dt;
+      uav_mass_difference_ += gains.km * Ep(2) * dt;
     }
 
     // saturate the mass estimator
@@ -1175,9 +1175,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
 
   // if the downwards part of the force is close to counter-act the gravity acceleration
-  if (f[2] < 0) {
+  if (f(2) < 0) {
 
-    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
+    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f(2));
 
     f << 0, 0, 1;
   }
@@ -1190,9 +1190,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   if (!f_normed_sanitized) {
 
-    ROS_INFO("[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
-    ROS_INFO("[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
-    ROS_INFO("[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
+    ROS_INFO("[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback(0), position_feedback(1), position_feedback(2));
+    ROS_INFO("[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback(0), velocity_feedback(1), velocity_feedback(2));
+    ROS_INFO("[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback(0), integral_feedback(1), integral_feedback(2));
     ROS_INFO("[Se3Controller]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", tracker_command.position.x, tracker_command.position.y,
              tracker_command.position.z, tracker_command.heading);
     ROS_INFO("[Se3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state.pose.position.x, uav_state.pose.position.y,
@@ -1326,9 +1326,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     world_accel.header.stamp    = ros::Time::now();
     world_accel.header.frame_id = uav_state.header.frame_id;
-    world_accel.vector.x        = unbiased_des_acc_world[0];
-    world_accel.vector.y        = unbiased_des_acc_world[1];
-    world_accel.vector.z        = unbiased_des_acc_world[2];
+    world_accel.vector.x        = unbiased_des_acc_world(0);
+    world_accel.vector.y        = unbiased_des_acc_world(1);
+    world_accel.vector.z        = unbiased_des_acc_world(2);
 
     auto res = common_handlers_->transformer->transformSingle(world_accel, "fcu");
 
@@ -1355,14 +1355,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   last_control_output_.diagnostics.disturbance_estimator = true;
 
-  last_control_output_.diagnostics.disturbance_bx_b = -Ib_b_[0];
-  last_control_output_.diagnostics.disturbance_by_b = -Ib_b_[1];
+  last_control_output_.diagnostics.disturbance_bx_b = -Ib_b_(0);
+  last_control_output_.diagnostics.disturbance_by_b = -Ib_b_(1);
 
-  last_control_output_.diagnostics.disturbance_bx_w = -Ib_w[0];
-  last_control_output_.diagnostics.disturbance_by_w = -Ib_w[1];
+  last_control_output_.diagnostics.disturbance_bx_w = -Ib_w(0);
+  last_control_output_.diagnostics.disturbance_by_w = -Ib_w(1);
 
-  last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_[0];
-  last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_[1];
+  last_control_output_.diagnostics.disturbance_wx_w = -Iw_w_(0);
+  last_control_output_.diagnostics.disturbance_wy_w = -Iw_w_(1);
 
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
 
@@ -1580,9 +1580,9 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
   position_pid_y_.setSaturation(constraints.horizontal_speed);
   position_pid_z_.setSaturation(std::min(constraints.vertical_ascending_speed, constraints.vertical_descending_speed));
 
-  double des_vel_x = position_pid_x_.update(Ep[0], dt);
-  double des_vel_y = position_pid_y_.update(Ep[1], dt);
-  double des_vel_z = position_pid_z_.update(Ep[2], dt);
+  double des_vel_x = position_pid_x_.update(Ep(0), dt);
+  double des_vel_y = position_pid_y_.update(Ep(1), dt);
+  double des_vel_z = position_pid_z_.update(Ep(2), dt);
 
   // | -------------------- position feedback ------------------- |
 
@@ -1597,9 +1597,9 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
     cmd.header.frame_id = uav_state.header.frame_id;
     cmd.header.stamp    = ros::Time::now();
 
-    cmd.velocity.x = des_vel[0];
-    cmd.velocity.y = des_vel[1];
-    cmd.velocity.z = des_vel[2];
+    cmd.velocity.x = des_vel(0);
+    cmd.velocity.y = des_vel(1);
+    cmd.velocity.z = des_vel(2);
 
     cmd.heading = tracker_command.heading;
 
@@ -1628,9 +1628,9 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
     cmd.header.frame_id = uav_state.header.frame_id;
     cmd.header.stamp    = ros::Time::now();
 
-    cmd.velocity.x = des_vel[0];
-    cmd.velocity.y = des_vel[1];
-    cmd.velocity.z = des_vel[2];
+    cmd.velocity.x = des_vel(0);
+    cmd.velocity.y = des_vel(1);
+    cmd.velocity.z = des_vel(2);
 
     cmd.heading_rate = des_hdg_rate + des_hdg_ff;
 
@@ -1695,8 +1695,7 @@ void Se3Controller::callbackDrs(mrs_uav_controllers::se3_controllerConfig& confi
 void Se3Controller::timerGains(const ros::TimerEvent& event) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains", _gain_filtering_rate_, 1.0, event);
-  mrs_lib::ScopeTimer timer =
-      mrs_lib::ScopeTimer("Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);

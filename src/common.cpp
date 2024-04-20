@@ -32,8 +32,8 @@ std::optional<Eigen::Vector3d> sanitizeDesiredForce(const Eigen::Vector3d& input
                                                     const std::string& node_name) {
 
   // calculate the force in spherical coordinates
-  double theta = acos(input[2]);
-  double phi   = atan2(input[1], input[0]);
+  double theta = acos(input(2));
+  double phi   = atan2(input(1), input(0));
 
   // check for the failsafe limit
   if (!std::isfinite(theta)) {
@@ -275,22 +275,22 @@ std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs:
 
   // | --------------- saturate the attitude rate --------------- |
 
-  if (rate_feedback[0] > rate_saturation[0]) {
-    rate_feedback[0] = rate_saturation[0];
-  } else if (rate_feedback[0] < -rate_saturation[0]) {
-    rate_feedback[0] = -rate_saturation[0];
+  if (rate_feedback(0) > rate_saturation(0)) {
+    rate_feedback(0) = rate_saturation(0);
+  } else if (rate_feedback(0) < -rate_saturation(0)) {
+    rate_feedback(0) = -rate_saturation(0);
   }
 
-  if (rate_feedback[1] > rate_saturation[1]) {
-    rate_feedback[1] = rate_saturation[1];
-  } else if (rate_feedback[1] < -rate_saturation[1]) {
-    rate_feedback[1] = -rate_saturation[1];
+  if (rate_feedback(1) > rate_saturation(1)) {
+    rate_feedback(1) = rate_saturation(1);
+  } else if (rate_feedback(1) < -rate_saturation(1)) {
+    rate_feedback(1) = -rate_saturation(1);
   }
 
-  if (rate_feedback[2] > rate_saturation[2]) {
-    rate_feedback[2] = rate_saturation[2];
-  } else if (rate_feedback[2] < -rate_saturation[2]) {
-    rate_feedback[2] = -rate_saturation[2];
+  if (rate_feedback(2) > rate_saturation(2)) {
+    rate_feedback(2) = rate_saturation(2);
+  } else if (rate_feedback(2) < -rate_saturation(2)) {
+    rate_feedback(2) = -rate_saturation(2);
   }
 
   // | ------------ fill in the attitude rate command ----------- |
@@ -299,9 +299,9 @@ std::optional<mrs_msgs::HwApiAttitudeRateCmd> attitudeController(const mrs_msgs:
 
   cmd.stamp = ros::Time::now();
 
-  cmd.body_rate.x = rate_feedback[0];
-  cmd.body_rate.y = rate_feedback[1];
-  cmd.body_rate.z = rate_feedback[2];
+  cmd.body_rate.x = rate_feedback(0);
+  cmd.body_rate.y = rate_feedback(1);
+  cmd.body_rate.z = rate_feedback(2);
 
   cmd.throttle = reference.throttle;
 
@@ -326,9 +326,9 @@ std::optional<mrs_msgs::HwApiControlGroupCmd> attitudeRateController(const mrs_m
 
   cmd.throttle = reference.throttle;
 
-  cmd.roll  = ctrl_group_action[0];
-  cmd.pitch = ctrl_group_action[1];
-  cmd.yaw   = ctrl_group_action[2];
+  cmd.roll  = ctrl_group_action(0);
+  cmd.pitch = ctrl_group_action(1);
+  cmd.yaw   = ctrl_group_action(2);
 
   return {cmd};
 }
@@ -374,7 +374,7 @@ mrs_msgs::HwApiActuatorCmd actuatorMixer(const mrs_msgs::HwApiControlGroupCmd& c
   actuator_msg.stamp = ros::Time::now();
 
   for (int i = 0; i < motors.size(); i++) {
-    actuator_msg.motors.push_back(motors[i]);
+    actuator_msg.motors.push_back(motors(i));
   }
 
   return actuator_msg;
