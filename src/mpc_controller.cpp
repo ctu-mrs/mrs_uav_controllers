@@ -344,7 +344,7 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   _tilt_angle_failsafe_ = M_PI * (_tilt_angle_failsafe_ / 180.0);
 
-  if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
+  if (_tilt_angle_failsafe_enabled_ && std::abs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[%s]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low", name_.c_str());
     return false;
   }
@@ -499,7 +499,7 @@ bool MpcController::activate(const ControlOutput &last_control_output) {
     rampup_last_time_  = ros::Time::now();
     rampup_throttle_   = throttle_last_controller.value();
 
-    rampup_duration_ = fabs(throttle_difference) / _rampup_speed_;
+    rampup_duration_ = std::abs(throttle_difference) / _rampup_speed_;
   }
 
   first_iteration_ = true;
@@ -577,7 +577,7 @@ MpcController::ControlOutput MpcController::updateActive(const mrs_msgs::UavStat
 
   last_update_time_ = uav_state.header.stamp;
 
-  if (fabs(dt) < 0.001) {
+  if (std::abs(dt) < 0.001) {
 
     ROS_DEBUG("[%s]: the last odometry message came too close (%.2f s)!", name_.c_str(), dt);
 
@@ -848,22 +848,22 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     double velocity;
     double coef = 1.5;
 
-    if (fabs(uav_state.acceleration.linear.x) < coef * max_acceleration_horizontal) {
+    if (std::abs(uav_state.acceleration.linear.x) < coef * max_acceleration_horizontal) {
       acceleration = uav_state.acceleration.linear.x;
     } else {
       acceleration = tracker_command.acceleration.x;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.acceleration.linear.x), coef, max_acceleration_horizontal);
+                         std::abs(uav_state.acceleration.linear.x), coef, max_acceleration_horizontal);
     }
 
-    if (fabs(uav_state.velocity.linear.x) < coef * max_speed_horizontal) {
+    if (std::abs(uav_state.velocity.linear.x) < coef * max_speed_horizontal) {
       velocity = uav_state.velocity.linear.x;
     } else {
       velocity = tracker_command.velocity.x;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.velocity.linear.x), coef, max_speed_horizontal);
+                         std::abs(uav_state.velocity.linear.x), coef, max_speed_horizontal);
     }
 
     initial_x << uav_state.pose.position.x, velocity, acceleration;
@@ -878,22 +878,22 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     double velocity;
     double coef = 1.5;
 
-    if (fabs(uav_state.acceleration.linear.y) < coef * max_acceleration_horizontal) {
+    if (std::abs(uav_state.acceleration.linear.y) < coef * max_acceleration_horizontal) {
       acceleration = uav_state.acceleration.linear.y;
     } else {
       acceleration = tracker_command.acceleration.y;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.acceleration.linear.y), coef, max_acceleration_horizontal);
+                         std::abs(uav_state.acceleration.linear.y), coef, max_acceleration_horizontal);
     }
 
-    if (fabs(uav_state.velocity.linear.y) < coef * max_speed_horizontal) {
+    if (std::abs(uav_state.velocity.linear.y) < coef * max_speed_horizontal) {
       velocity = uav_state.velocity.linear.y;
     } else {
       velocity = tracker_command.velocity.y;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.velocity.linear.y), coef, max_speed_horizontal);
+                         std::abs(uav_state.velocity.linear.y), coef, max_speed_horizontal);
     }
 
     initial_y << uav_state.pose.position.y, velocity, acceleration;
@@ -908,22 +908,22 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     double velocity;
     double coef = 1.5;
 
-    if (fabs(uav_state.acceleration.linear.z) < coef * max_acceleration_horizontal) {
+    if (std::abs(uav_state.acceleration.linear.z) < coef * max_acceleration_horizontal) {
       acceleration = uav_state.acceleration.linear.z;
     } else {
       acceleration = tracker_command.acceleration.z;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.acceleration.linear.z), coef, max_acceleration_horizontal);
+                         std::abs(uav_state.acceleration.linear.z), coef, max_acceleration_horizontal);
     }
 
-    if (fabs(uav_state.velocity.linear.z) < coef * max_speed_vertical) {
+    if (std::abs(uav_state.velocity.linear.z) < coef * max_speed_vertical) {
       velocity = uav_state.velocity.linear.z;
     } else {
       velocity = tracker_command.velocity.z;
 
       ROS_ERROR_THROTTLE(1.0, "[%s]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                         fabs(uav_state.velocity.linear.z), coef, max_speed_vertical);
+                         std::abs(uav_state.velocity.linear.z), coef, max_speed_vertical);
     }
 
     initial_z << uav_state.pose.position.z, velocity, acceleration;
@@ -1393,7 +1393,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
     // antiwindup
     double temp_gain = gains.km;
     if (rampup_active_ ||
-        (fabs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
+        (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
       temp_gain = 0;
       ROS_DEBUG_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
     }
@@ -1500,7 +1500,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   if (rampup_active_) {
 
     // deactivate the rampup when the times up
-    if (fabs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
+    if (std::abs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
 
       rampup_active_ = false;
 
@@ -2004,7 +2004,11 @@ void MpcController::timerGains(const ros::TimerEvent &event) {
 
   mute_gains_ = false;
 
-  const double dt = (event.current_real - event.last_real).toSec();
+  double dt = (event.current_real - event.last_real).toSec();
+
+  if (!std::isfinite(dt) || (dt <= 0) || (dt > 5 * (1.0 / _gain_filtering_rate_))) {
+    return;
+  }
 
   bool updated = false;
 
@@ -2062,13 +2066,13 @@ double MpcController::calculateGainChange(const double dt, const double current_
     double change_in_perc;
     double saturated_change;
 
-    if (fabs(current_value) < 1e-6) {
+    if (std::abs(current_value) < 1e-6) {
       change *= gains_filter_max_change;
     } else {
 
       saturated_change = change;
 
-      change_in_perc = (current_value + saturated_change) / current_value - 1.0;
+      change_in_perc = ((current_value + saturated_change) / current_value) - 1.0;
 
       if (change_in_perc > gains_filter_max_change) {
         saturated_change = current_value * gains_filter_max_change;
@@ -2076,7 +2080,7 @@ double MpcController::calculateGainChange(const double dt, const double current_
         saturated_change = current_value * -gains_filter_max_change;
       }
 
-      if (fabs(saturated_change) < fabs(change) * gains_filter_min_change) {
+      if (std::abs(saturated_change) < std::abs(change) * gains_filter_min_change) {
         change *= gains_filter_min_change;
       } else {
         change = saturated_change;
@@ -2084,7 +2088,7 @@ double MpcController::calculateGainChange(const double dt, const double current_
     }
   }
 
-  if (fabs(change) > 1e-3) {
+  if (std::abs(change) > 1e-3) {
     ROS_DEBUG("[%s]: changing gain '%s' from %.2f to %.2f", name_.c_str(), name.c_str(), current_value, desired_value);
     updated = true;
   }
