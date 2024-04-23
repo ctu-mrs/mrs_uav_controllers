@@ -1184,7 +1184,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       const double desired_bodyz_acc  = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
 
       if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
-        uav_mass_difference_ += 2 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+        uav_mass_difference_ += 0.1 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+
+        ROS_INFO_THROTTLE(0.1, "[Se3Controller]: mass estimation using IMU acc runs, mass difference %.3f kg", uav_mass_difference_);
       }
 
     } else if (tracker_command.use_velocity_vertical) {
