@@ -32,6 +32,8 @@ bool Tester::test() {
     }
   }
 
+  this->sleep(1.0);
+
   {
     auto [success, message] = uh->gotoAbs(0, 0, 2.0, 0);
 
@@ -50,7 +52,6 @@ bool Tester::test() {
     return false;
   }
 }
-
 
 TEST(TESTSuite, test) {
 
