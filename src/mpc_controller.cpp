@@ -20,6 +20,9 @@
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/geometry/cyclic.h>
+#include <mrs_lib/subscribe_handler.h>
+
+#include <sensor_msgs/Imu.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
 
@@ -89,6 +92,8 @@ private:
   std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers_;
   std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers_;
 
+  mrs_lib::SubscribeHandler<sensor_msgs::Imu> sh_imu_;
+
   // | ------------------------ uav state ----------------------- |
 
   mrs_msgs::UavState uav_state_;
@@ -122,6 +127,8 @@ private:
 
   double _uav_mass_;
   double uav_mass_difference_;
+  double last_thrust_force_;
+  double last_throttle_;
 
   Gains_t gains_;
 
@@ -336,6 +343,7 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   // mass estimator
   private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/km", gains_.km);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/acceleration_feedback", drs_params_.fuse_acceleration);
   private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/km_lim", gains_.km_lim);
 
   // constraints
@@ -373,10 +381,25 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
   private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
   private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
 
+  // | ------------------ finish loading params ----------------- |
+
   if (!private_handlers->param_loader->loadedSuccessfully()) {
     ROS_ERROR("[%s]: Could not load all parameters!", this->name_.c_str());
     return false;
   }
+
+  // | ----------------------- subscribers ---------------------- |
+
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.nh                 = nh_;
+  shopts.node_name          = "Se3Controller";
+  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
+  shopts.queue_size         = 10;
+  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
+
+  sh_imu_ = mrs_lib::SubscribeHandler<sensor_msgs::Imu>(shopts, "/" + common_handlers->uav_name + "/hw_api/imu");
 
   // | ---------------- prepare stuff from params --------------- |
 
@@ -387,6 +410,8 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
   }
 
   uav_mass_difference_ = 0;
+  last_thrust_force_   = 0;
+  last_throttle_       = 0;
   Iw_w_                = Eigen::Vector2d::Zero(2);
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
@@ -1390,16 +1415,34 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   {
     std::scoped_lock lock(mutex_gains_);
 
-    // antiwindup
-    double temp_gain = gains.km;
-    if (rampup_active_ ||
-        (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
-      temp_gain = 0;
-      ROS_DEBUG_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
-    }
+    if (tracker_command.use_acceleration && sh_imu_.hasMsg() && drs_params.fuse_acceleration) {
 
-    if (tracker_command.use_position_vertical) {
-      uav_mass_difference_ += temp_gain * Ep(2) * dt;
+      auto         imu                = sh_imu_.getMsg();
+      const double measured_bodyz_acc = imu->linear_acceleration.z;
+      const double desired_bodyz_acc  = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
+
+      if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
+        uav_mass_difference_ += 1.0 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+
+        ROS_INFO_THROTTLE(0.1, "[%s]: mass estimation using IMU acc runs, mass difference %.3f kg", this->name_.c_str(), uav_mass_difference_);
+      }
+
+    } else if (tracker_command.use_position_vertical) {
+
+      uav_mass_difference_ += gains.km * Ep(2) * dt;
+
+    } else if (tracker_command.use_velocity_vertical) {
+
+      // antiwindup
+      double temp_gain = gains.km;
+
+      if (rampup_active_ ||
+          (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
+        temp_gain = 0;
+        ROS_DEBUG_THROTTLE(1.0, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
+      }
+
+      uav_mass_difference_ += temp_gain * Ev(2) * dt;
     }
 
     // saturate the mass estimator
@@ -1495,6 +1538,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   // | -------------------- desired throttle -------------------- |
 
   double desired_thrust_force = f.dot(R.col(2));
+  last_thrust_force_          = desired_thrust_force;
   double throttle             = 0;
 
   if (rampup_active_) {
@@ -1643,6 +1687,7 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
   attitude_cmd.stamp       = ros::Time::now();
   attitude_cmd.orientation = mrs_lib::AttitudeConverter(Rd);
   attitude_cmd.throttle    = throttle;
+  last_throttle_           = throttle;
 
   if (output_modality == common::ATTITUDE) {
 

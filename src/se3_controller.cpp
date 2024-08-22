@@ -275,6 +275,7 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // mass estimator
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", gains_.km);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
 
   // integrator limits
@@ -1177,7 +1178,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     std::scoped_lock lock(mutex_gains_);
 
-    if (tracker_command.use_acceleration && sh_imu_.hasMsg()) {
+    if (tracker_command.use_acceleration && sh_imu_.hasMsg() && drs_params.fuse_acceleration) {
 
       auto         imu                = sh_imu_.getMsg();
       const double measured_bodyz_acc = imu->linear_acceleration.z;
@@ -1189,13 +1190,13 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
         ROS_INFO_THROTTLE(0.1, "[Se3Controller]: mass estimation using IMU acc runs, mass difference %.3f kg", uav_mass_difference_);
       }
 
-    } else if (tracker_command.use_velocity_vertical) {
-
-      uav_mass_difference_ += gains.km * Ev(2) * dt;
-
     } else if (tracker_command.use_position_vertical) {
 
       uav_mass_difference_ += gains.km * Ep(2) * dt;
+
+    } else if (tracker_command.use_velocity_vertical) {
+
+      uav_mass_difference_ += gains.km * Ev(2) * dt;
     }
 
     // saturate the mass estimator
