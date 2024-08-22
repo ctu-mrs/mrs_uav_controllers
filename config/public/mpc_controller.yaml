@@ -14,7 +14,7 @@ mrs_uav_controllers:
         km: 0.5 # [kg/s], mass estimator max rate
         km_lim: 20.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
-        acceleration_feedback: true
+        fuse_acceleration: true
 
       # preferred output mode:
       # - choose this one if more output modes are available

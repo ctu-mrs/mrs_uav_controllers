@@ -275,7 +275,7 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // mass estimator
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", gains_.km);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
 
   // integrator limits

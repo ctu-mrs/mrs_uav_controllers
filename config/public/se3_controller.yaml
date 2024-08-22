@@ -34,7 +34,7 @@ mrs_uav_controllers:
                           #
       mass_estimator:
 
-        acceleration_feedback: true
+        fuse_acceleration: true
 
     # PID gains for the position controller
     # used only when outputing desired "velocity"

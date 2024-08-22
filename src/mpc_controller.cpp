@@ -343,7 +343,7 @@ bool MpcController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_ua
 
   // mass estimator
   private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/km", gains_.km);
-  private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/acceleration_feedback", drs_params_.fuse_acceleration);
+  private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
   private_handlers->param_loader->loadParam(yaml_namespace + "so3/mass_estimator/km_lim", gains_.km_lim);
 
   // constraints
