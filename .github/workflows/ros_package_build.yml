@@ -3,7 +3,7 @@ name: ros_package_build
 on:
 
   push:
-    branches: [ master ]
+    branches: [ ros2 ]
 
     paths-ignore:
       - '**/README.md'
@@ -11,12 +11,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
 
   build:
-    uses: ctu-mrs/ci_scripts/.github/workflows/ros_package_build.yml@master
+    uses: ctu-mrs/ci_scripts/.github/workflows/ros_package_build.yml@ros2
     secrets:
       PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}

@@ -3,23 +3,23 @@ name: ros_build_test
 on:
 
   push:
-    branches: [ devel ]
+    branches: [ ros2_devel ]
 
     paths-ignore:
       - '**/README.md'
 
-    pull_request:
-      branches: [ master ]
+  pull_request:
+    branches: [ ros2 ]
 
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
 
   build:
-    uses: ctu-mrs/ci_scripts/.github/workflows/ros_build_test.yml@master
+    uses: ctu-mrs/ci_scripts/.github/workflows/ros_build_test.yml@ros2
     secrets:
       PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
