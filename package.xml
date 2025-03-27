@@ -1,32 +1,38 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
 
   <name>mrs_uav_controllers</name>
-  <version>1.0.4</version>
-  <description>The mrs_uav_controllers package</description>
 
-  <author email="tomas.baca@fel.cvut.cz">Tomas Baca</author>
-  <maintainer email="tomas.baca@fel.cvut.cz">Tomas Baca</maintainer>
+  <version>2.0.0</version>
+  <description>MRS UAV Controllers</description>
+
+  <author email="tomas.baca@fel.cvut.cz">klaxalk</author>
+  <maintainer email="tomas.baca@fel.cvut.cz">klaxalk</maintainer>
 
   <license>BSD 3-Clause</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_ros</buildtool_depend>
 
-  <depend>cmake_modules</depend>
-  <depend>dynamic_reconfigure</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>pluginlib</depend>
+  <depend>builtin_interfaces</depend>
+
   <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>eigen</depend>
+
   <depend>mrs_lib</depend>
   <depend>mrs_msgs</depend>
   <depend>mrs_uav_managers</depend>
-  <depend>pluginlib</depend>
-  <depend>roscpp</depend>
-  <depend>rospy</depend>
-  <depend>mrs_uav_testing</depend>
-
-  <test_depend>mrs_uav_gazebo_simulation</test_depend>
 
   <export>
-    <mrs_uav_managers plugin="${prefix}/plugins.xml" />
+    <build_type>ament_cmake</build_type>
   </export>
 
 </package>

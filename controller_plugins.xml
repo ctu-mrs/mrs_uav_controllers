@@ -1,0 +1,5 @@
+<library path="MrsUavControllers_MpcController">
+  <class type="mrs_uav_controllers::mpc_controller::MpcController" base_class_type="mrs_uav_managers::Controller">
+    <description>MpcController</description>
+  </class>
+</library>

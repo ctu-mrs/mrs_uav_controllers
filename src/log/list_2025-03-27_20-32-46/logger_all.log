@@ -1,0 +1,273 @@
+[0.200s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'list', '--base-paths', '/home/klaxalk/ws/install/..']
+[0.200s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='list', build_base='build', ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['/home/klaxalk/ws/install/..'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], topological_order=False, names_only=False, paths_only=False, topological_graph=False, topological_graph_dot=False, topological_graph_density=False, topological_graph_legend=False, topological_graph_dot_cluster=False, topological_graph_dot_include_skipped=False, mixin_files=None, mixin=None, verb_parser=<colcon_mixin.mixin.mixin_argument.MixinArgumentDecorator object at 0x7079b5bcc590>, verb_extension=<colcon_package_information.verb.list.ListVerb object at 0x7079b5b49970>, main=<bound method ListVerb.main of <colcon_package_information.verb.list.ListVerb object at 0x7079b5b49970>>, mixin_verb=('list',))
+[0.282s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.283s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.283s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.283s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.283s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.283s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/klaxalk/ws'
+[0.283s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extensions ['ignore', 'ignore_ament_install']
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'ignore'
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'ignore_ament_install'
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extensions ['colcon_pkg']
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'colcon_pkg'
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extensions ['colcon_meta']
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'colcon_meta'
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extensions ['ros']
+[0.284s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'ros'
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extensions ['cmake', 'python']
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'cmake'
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'python'
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extensions ['python_setup_py']
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/..) by extension 'python_setup_py'
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../build) by extensions ['ignore', 'ignore_ament_install']
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../build) by extension 'ignore'
+[0.340s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../build) ignored
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../install) by extensions ['ignore', 'ignore_ament_install']
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../install) by extension 'ignore'
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../install) ignored
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../log) by extensions ['ignore', 'ignore_ament_install']
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../log) by extension 'ignore'
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../log) ignored
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extensions ['ignore', 'ignore_ament_install']
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'ignore'
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'ignore_ament_install'
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extensions ['colcon_pkg']
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'colcon_pkg'
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extensions ['colcon_meta']
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'colcon_meta'
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extensions ['ros']
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'ros'
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extensions ['cmake', 'python']
+[0.341s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'cmake'
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'python'
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extensions ['python_setup_py']
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src) by extension 'python_setup_py'
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extensions ['ignore', 'ignore_ament_install']
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extension 'ignore'
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extension 'ignore_ament_install'
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extensions ['colcon_pkg']
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extension 'colcon_pkg'
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extensions ['colcon_meta']
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extension 'colcon_meta'
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extensions ['ros']
+[0.342s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_lib) by extension 'ros'
+[0.348s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/mrs_lib' with type 'ros.ament_cmake' and name 'mrs_lib'
+[0.348s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extensions ['ignore', 'ignore_ament_install']
+[0.348s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extension 'ignore'
+[0.348s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extension 'ignore_ament_install'
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extensions ['colcon_pkg']
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extension 'colcon_pkg'
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extensions ['colcon_meta']
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extension 'colcon_meta'
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extensions ['ros']
+[0.349s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_msgs) by extension 'ros'
+[0.350s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/mrs_msgs' with type 'ros.ament_cmake' and name 'mrs_msgs'
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extensions ['ignore', 'ignore_ament_install']
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extension 'ignore'
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extension 'ignore_ament_install'
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extensions ['colcon_pkg']
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extension 'colcon_pkg'
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extensions ['colcon_meta']
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extension 'colcon_meta'
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extensions ['ros']
+[0.351s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_multirotor_simulator) by extension 'ros'
+[0.354s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/mrs_multirotor_simulator' with type 'ros.ament_cmake' and name 'mrs_multirotor_simulator'
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extensions ['ignore', 'ignore_ament_install']
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extension 'ignore'
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extension 'ignore_ament_install'
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extensions ['colcon_pkg']
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extension 'colcon_pkg'
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extensions ['colcon_meta']
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extension 'colcon_meta'
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extensions ['ros']
+[0.354s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_controllers) by extension 'ros'
+[0.355s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/mrs_uav_controllers' with type 'ros.ament_cmake' and name 'mrs_uav_controllers'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extensions ['ignore', 'ignore_ament_install']
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'ignore'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'ignore_ament_install'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extensions ['colcon_pkg']
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'colcon_pkg'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extensions ['colcon_meta']
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'colcon_meta'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extensions ['ros']
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'ros'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extensions ['cmake', 'python']
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'cmake'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'python'
+[0.356s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extensions ['python_setup_py']
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core) by extension 'python_setup_py'
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extensions ['ignore', 'ignore_ament_install']
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'ignore'
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'ignore_ament_install'
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extensions ['colcon_pkg']
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'colcon_pkg'
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extensions ['colcon_meta']
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'colcon_meta'
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extensions ['ros']
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'ros'
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extensions ['cmake', 'python']
+[0.357s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'cmake'
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'python'
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extensions ['python_setup_py']
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages) by extension 'python_setup_py'
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages/mrs_uav_core) by extensions ['ignore', 'ignore_ament_install']
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages/mrs_uav_core) by extension 'ignore'
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/ros_packages/mrs_uav_core) ignored
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extensions ['ignore', 'ignore_ament_install']
+[0.358s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'ignore'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'ignore_ament_install'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extensions ['colcon_pkg']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'colcon_pkg'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extensions ['colcon_meta']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'colcon_meta'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extensions ['ros']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'ros'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extensions ['cmake', 'python']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'cmake'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'python'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extensions ['python_setup_py']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_core/test) by extension 'python_setup_py'
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extensions ['ignore', 'ignore_ament_install']
+[0.359s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extension 'ignore'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extension 'ignore_ament_install'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extensions ['colcon_pkg']
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extension 'colcon_pkg'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extensions ['colcon_meta']
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extension 'colcon_meta'
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extensions ['ros']
+[0.360s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_hw_api) by extension 'ros'
+[0.361s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/mrs_uav_hw_api' with type 'ros.ament_cmake' and name 'mrs_uav_hw_api'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extensions ['ignore', 'ignore_ament_install']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extension 'ignore'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extension 'ignore_ament_install'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extensions ['colcon_pkg']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extension 'colcon_pkg'
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extensions ['colcon_meta']
+[0.361s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extension 'colcon_meta'
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extensions ['ros']
+[0.362s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_managers) by extension 'ros'
+[0.364s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/mrs_uav_managers' with type 'ros.ament_cmake' and name 'mrs_uav_managers'
+[0.364s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extensions ['ignore', 'ignore_ament_install']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extension 'ignore'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extension 'ignore_ament_install'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extensions ['colcon_pkg']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extension 'colcon_pkg'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extensions ['colcon_meta']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extension 'colcon_meta'
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extensions ['ros']
+[0.365s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/mrs_uav_state_estimators) by extension 'ros'
+[0.367s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/mrs_uav_state_estimators' with type 'ros.ament_cmake' and name 'mrs_uav_state_estimators'
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extensions ['ignore', 'ignore_ament_install']
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'ignore'
+[0.367s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'ignore_ament_install'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extensions ['colcon_pkg']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'colcon_pkg'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extensions ['colcon_meta']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'colcon_meta'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extensions ['ros']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'ros'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extensions ['cmake', 'python']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'cmake'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'python'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extensions ['python_setup_py']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples) by extension 'python_setup_py'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extensions ['ignore', 'ignore_ament_install']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'ignore'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'ignore_ament_install'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extensions ['colcon_pkg']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'colcon_pkg'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extensions ['colcon_meta']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'colcon_meta'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extensions ['ros']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'ros'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extensions ['cmake', 'python']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'cmake'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'python'
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extensions ['python_setup_py']
+[0.368s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples) by extension 'python_setup_py'
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extensions ['ignore', 'ignore_ament_install']
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'ignore'
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'ignore_ament_install'
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extensions ['colcon_pkg']
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'colcon_pkg'
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extensions ['colcon_meta']
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'colcon_meta'
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extensions ['ros']
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'ros'
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extensions ['cmake', 'python']
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'cmake'
+[0.369s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'python'
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extensions ['python_setup_py']
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example) by extension 'python_setup_py'
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extensions ['ignore', 'ignore_ament_install']
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extension 'ignore'
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extension 'ignore_ament_install'
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extensions ['colcon_pkg']
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extension 'colcon_pkg'
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extensions ['colcon_meta']
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extension 'colcon_meta'
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extensions ['ros']
+[0.370s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager) by extension 'ros'
+[0.372s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugin_manager' with type 'ros.ament_cmake' and name 'example_plugin_manager'
+[0.372s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extensions ['ignore', 'ignore_ament_install']
+[0.372s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extension 'ignore'
+[0.372s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extension 'ignore_ament_install'
+[0.372s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extensions ['colcon_pkg']
+[0.372s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extension 'colcon_pkg'
+[0.373s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extensions ['colcon_meta']
+[0.373s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extension 'colcon_meta'
+[0.373s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extensions ['ros']
+[0.373s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins) by extension 'ros'
+[0.374s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/pluginlib_example/example_plugins' with type 'ros.ament_cmake' and name 'example_plugins'
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extensions ['ignore', 'ignore_ament_install']
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'ignore'
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'ignore_ament_install'
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extensions ['colcon_pkg']
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'colcon_pkg'
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extensions ['colcon_meta']
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'colcon_meta'
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extensions ['ros']
+[0.374s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'ros'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extensions ['cmake', 'python']
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'cmake'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'python'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extensions ['python_setup_py']
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples) by extension 'python_setup_py'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples/example_image_transport) by extensions ['ignore', 'ignore_ament_install']
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples/example_image_transport) by extension 'ignore'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples/example_image_transport) ignored
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples/vision_examples_utils) by extensions ['ignore', 'ignore_ament_install']
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples/vision_examples_utils) by extension 'ignore'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/extended_examples/vision_examples/vision_examples_utils) ignored
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extensions ['ignore', 'ignore_ament_install']
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extension 'ignore'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extension 'ignore_ament_install'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extensions ['colcon_pkg']
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extension 'colcon_pkg'
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extensions ['colcon_meta']
+[0.375s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extension 'colcon_meta'
+[0.376s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extensions ['ros']
+[0.376s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples) by extension 'ros'
+[0.377s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/ros2_examples/ros2_examples' with type 'ros.ament_cmake' and name 'ros2_examples'
+[0.377s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extensions ['ignore', 'ignore_ament_install']
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extension 'ignore'
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extension 'ignore_ament_install'
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extensions ['colcon_pkg']
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extension 'colcon_pkg'
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extensions ['colcon_meta']
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extension 'colcon_meta'
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extensions ['ros']
+[0.378s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib) by extension 'ros'
+[0.379s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/ros2_examples/ros2_lib' with type 'ros.ament_cmake' and name 'ros2_lib'
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extensions ['ignore', 'ignore_ament_install']
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extension 'ignore'
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extension 'ignore_ament_install'
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extensions ['colcon_pkg']
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extension 'colcon_pkg'
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extensions ['colcon_meta']
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extension 'colcon_meta'
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extensions ['ros']
+[0.380s] Level 1:colcon.colcon_core.package_identification:_identify(/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test) by extension 'ros'
+[0.381s] DEBUG:colcon.colcon_core.package_identification:Package '/home/klaxalk/ws/install/../src/ros2_examples/sub_pub_torture_test' with type 'ros.ament_cmake' and name 'sub_pub_torture_test'
+[0.381s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults

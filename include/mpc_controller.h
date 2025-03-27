@@ -1,7 +1,7 @@
 #ifndef MPC_CONTROLLER_SOLVER
 #define MPC_CONTROLLER_SOLVER
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <eigen3/Eigen/Eigen>
 #include <mutex>
 
