@@ -31,6 +31,10 @@ mrs_uav_controllers:
                           #  1 = control_group,
                           #  2 = attitude_rate,
                           #  3 = attitude,}
+                          #
+      mass_estimator:
+
+        fuse_acceleration: false
 
     # PID gains for the position controller
     # used only when outputing desired "velocity"

@@ -16,6 +16,9 @@
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/geometry/cyclic.h>
+#include <mrs_lib/subscribe_handler.h>
+
+#include <sensor_msgs/Imu.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
 
@@ -89,6 +92,8 @@ private:
   std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers_;
   std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers_;
 
+  mrs_lib::SubscribeHandler<sensor_msgs::Imu> sh_imu_;
+
   // | ------------------------ uav state ----------------------- |
 
   mrs_msgs::UavState uav_state_;
@@ -122,6 +127,8 @@ private:
 
   double _uav_mass_;
   double uav_mass_difference_;
+  double last_thrust_force_;
+  double last_throttle_;
 
   Gains_t gains_;
 
@@ -268,6 +275,7 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // mass estimator
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", gains_.km);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
 
   // integrator limits
@@ -320,6 +328,19 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
     return false;
   }
 
+  // | ----------------------- subscribers ---------------------- |
+
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.nh                 = nh_;
+  shopts.node_name          = "Se3Controller";
+  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
+  shopts.queue_size         = 10;
+  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
+
+  sh_imu_ = mrs_lib::SubscribeHandler<sensor_msgs::Imu>(shopts, "/" + common_handlers->uav_name + "/hw_api/imu");
+
   // | ---------------- prepare stuff from params --------------- |
 
   if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
@@ -330,6 +351,8 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // initialize the integrals
   uav_mass_difference_ = 0;
+  last_thrust_force_   = 0;
+  last_throttle_       = 0;
   Iw_w_                = Eigen::Vector2d::Zero(2);
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
@@ -760,11 +783,13 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // Op - position in global frame
   // Ov - velocity in global frame
-  Eigen::Vector3d Op(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
-  Eigen::Vector3d Ov(uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z);
+  // Oa - acceleration in global frame
+  const Eigen::Vector3d Op(uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z);
+  const Eigen::Vector3d Ov(uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z);
+  const Eigen::Vector3d Oa(uav_state.acceleration.linear.x, uav_state.acceleration.linear.y, uav_state.acceleration.linear.z);
 
   // R - current uav attitude
-  Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state.pose.orientation);
+  const Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state.pose.orientation);
 
   // Ow - UAV angular rate
   Eigen::Vector3d Ow(uav_state.velocity.angular.x, uav_state.velocity.angular.y, uav_state.velocity.angular.z);
@@ -782,8 +807,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   Eigen::Vector3d Ev(0, 0, 0);
 
   if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
-      tracker_command.use_position_vertical) {  // use_position_vertical = true, not a mistake, this provides dampening
+      tracker_command.use_position_vertical) {  // use_position_vertical == true, not a mistake, this provides dampening
     Ev = Rv - Ov;
+  }
+
+  // acceleration control error
+  Eigen::Vector3d Ea(0, 0, 0);
+
+  if (tracker_command.use_acceleration) {
+    Ea = Ra - Oa;
   }
 
   // | --------------------- load the gains --------------------- |
@@ -873,7 +905,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // construct the desired force vector
 
-  double total_mass = _uav_mass_ + uav_mass_difference_;
+  const double total_mass = _uav_mass_ + uav_mass_difference_;
 
   Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
   Eigen::Vector3d position_feedback = Kp * Ep.array();
@@ -1142,11 +1174,29 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // |                integrate the mass difference               |
   // --------------------------------------------------------------
 
-  {
+  if (!rampup_active_) {
+
     std::scoped_lock lock(mutex_gains_);
 
-    if (tracker_command.use_position_vertical && !rampup_active_) {
+    if (tracker_command.use_acceleration && sh_imu_.hasMsg() && drs_params.fuse_acceleration) {
+
+      auto         imu                = sh_imu_.getMsg();
+      const double measured_bodyz_acc = imu->linear_acceleration.z;
+      const double desired_bodyz_acc  = mrs_lib::quadratic_throttle_model::throttleToForce(common_handlers_->throttle_model, last_throttle_) / total_mass;
+
+      if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
+        uav_mass_difference_ += 1.0 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
+
+        ROS_INFO_THROTTLE(0.1, "[Se3Controller]: mass estimation using IMU acc runs, mass difference %.3f kg", uav_mass_difference_);
+      }
+
+    } else if (tracker_command.use_position_vertical) {
+
       uav_mass_difference_ += gains.km * Ep(2) * dt;
+
+    } else if (tracker_command.use_velocity_vertical) {
+
+      uav_mass_difference_ += gains.km * Ev(2) * dt;
     }
 
     // saturate the mass estimator
@@ -1241,8 +1291,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // | -------------------- desired throttle -------------------- |
 
-  double desired_thrust_force = f.dot(R.col(2));
-  double throttle             = 0;
+  const double desired_thrust_force = f.dot(R.col(2));
+  last_thrust_force_                = desired_thrust_force;
+  double throttle                   = 0;
 
   if (tracker_command.use_throttle) {
 
@@ -1375,6 +1426,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   attitude_cmd.stamp       = ros::Time::now();
   attitude_cmd.orientation = mrs_lib::AttitudeConverter(Rd);
   attitude_cmd.throttle    = throttle;
+  last_throttle_           = throttle;
 
   if (output_modality == common::ATTITUDE) {
 

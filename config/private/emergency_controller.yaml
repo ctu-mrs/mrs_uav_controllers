@@ -48,6 +48,8 @@ mrs_uav_controllers:
         km: 0.5 # [kg/s], mass estimator max rate
         km_lim: 5.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection]
 
+        fuse_acceleration: false
+
       gain_filtering:
 
         rate: 10.0 # [Hz]
