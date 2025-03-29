@@ -41,6 +41,7 @@ set(DEPENDENCIES
   sensor_msgs
   mrs_uav_managers
   Eigen3
+  mrs_mpc_solvers
 )
 
 set(LIBRARIES
@@ -56,36 +57,10 @@ include_directories(
   ${rclcpp_INCLUDE_DIRS}
   ${mrs_lib_INCLUDE_DIRS}
   ${mrs_uav_managers_INCLUDE_DIRS}
+  ${mrs_mpc_solvers_INCLUDE_DIRS}
 )
 
-# Mpc Solver Library
-
-# Store in CMAKE_DEB_HOST_ARCH var the current build architecture
-execute_process(COMMAND
-  dpkg-architecture
-  -qDEB_HOST_ARCH
-  OUTPUT_VARIABLE
-  CMAKE_DEB_HOST_ARCH
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-
-# deduce the library path based on the system architecture
-if(${CMAKE_DEB_HOST_ARCH} MATCHES "armhf")
-  MESSAGE(FATAL_ERROR "Mising MpcControllerSolver.so for armhf")
-elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "i386")
-  MESSAGE(FATAL_ERROR "Mising MpcControllerSolver.so for i386")
-elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "x64")
-  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/x64/libMpcControllerSolver.so)
-elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "amd64")
-  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/x64/libMpcControllerSolver.so)
-elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "arm64")
-  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/arm64/libMpcControllerSolver.so)
-else()
-  MESSAGE(FATAL_ERROR ${CMAKE_DEB_HOST_ARCH})
-  MESSAGE(FATAL_ERROR "MpcControllerSolver.so has not been selected, check CMakeLists.txt.")
-endif()
-
-# Common estimators
+# MPC Controller
 
 add_library(MrsUavControllers_MpcController SHARED
   src/mpc_controller.cpp
@@ -93,11 +68,8 @@ add_library(MrsUavControllers_MpcController SHARED
   )
 
 ament_target_dependencies(MrsUavControllers_MpcController
+  mrs_mpc_solvers
   ${DEPENDENCIES}
-  )
-
-target_link_libraries(MrsUavControllers_MpcController
-  ${MPC_CONTROLLER_SOLVER_BIN}
   )
 
 target_compile_definitions(MrsUavControllers_MpcController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})

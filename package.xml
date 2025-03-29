@@ -30,6 +30,7 @@
   <depend>mrs_lib</depend>
   <depend>mrs_msgs</depend>
   <depend>mrs_uav_managers</depend>
+  <depend>mrs_mpc_solvers</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
