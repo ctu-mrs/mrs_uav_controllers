@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(USE_ROS_TIMER 0)
 
 if(${USE_ROS_TIMER})
-  MESSAGE(WARNING "[mrs_uav_managers]: Compiling with ROS Timers. This can cause high CPU load in runtime.")
+  MESSAGE(WARNING "[mrs_uav_controllers]: Compiling with ROS Timers. This can cause high CPU load in runtime.")
 endif()
 
 # set the compile options to show code warnings
@@ -107,7 +107,7 @@ target_compile_definitions(MrsUavControllers_MpcController PRIVATE USE_ROS_TIMER
 ## --------------------------------------------------------------
 
 # <package of the base class>, <relative path to the xml>
-pluginlib_export_plugin_description_file(mrs_uav_managers controller_plugins.xml)
+pluginlib_export_plugin_description_file(mrs_uav_managers plugins.xml)
 
 ## --------------------------------------------------------------
 ## |                           install                          |
