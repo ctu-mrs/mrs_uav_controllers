@@ -715,7 +715,7 @@ void MpcController::updateInactive(const mrs_msgs::msg::UavState &uav_state, [[m
 
 //}
 
-/* //{ updateWhenAcctive() */
+/* //{ updateActive() */
 
 MpcController::ControlOutput MpcController::updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
 

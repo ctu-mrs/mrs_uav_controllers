@@ -1,7 +1,6 @@
 /* includes //{ */
 
-#include <ros/ros.h>
-#include <ros/package.h>
+#include <rclcpp/rclcpp.hpp>
 
 #include <common.h>
 
@@ -10,7 +9,19 @@
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/mutex.h>
-#include <mrs_lib/subscribe_handler.h>
+#include <mrs_lib/subscriber_handler.h>
+
+#include <ament_index_cpp/get_package_share_directory.hpp>
+
+//}
+
+/* typedefs //{ */
+
+#if USE_ROS_TIMER == 1
+typedef mrs_lib::ROSTimer TimerType;
+#else
+typedef mrs_lib::ThreadTimer TimerType;
+#endif
 
 //}
 
@@ -25,28 +36,29 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
-                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
+  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   bool activate(const ControlOutput &last_control_output);
+
   void deactivate(void);
 
-  void updateInactive(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
+  void updateInactive(const mrs_msgs::msg::UavState &uav_state, const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command);
 
-  ControlOutput updateActive(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+  ControlOutput updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command);
 
-  const mrs_msgs::ControllerStatus getStatus();
+  const mrs_msgs::msg::ControllerStatus getStatus();
 
-  void switchOdometrySource(const mrs_msgs::UavState &new_uav_state);
+  void switchOdometrySource(const mrs_msgs::msg::UavState &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
-  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
-  double getHeadingSafely(const geometry_msgs::Quaternion &quaternion);
+  double getHeadingSafely(const geometry_msgs::msg::QuaternionStamped::ConstSharedPtr quaternion);
 
 private:
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr  node_;
+  rclcpp::Clock::SharedPtr clock_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
@@ -64,8 +76,8 @@ private:
 
   // | ------------------- remember uav state ------------------- |
 
-  mrs_msgs::UavState uav_state_;
-  std::mutex         mutex_uav_state_;
+  mrs_msgs::msg::UavState uav_state_;
+  std::mutex              mutex_uav_state_;
 
   // | --------------------- throttle control --------------------- |
 
@@ -81,14 +93,14 @@ private:
 
   double heading_setpoint_;
 
-  mrs_lib::SubscribeHandler<geometry_msgs::QuaternionStamped> sh_hw_api_orientation_;
+  mrs_lib::SubscriberHandler<geometry_msgs::msg::QuaternionStamped> sh_hw_api_orientation_;
 
   // | ------------------ activation and output ----------------- |
 
   ControlOutput last_control_output_;
   ControlOutput activation_control_output_;
 
-  ros::Time         last_update_time_;
+  rclcpp::Time      last_update_time_;
   std::atomic<bool> first_iteration_ = true;
 
   // | ------------------------ profiler ------------------------ |
@@ -98,8 +110,8 @@ private:
 
   // | ----------------------- constraints ---------------------- |
 
-  mrs_msgs::DynamicsConstraints constraints_;
-  std::mutex                    mutex_constraints_;
+  mrs_msgs::msg::DynamicsConstraints constraints_;
+  std::mutex                         mutex_constraints_;
 };
 
 //}
@@ -110,33 +122,32 @@ private:
 
 /* initialize() //{ */
 
-bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
-                                    std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
+bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
-  nh_ = nh;
+  node_  = node;
+  clock_ = node->get_clock();
+
+  RCLCPP_INFO(node_->get_logger(), "initializing");
 
   common_handlers_  = common_handlers;
   private_handlers_ = private_handlers;
 
   _uav_mass_ = common_handlers->getMass();
-
-  ros::Time::waitForValid();
-
   // | ---------- loading params using the parent's nh ---------- |
 
-  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
+  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_node, "ControlManager");
 
   param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
 
   if (!param_loader_parent.loadedSuccessfully()) {
-    ROS_ERROR("[FailsafeController]: Could not load all parameters!");
+    RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: Could not load all parameters!");
     return false;
   }
 
   // | -------------------- loading my params ------------------- |
 
-  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
 
   const std::string yaml_namespace = "mrs_uav_controllers/failsafe_controller/";
 
@@ -151,7 +162,7 @@ bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<m
   private_handlers->param_loader->loadParam(yaml_namespace + "acceleration_output/descend_acceleration", _descend_acceleration_);
 
   if (!private_handlers->param_loader->loadedSuccessfully()) {
-    ROS_ERROR("[FailsafeController]: Could not load all parameters!");
+    RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: Could not load all parameters!");
     return false;
   }
 
@@ -162,16 +173,14 @@ bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<m
 
   // | ----------------------- subscribers ---------------------- |
 
-  mrs_lib::SubscribeHandlerOptions shopts;
-  shopts.nh                 = nh_;
-  shopts.node_name          = "FailsafeController";
+  mrs_lib::SubscriberHandlerOptions shopts;
+
+  shopts.node               = node_;
   shopts.no_message_timeout = mrs_lib::no_timeout;
   shopts.threadsafe         = true;
   shopts.autostart          = true;
-  shopts.queue_size         = 10;
-  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
-  sh_hw_api_orientation_ = mrs_lib::SubscribeHandler<geometry_msgs::QuaternionStamped>(shopts, "/" + common_handlers->uav_name + "/" + "hw_api/orientation");
+  sh_hw_api_orientation_ = mrs_lib::SubscriberHandler<geometry_msgs::msg::QuaternionStamped>(shopts, "/" + common_handlers->uav_name + "/" + "hw_api/orientation");
 
   // | ----------- calculate the default hover throttle ----------- |
 
@@ -179,11 +188,11 @@ bool FailsafeController::initialize(const ros::NodeHandle &nh, std::shared_ptr<m
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(common_handlers->parent_nh, "FailsafeController", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(common_handlers->parent_node, "FailsafeController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[FailsafeController]: initialized");
+  RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: initialized");
 
   is_initialized_ = true;
 
@@ -200,7 +209,7 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
 
   if (!last_control_output.control_output) {
 
-    ROS_WARN("[FailsafeController]: activated without getting the last controller's command");
+    RCLCPP_WARN(node_->get_logger(), "[FailsafeController]: activated without getting the last controller's command");
 
     return false;
 
@@ -212,13 +221,13 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
 
       auto hw_api_orientation = sh_hw_api_orientation_.getMsg();
 
-      heading_setpoint_ = getHeadingSafely(hw_api_orientation->quaternion);
+      heading_setpoint_ = getHeadingSafely(hw_api_orientation);
 
-      ROS_INFO("[FailsafeController]: activated with heading = %.2f rad", heading_setpoint_);
+      RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: activated with heading = %.2f rad", heading_setpoint_);
 
     } else {
 
-      ROS_ERROR("[FailsafeController]: missing orientation from HW API, activated with heading = 0 rad");
+      RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: missing orientation from HW API, activated with heading = 0 rad");
 
       heading_setpoint_ = 0;
     }
@@ -233,10 +242,9 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
 
     activation_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-    hover_throttle_ = _initial_throttle_percentage_ * mrs_lib::quadratic_throttle_model::forceToThrottle(
-                                                          common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
+    hover_throttle_ = _initial_throttle_percentage_ * mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
 
-    ROS_INFO("[FailsafeController]: activated with uav_mass_difference %.2f kg.", uav_mass_difference_);
+    RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: activated with uav_mass_difference %.2f kg, hover_throttle %.3f", uav_mass_difference_, hover_throttle_);
   }
 
   first_iteration_ = true;
@@ -256,18 +264,18 @@ void FailsafeController::deactivate(void) {
   first_iteration_     = false;
   uav_mass_difference_ = 0;
 
-  ROS_INFO("[FailsafeController]: deactivated");
+  RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: deactivated");
 }
 
 //}
 
 /* updateInactive() //{ */
 
-void FailsafeController::updateInactive(const mrs_msgs::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
+void FailsafeController::updateInactive(const mrs_msgs::msg::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
-  last_update_time_ = ros::Time::now();
+  last_update_time_ = clock_->now();
 
   first_iteration_ = false;
 }
@@ -276,11 +284,10 @@ void FailsafeController::updateInactive(const mrs_msgs::UavState &uav_state, [[m
 
 /* //{ updateWhenAcctive() */
 
-FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msgs::UavState &                       uav_state,
-                                                                   [[maybe_unused]] const mrs_msgs::TrackerCommand &tracker_command) {
+FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msgs::msg::UavState &uav_state, [[maybe_unused]] const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
-  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   {
     std::scoped_lock lock(mutex_uav_state_);
@@ -302,16 +309,16 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
     dt               = 0.01;
     first_iteration_ = false;
   } else {
-    dt = (ros::Time::now() - last_update_time_).toSec();
+    dt = (clock_->now() - last_update_time_).seconds();
   }
 
-  last_update_time_ = ros::Time::now();
+  last_update_time_ = clock_->now();
 
   hover_throttle_ -= _throttle_decrease_rate_ * dt;
 
   if (!std::isfinite(hover_throttle_)) {
     hover_throttle_ = 0;
-    ROS_ERROR("[FailsafeController]: NaN detected in variable 'hover_throttle', setting it to 0 and returning!!!");
+    RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: NaN detected in variable 'hover_throttle', setting it to 0 and returning!!!");
   } else if (hover_throttle_ > 1.0) {
     hover_throttle_ = 1.0;
   } else if (hover_throttle_ < 0.0) {
@@ -327,7 +334,7 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
   auto highest_modality = common::getHighestOuput(common_handlers_->control_output_modalities);
 
   if (!highest_modality) {
-    ROS_ERROR_THROTTLE(1.0, "[FailsafeController]: output modalities are empty! This error should never appear.");
+    RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: output modalities are empty! This error should never appear.");
     return control_output;
   }
 
@@ -338,7 +345,7 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
   // --------------------------------------------------------------
 
   if (highest_modality.value() == common::POSITION) {
-    ROS_INFO_THROTTLE(1.0, "[FailsafeController]: returning empty command, because we are at the position modality");
+    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning empty command, because we are at the position modality");
     return control_output;
   }
 
@@ -348,32 +355,32 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
 
   if (highest_modality.value() == common::VELOCITY_HDG) {
 
-    mrs_msgs::HwApiVelocityHdgCmd vel_cmd;
+    mrs_msgs::msg::HwApiVelocityHdgCmd vel_cmd;
 
-    vel_cmd.header.stamp = ros::Time::now();
+    vel_cmd.header.stamp = clock_->now();
 
     vel_cmd.velocity.x = 0;
     vel_cmd.velocity.y = 0;
     vel_cmd.velocity.z = -_descend_speed_;
     vel_cmd.heading    = heading_setpoint_;
 
-    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning velocity+hdg output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning velocity+hdg output");
     control_output.control_output = vel_cmd;
     return control_output;
   }
 
   if (highest_modality.value() == common::VELOCITY_HDG_RATE) {
 
-    mrs_msgs::HwApiVelocityHdgRateCmd vel_cmd;
+    mrs_msgs::msg::HwApiVelocityHdgRateCmd vel_cmd;
 
-    vel_cmd.header.stamp = ros::Time::now();
+    vel_cmd.header.stamp = clock_->now();
 
     vel_cmd.velocity.x   = 0;
     vel_cmd.velocity.y   = 0;
     vel_cmd.velocity.z   = -_descend_speed_;
     vel_cmd.heading_rate = 0.0;
 
-    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning velocity+hdg rate output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning velocity+hdg rate output");
     control_output.control_output = vel_cmd;
     return control_output;
   }
@@ -384,32 +391,32 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
 
   if (highest_modality.value() == common::ACCELERATION_HDG) {
 
-    mrs_msgs::HwApiAccelerationHdgCmd acc_cmd;
+    mrs_msgs::msg::HwApiAccelerationHdgCmd acc_cmd;
 
-    acc_cmd.header.stamp = ros::Time::now();
+    acc_cmd.header.stamp = clock_->now();
 
     acc_cmd.acceleration.x = 0;
     acc_cmd.acceleration.y = 0;
     acc_cmd.acceleration.z = -_descend_acceleration_;
     acc_cmd.heading        = heading_setpoint_;
 
-    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning acceleration+hdg output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning acceleration+hdg output");
     control_output.control_output = acc_cmd;
     return control_output;
   }
 
   if (highest_modality.value() == common::ACCELERATION_HDG_RATE) {
 
-    mrs_msgs::HwApiAccelerationHdgRateCmd acc_cmd;
+    mrs_msgs::msg::HwApiAccelerationHdgRateCmd acc_cmd;
 
-    acc_cmd.header.stamp = ros::Time::now();
+    acc_cmd.header.stamp = clock_->now();
 
     acc_cmd.acceleration.x = 0;
     acc_cmd.acceleration.y = 0;
     acc_cmd.acceleration.z = -_descend_acceleration_;
     acc_cmd.heading_rate   = 0.0;
 
-    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning acceleration+hdg rate output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning acceleration+hdg rate output");
     control_output.control_output = acc_cmd;
     return control_output;
   }
@@ -418,14 +425,14 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
   // |                       attitude output                      |
   // --------------------------------------------------------------
 
-  mrs_msgs::HwApiAttitudeCmd attitude_cmd;
+  mrs_msgs::msg::HwApiAttitudeCmd attitude_cmd;
 
-  attitude_cmd.stamp       = ros::Time::now();
+  attitude_cmd.stamp       = clock_->now();
   attitude_cmd.orientation = mrs_lib::AttitudeConverter(0, 0, heading_setpoint_);
   attitude_cmd.throttle    = hover_throttle_;
 
   if (highest_modality.value() == common::ATTITUDE) {
-    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning attitude output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning attitude output");
     control_output.control_output = attitude_cmd;
     return control_output;
   }
@@ -438,10 +445,10 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
   Eigen::Vector3d rate_ff(0, 0, 0);
   Eigen::Vector3d Kq(_kq_, _kq_, _kq_);
 
-  auto attitude_rate_command = common::attitudeController(uav_state, attitude_cmd, rate_ff, attitude_rate_saturation, Kq, false);
+  auto attitude_rate_command = common::attitudeController(node_, uav_state, attitude_cmd, rate_ff, attitude_rate_saturation, Kq, false);
 
   if (highest_modality.value() == common::ATTITUDE_RATE) {
-    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning attitude rate output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning attitude rate output");
     control_output.control_output = attitude_rate_command;
     return control_output;
   }
@@ -452,10 +459,10 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
 
   Eigen::Vector3d Kw = common_handlers_->detailed_model_params->inertia.diagonal() * _kw_;
 
-  auto control_group_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
+  auto control_group_command = common::attitudeRateController(node_, uav_state, attitude_rate_command.value(), Kw);
 
   if (highest_modality.value() == common::CONTROL_GROUP) {
-    ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning control group output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning control group output");
     control_output.control_output = control_group_command;
     return control_output;
   }
@@ -464,10 +471,11 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
   // |                            mixer                           |
   // --------------------------------------------------------------
 
-  mrs_msgs::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
 
-  ROS_DEBUG_THROTTLE(1.0, "[FailsafeController]: returning actuators output");
+  RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning actuators output");
   control_output.control_output = actuator_cmd;
+
   return control_output;
 }
 
@@ -475,9 +483,9 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
 
 /* getStatus() //{ */
 
-const mrs_msgs::ControllerStatus FailsafeController::getStatus() {
+const mrs_msgs::msg::ControllerStatus FailsafeController::getStatus() {
 
-  mrs_msgs::ControllerStatus controller_status;
+  mrs_msgs::msg::ControllerStatus controller_status;
 
   controller_status.active = is_active_;
 
@@ -488,7 +496,7 @@ const mrs_msgs::ControllerStatus FailsafeController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void FailsafeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState &new_uav_state) {
+void FailsafeController::switchOdometrySource([[maybe_unused]] const mrs_msgs::msg::UavState &new_uav_state) {
 }
 
 //}
@@ -502,38 +510,42 @@ void FailsafeController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr FailsafeController::setConstraints([
-    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> FailsafeController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
+
+  std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
   if (!is_initialized_) {
-    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+    response->success = false;
+    response->message = "not initialized";
+    return response;
   }
 
   mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
 
-  ROS_INFO("[FailsafeController]: updating constraints");
+  RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: updating constraints");
 
-  mrs_msgs::DynamicsConstraintsSrvResponse res;
-  res.success = true;
-  res.message = "constraints updated";
+  response->success = true;
+  response->message = "constraints updated";
 
-  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+  return response;
 }
 
 //}
 
+// | ------------------------- methods ------------------------ |
+
 /* getHeadingSafely() //{ */
 
-double FailsafeController::getHeadingSafely(const geometry_msgs::Quaternion &quaternion) {
+double FailsafeController::getHeadingSafely(const geometry_msgs::msg::QuaternionStamped::ConstSharedPtr quaternion) {
 
   try {
-    return mrs_lib::AttitudeConverter(quaternion).getHeading();
+    return mrs_lib::AttitudeConverter(quaternion->quaternion).getHeading();
   }
   catch (...) {
   }
 
   try {
-    return mrs_lib::AttitudeConverter(quaternion).getYaw();
+    return mrs_lib::AttitudeConverter(quaternion->quaternion).getYaw();
   }
   catch (...) {
   }
@@ -547,5 +559,5 @@ double FailsafeController::getHeadingSafely(const geometry_msgs::Quaternion &qua
 
 }  // namespace mrs_uav_controllers
 
-#include <pluginlib/class_list_macros.h>
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::failsafe_controller::FailsafeController, mrs_uav_managers::Controller)

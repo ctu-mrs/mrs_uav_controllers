@@ -46,6 +46,7 @@ set(DEPENDENCIES
 
 set(LIBRARIES
   MrsUavControllers_MpcController
+  MrsUavControllers_FailsafeController
   )
 
 foreach(DEP IN LISTS DEPENDENCIES)
@@ -73,6 +74,19 @@ ament_target_dependencies(MrsUavControllers_MpcController
   )
 
 target_compile_definitions(MrsUavControllers_MpcController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
+
+# Failsafe Controller
+
+add_library(MrsUavControllers_FailsafeController SHARED
+  src/failsafe_controller.cpp
+  src/common.cpp
+  )
+
+ament_target_dependencies(MrsUavControllers_FailsafeController
+  ${DEPENDENCIES}
+  )
+
+target_compile_definitions(MrsUavControllers_FailsafeController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
 ## --------------------------------------------------------------
 ## |                       export plugins                       |

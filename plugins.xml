@@ -3,3 +3,9 @@
     <description>MpcController</description>
   </class>
 </library>
+
+<library path="MrsUavControllers_FailsafeController">
+  <class type="mrs_uav_controllers::failsafe_controller::FailsafeController" base_class_type="mrs_uav_managers::Controller">
+    <description>FailsafeController</description>
+  </class>
+</library>
