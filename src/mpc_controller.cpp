@@ -18,6 +18,7 @@
 #include <mrs_lib/geometry/cyclic.h>
 #include <mrs_lib/subscriber_handler.h>
 #include <mrs_lib/timer_handler.h>
+#include <mrs_lib/utils.h>
 
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -136,9 +137,13 @@ private:
   DrsParams_t drs_params_;
   std::mutex  mutex_drs_params_;
 
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+
   rcl_interfaces::msg::SetParametersResult callbackParameters(std::vector<rclcpp::Parameter> parameters);
 
   void setParamsToServer(const DrsParams_t &drs_params);
+
+  std::atomic<bool> params_setting_running_ = false;
 
   // | ----------------------- controllers ---------------------- |
 
@@ -463,10 +468,10 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "horizontal.kiwxy", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "horizontal.kibxy", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "horizontal.kiwxy_lim", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "horizontal.kibxy_lim", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", 0.0, param_desc);
   }
 
   {
@@ -481,7 +486,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "attitude.kq_roll_pitch", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", 0.0, param_desc);
   }
 
   {
@@ -496,7 +501,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "attitude.kq_yaw", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", 0.0, param_desc);
   }
 
   {
@@ -511,7 +516,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "mass.km", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km", 0.0, param_desc);
   }
 
   {
@@ -519,7 +524,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "mass.fuse_acceleration", false, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", false, param_desc);
   }
 
   {
@@ -534,7 +539,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "mass.km_lim", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km_lim", 0.0, param_desc);
   }
 
   {
@@ -549,7 +554,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "preferred_output_mode", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/preferred_output_mode", 0, param_desc);
   }
 
   {
@@ -557,7 +562,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
     param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
 
-    node_->declare_parameter(node_->get_sub_namespace() + "jerk_feedforward", false, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/jerk_feedforward", false, param_desc);
   }
 
   drs_params_.kiwxy         = gains_.kiwxy;
@@ -571,11 +576,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   setParamsToServer(drs_params_);
 
-  // old ROS1 drs
-  /* drs_.reset(new Drs_t(mutex_drs_, nh_)); */
-  /* drs_->updateConfig(drs_params_); */
-  /* Drs_t::CallbackType f = boost::bind(&MpcController::callbackDrs, this, _1, _2); */
-  /* drs_->setCallback(f); */
+  param_callback_handle_ = node_->add_on_set_parameters_callback(std::bind(&MpcController::callbackParameters, this, std::placeholders::_1));
 
   // | --------------------- service servers -------------------- |
 
@@ -2121,14 +2122,87 @@ void MpcController::PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, 
 // |                          callbacks                         |
 // --------------------------------------------------------------
 
-/* //{ callbackDrs() */
+/* callbackParameters() //{ */
 
-/* void MpcController::callbackDrs(mrs_uav_controllers::mpc_controllerConfig &config, [[maybe_unused]] uint32_t level) { */
+rcl_interfaces::msg::SetParametersResult MpcController::callbackParameters(std::vector<rclcpp::Parameter> parameters) {
 
-/*   mrs_lib::set_mutexed(mutex_drs_params_, config, drs_params_); */
+  rcl_interfaces::msg::SetParametersResult result;
 
-/*   ROS_INFO("[%s]: DRS updated gains", this->name_.c_str()); */
-/* } */
+  if (params_setting_running_) {
+
+    result.successful = true;
+    result.reason     = "not seting, params update triggered from the inside";
+
+    return result;
+  }
+
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+
+  // Note that setting a parameter to a nonsensical value (such as setting the `param_namespace.floating_number` parameter to `hello`)
+  // doesn't have any effect - it doesn't even call this callback.
+  for (auto &param : parameters) {
+
+    RCLCPP_INFO_STREAM(node_->get_logger(), "got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
+
+    if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy") {
+
+      drs_params.kiwxy = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy") {
+
+      drs_params.kibxy = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy_lim") {
+
+      drs_params.kiwxy_lim = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy_lim") {
+
+      drs_params.kibxy_lim = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_roll_pitch") {
+
+      drs_params.kq_roll_pitch = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_yaw") {
+
+      drs_params.kq_yaw = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km") {
+
+      drs_params.km = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.fuse_acceleration") {
+
+      drs_params.fuse_acceleration = param.as_bool();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km_lim") {
+
+      drs_params.km_lim = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/preferred_output_mode") {
+
+      drs_params.preferred_output_mode = param.as_int();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/jerk_feedforward") {
+
+      drs_params.jerk_feedforward = param.as_bool();
+
+    } else {
+
+      RCLCPP_DEBUG_STREAM(node_->get_logger(), "parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
+    }
+  }
+
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "params updated");
+
+  result.successful = true;
+  result.reason     = "OK";
+
+  mrs_lib::set_mutexed(mutex_drs_params_, drs_params, drs_params_);
+
+  return result;
+}
 
 //}
 
@@ -2294,18 +2368,20 @@ double MpcController::getHeadingSafely(const mrs_msgs::msg::UavState &uav_state,
 
 void MpcController::setParamsToServer(const DrsParams_t &drs_params) {
 
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "mass.fuse_acceleration", drs_params.fuse_acceleration));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "jerk_feedforward", drs_params.jerk_feedforward));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "preferred_output_mode", drs_params.preferred_output_mode));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "horizontal.kiwxy", drs_params.kiwxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "horizontal.kibxy", drs_params.kibxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "horizontal.kiwxy_lim", drs_params.kiwxy_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "horizontal.kibxy_lim", drs_params.kibxy_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "attitude.kq_roll_pitch", drs_params.kq_roll_pitch));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "attitude.kq_yaw", drs_params.kq_yaw));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "mass.km", drs_params.km));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "mass.km_lim", drs_params.km_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "mass.fuse_acceleration", drs_params.fuse_acceleration));
+  mrs_lib::AtomicScopeFlag unset_running(params_setting_running_);
+
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/jerk_feedforward", drs_params.jerk_feedforward));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/preferred_output_mode", drs_params.preferred_output_mode));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", drs_params.kiwxy));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy", drs_params.kibxy));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", drs_params.kiwxy_lim));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", drs_params.kibxy_lim));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", drs_params.kq_roll_pitch));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", drs_params.kq_yaw));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km", drs_params.km));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km_lim", drs_params.km_lim));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
 }
 
 //}
