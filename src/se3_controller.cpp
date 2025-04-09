@@ -231,12 +231,10 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // | ---------- loading params using the parent's nh ---------- |
 
-  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
+  private_handlers->parent_param_loader->loadParamReusable("enable_profiler", _profiler_enabled_);
 
-  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
-
-  if (!param_loader_parent.loadedSuccessfully()) {
-    ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
+  if (!private_handlers->parent_param_loader->loadedSuccessfully()) {
+    ROS_ERROR("[Se3Controller]: Could not load all parameters!");
     return false;
   }
 
@@ -245,7 +243,8 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
   private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
 
-  const std::string yaml_namespace = "mrs_uav_controllers/se3_controller/";
+  /* const std::string yaml_namespace = "mrs_uav_controllers/se3_controller/"; */
+  const std::string yaml_namespace = "";
 
   // lateral gains
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kp", gains_.kpxy);

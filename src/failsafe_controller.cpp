@@ -135,11 +135,9 @@ bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::sh
   _uav_mass_ = common_handlers->getMass();
   // | ---------- loading params using the parent's nh ---------- |
 
-  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_node, "ControlManager");
+  private_handlers->parent_param_loader->loadParamReusable("enable_profiler", _profiler_enabled_);
 
-  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
-
-  if (!param_loader_parent.loadedSuccessfully()) {
+  if (!private_handlers->parent_param_loader->loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: Could not load all parameters!");
     return false;
   }
@@ -149,7 +147,8 @@ bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::sh
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
 
-  const std::string yaml_namespace = "mrs_uav_controllers/failsafe_controller/";
+  /* const std::string yaml_namespace = "mrs_uav_controllers/failsafe_controller/"; */
+  const std::string yaml_namespace = "";
 
   private_handlers->param_loader->loadParam(yaml_namespace + "throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
   private_handlers->param_loader->loadParam(yaml_namespace + "throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);

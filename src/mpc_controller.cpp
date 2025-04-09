@@ -310,11 +310,9 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // | ---------- loading params using the parent's nh ---------- |
 
-  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_node, "ControlManager");
+  private_handlers->parent_param_loader->loadParamReusable("enable_profiler", _profiler_enabled_);
 
-  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
-
-  if (!param_loader_parent.loadedSuccessfully()) {
+  if (!private_handlers->parent_param_loader->loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "[%s]: Could not load all parameters!", name_.c_str());
     return false;
   }
@@ -326,7 +324,8 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/" + private_handlers->name_space + ".yaml");
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/" + private_handlers->name_space + ".yaml");
 
-  const std::string yaml_namespace = "mrs_uav_controllers/" + private_handlers_->name_space + "/";
+  /* const std::string yaml_namespace = "mrs_uav_controllers/" + private_handlers_->name_space + "/"; */
+  const std::string yaml_namespace = "";
 
   // load the dynamicall model parameters
   private_handlers->param_loader->loadParam(yaml_namespace + "mpc/mpc_model/number_of_states", _n_states_);

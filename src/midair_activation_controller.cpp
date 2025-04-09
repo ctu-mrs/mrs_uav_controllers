@@ -97,11 +97,9 @@ bool MidairActivationController::initialize(const ros::NodeHandle &nh, std::shar
 
   // | ---------- loading params using the parent's nh ---------- |
 
-  mrs_lib::ParamLoader param_loader_parent(common_handlers->parent_nh, "ControlManager");
+  private_handlers->parent_param_loader->loadParamReusable("enable_profiler", _profiler_enabled_);
 
-  param_loader_parent.loadParam("enable_profiler", _profiler_enabled_);
-
-  if (!param_loader_parent.loadedSuccessfully()) {
+  if (!private_handlers->parent_param_loader->loadedSuccessfully()) {
     ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
     return false;
   }

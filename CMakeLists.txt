@@ -5,6 +5,7 @@ project(mrs_uav_controllers)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 1 == use rclcpp::Timer implementation
 # 0 == use MRS's thread timer implementation
