@@ -4,6 +4,12 @@
   </class>
 </library>
 
+<library path="MrsUavControllers_Se3Controller">
+  <class type="mrs_uav_controllers::se3_controller::Se3Controller" base_class_type="mrs_uav_managers::Controller">
+    <description>Se3Controller</description>
+  </class>
+</library>
+
 <library path="MrsUavControllers_FailsafeController">
   <class type="mrs_uav_controllers::failsafe_controller::FailsafeController" base_class_type="mrs_uav_managers::Controller">
     <description>FailsafeController</description>

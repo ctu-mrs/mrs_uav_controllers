@@ -46,6 +46,7 @@ set(DEPENDENCIES
 
 set(LIBRARIES
   MrsUavControllers_MpcController
+  MrsUavControllers_Se3Controller
   MrsUavControllers_FailsafeController
   )
 
@@ -74,6 +75,20 @@ ament_target_dependencies(MrsUavControllers_MpcController
   )
 
 target_compile_definitions(MrsUavControllers_MpcController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
+
+# SE3 Controller
+
+add_library(MrsUavControllers_Se3Controller SHARED
+  src/se3_controller.cpp
+  src/common.cpp
+  )
+
+ament_target_dependencies(MrsUavControllers_Se3Controller
+  mrs_mpc_solvers
+  ${DEPENDENCIES}
+  )
+
+target_compile_definitions(MrsUavControllers_Se3Controller PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
 # Failsafe Controller
 
