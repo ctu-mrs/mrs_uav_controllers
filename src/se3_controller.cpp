@@ -740,7 +740,7 @@ void Se3Controller::updateInactive(const mrs_msgs::msg::UavState& uav_state, [[m
 
 //}
 
-/* //{ updateWhenActive() */
+/* //{ updateActive() */
 
 Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
 
@@ -1971,9 +1971,9 @@ rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::
   // doesn't have any effect - it doesn't even call this callback.
   for (auto& param : parameters) {
 
-    RCLCPP_INFO_STREAM(node_->get_logger(), "got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
+    RCLCPP_INFO_STREAM(node_->get_logger(), "[Se3Controller]: got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
 
-    if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kpx") {
+    if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kpxy") {
 
       drs_params.kpxy = param.as_double();
 
@@ -2051,11 +2051,11 @@ rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::
 
     } else {
 
-      RCLCPP_DEBUG_STREAM(node_->get_logger(), "parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
+      RCLCPP_WARN_STREAM(node_->get_logger(), "[Se3Controller]: parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
     }
   }
 
-  RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "params updated");
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: params updated");
 
   result.successful = true;
   result.reason     = "OK";
