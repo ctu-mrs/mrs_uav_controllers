@@ -1,33 +1,45 @@
 /* includes //{ */
 
-#include <ros/ros.h>
-#include <ros/package.h>
+#include <rclcpp/rclcpp.hpp>
 
 #include <common.h>
 #include <pid.hpp>
 
 #include <mrs_uav_managers/controller.h>
 
-#include <dynamic_reconfigure/server.h>
-#include <mrs_uav_controllers/se3_controllerConfig.h>
-
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/geometry/cyclic.h>
-#include <mrs_lib/subscribe_handler.h>
+#include <mrs_lib/subscriber_handler.h>
 
-#include <sensor_msgs/Imu.h>
+#include <sensor_msgs/msg/imu.hpp>
 
-#include <geometry_msgs/Vector3Stamped.h>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
+
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 //}
+
+/* typedefs //{ */
+
+#if USE_ROS_TIMER == 1
+typedef mrs_lib::ROSTimer TimerType;
+#else
+typedef mrs_lib::ThreadTimer TimerType;
+#endif
+
+//}
+
+/* defines //{ */
 
 #define OUTPUT_ACTUATORS 0
 #define OUTPUT_CONTROL_GROUP 1
 #define OUTPUT_ATTITUDE_RATE 2
 #define OUTPUT_ATTITUDE 3
+
+//}
 
 namespace mrs_uav_controllers
 {
@@ -64,27 +76,27 @@ typedef struct
 class Se3Controller : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
-                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
+  bool initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   bool activate(const ControlOutput& last_control_output);
 
   void deactivate(void);
 
-  void updateInactive(const mrs_msgs::UavState& uav_state, const std::optional<mrs_msgs::TrackerCommand>& tracker_command);
+  void updateInactive(const mrs_msgs::msg::UavState& uav_state, const std::optional<mrs_msgs::msg::TrackerCommand>& tracker_command);
 
-  ControlOutput updateActive(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command);
+  ControlOutput updateActive(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
 
-  const mrs_msgs::ControllerStatus getStatus();
+  const mrs_msgs::msg::ControllerStatus getStatus();
 
-  void switchOdometrySource(const mrs_msgs::UavState& new_uav_state);
+  void switchOdometrySource(const mrs_msgs::msg::UavState& new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
-  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints);
 
 private:
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr  node_;
+  rclcpp::Clock::SharedPtr clock_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
@@ -92,36 +104,61 @@ private:
   std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers_;
   std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers_;
 
-  mrs_lib::SubscribeHandler<sensor_msgs::Imu> sh_imu_;
+  mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu> sh_imu_;
 
   // | ------------------------ uav state ----------------------- |
 
-  mrs_msgs::UavState uav_state_;
-  std::mutex         mutex_uav_state_;
+  mrs_msgs::msg::UavState uav_state_;
+  std::mutex              mutex_uav_state_;
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  boost::recursive_mutex                            mutex_drs_;
-  typedef mrs_uav_controllers::se3_controllerConfig DrsConfig_t;
-  typedef dynamic_reconfigure::Server<DrsConfig_t>  Drs_t;
-  boost::shared_ptr<Drs_t>                          drs_;
-  void                                              callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, uint32_t level);
-  DrsConfig_t                                       drs_params_;
+  struct DrsParams_t
+  {
+    double kpxy;
+    double kvxy;
+    double kaxy;
+    double kiwxy;
+    double kibxy;
+    double kpz;
+    double kvz;
+    double kaz;
+    double kiwxy_lim;
+    double kibxy_lim;
+    double kq_roll_pitch;
+    double kq_yaw;
+    double km;
+    bool   fuse_acceleration;
+    double km_lim;
+    int    preferred_output_mode;
+    bool   jerk_feedforward;
+    int    rotation_type;
+    bool   pitch_roll_heading_rate_compensation;
+  };
+
+  DrsParams_t drs_params_;
+  std::mutex  mutex_drs_params_;
+
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+
+  rcl_interfaces::msg::SetParametersResult callbackParameters(std::vector<rclcpp::Parameter> parameters);
+
+  void setParamsToServer(const DrsParams_t& drs_params);
+
+  std::atomic<bool> params_setting_running_ = false;
 
   // | ----------------------- controllers ---------------------- |
 
-  void positionPassthrough(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command);
+  void positionPassthrough(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
 
-  void PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const common::CONTROL_OUTPUT& control_output,
-                         const double& dt);
+  void PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const common::CONTROL_OUTPUT& control_output, const double& dt);
 
-  void SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const double& dt,
-                     const common::CONTROL_OUTPUT& output_modality);
+  void SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt, const common::CONTROL_OUTPUT& output_modality);
 
   // | ----------------------- constraints ---------------------- |
 
-  mrs_msgs::DynamicsConstraints constraints_;
-  std::mutex                    mutex_constraints_;
+  mrs_msgs::msg::DynamicsConstraints constraints_;
+  std::mutex                         mutex_constraints_;
 
   // | --------- throttle generation and mass estimation -------- |
 
@@ -132,11 +169,10 @@ private:
 
   Gains_t gains_;
 
-  std::mutex mutex_gains_;       // locks the gains the are used and filtered
-  std::mutex mutex_drs_params_;  // locks the gains that came from the drs
+  std::mutex mutex_gains_;  // locks the gains the are used and filtered
 
-  ros::Timer timer_gains_;
-  void       timerGains(const ros::TimerEvent& event);
+  std::shared_ptr<TimerType> timer_gains_;
+  void                       timerGains();
 
   double _gain_filtering_rate_;
 
@@ -150,7 +186,7 @@ private:
 
   double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
 
-  double getHeadingSafely(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command);
+  double getHeadingSafely(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
 
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
@@ -167,7 +203,7 @@ private:
   ControlOutput last_control_output_;
   ControlOutput activation_control_output_;
 
-  ros::Time         last_update_time_;
+  rclcpp::Time      last_update_time_;
   std::atomic<bool> first_iteration_ = true;
 
   // | ------------------------ profiler_ ------------------------ |
@@ -186,12 +222,12 @@ private:
   bool   _rampup_enabled_ = false;
   double _rampup_speed_;
 
-  bool      rampup_active_ = false;
-  double    rampup_throttle_;
-  int       rampup_direction_;
-  double    rampup_duration_;
-  ros::Time rampup_start_time_;
-  ros::Time rampup_last_time_;
+  bool         rampup_active_ = false;
+  double       rampup_throttle_;
+  int          rampup_direction_;
+  double       rampup_duration_;
+  rclcpp::Time rampup_start_time_;
+  rclcpp::Time rampup_last_time_;
 
   // | ---------------------- position pid ---------------------- |
 
@@ -217,31 +253,31 @@ private:
 
 /* //{ initialize() */
 
-bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
-                               std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
+bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
-  nh_ = nh;
+  node_  = node;
+  clock_ = node->get_clock();
+
+  RCLCPP_INFO(node_->get_logger(), "initializing");
 
   common_handlers_  = common_handlers;
   private_handlers_ = private_handlers;
 
   _uav_mass_ = common_handlers->getMass();
 
-  ros::Time::waitForValid();
-
   // | ---------- loading params using the parent's nh ---------- |
 
   private_handlers->parent_param_loader->loadParamReusable("enable_profiler", _profiler_enabled_);
 
   if (!private_handlers->parent_param_loader->loadedSuccessfully()) {
-    ROS_ERROR("[Se3Controller]: Could not load all parameters!");
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: Could not load all parameters!");
     return false;
   }
 
   // | -------------------- loading my params ------------------- |
 
-  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
 
   /* const std::string yaml_namespace = "mrs_uav_controllers/se3_controller/"; */
   const std::string yaml_namespace = "";
@@ -288,7 +324,7 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   _tilt_angle_failsafe_ = M_PI * (_tilt_angle_failsafe_ / 180.0);
 
   if (_tilt_angle_failsafe_enabled_ && std::abs(_tilt_angle_failsafe_) < 1e-3) {
-    ROS_ERROR("[Se3Controller]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
     return false;
   }
 
@@ -306,8 +342,7 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/rotation_matrix", drs_params_.rotation_type);
 
   // angular rate feed forward
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/angular_rate_feedforward/parasitic_pitch_roll",
-                                            drs_params_.pitch_roll_heading_rate_compensation);
+  private_handlers->param_loader->loadParam(yaml_namespace + "se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
   private_handlers->param_loader->loadParam(yaml_namespace + "se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
 
   // | ------------------- position pid params ------------------ |
@@ -323,28 +358,25 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   // | ------------------ finish loading params ----------------- |
 
   if (!private_handlers->param_loader->loadedSuccessfully()) {
-    ROS_ERROR("[Se3Controller]: could not load all parameters!");
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: could not load all parameters!");
     return false;
   }
 
   // | ----------------------- subscribers ---------------------- |
 
-  mrs_lib::SubscribeHandlerOptions shopts;
-  shopts.nh                 = nh_;
-  shopts.node_name          = "Se3Controller";
+  mrs_lib::SubscriberHandlerOptions shopts;
+
+  shopts.node               = node_;
   shopts.no_message_timeout = mrs_lib::no_timeout;
   shopts.threadsafe         = true;
   shopts.autostart          = true;
-  shopts.queue_size         = 10;
-  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
-  sh_imu_ = mrs_lib::SubscribeHandler<sensor_msgs::Imu>(shopts, "/" + common_handlers->uav_name + "/hw_api/imu");
+  sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "/" + common_handlers->uav_name + "/hw_api/imu");
 
   // | ---------------- prepare stuff from params --------------- |
 
-  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
-        drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
-    ROS_ERROR("[Se3Controller]: preferred output mode has to be {0, 1, 2, 3}!");
+  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: preferred output mode has to be {0, 1, 2, 3}!");
     return false;
   }
 
@@ -356,6 +388,200 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
   // | --------------- dynamic reconfigure server --------------- |
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 40.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kpxy", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kvxy", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 2.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kaxy", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 10.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 200.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/vertical.kpz", 0.0, param_desc);
+    node_->declare_parameter(node_->get_sub_namespace() + "/vertical.kvz", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 2.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/vertical.kaz", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 20.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 40.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 2.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", false, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::FloatingPointRange range;
+
+    range.from_value = 0.0;
+    range.to_value   = 50.0;
+
+    param_desc.floating_point_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km_lim", 0.0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::IntegerRange range;
+
+    range.from_value = 0;
+    range.to_value   = 3;
+
+    param_desc.integer_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/preferred_output_mode", 0, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/jerk_feedforward", false, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/pitch_roll_heading_rate_compensation", false, param_desc);
+  }
+
+  {
+    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+
+    rcl_interfaces::msg::IntegerRange range;
+
+    range.from_value = 0;
+    range.to_value   = 1;
+
+    param_desc.integer_range = {range};
+
+    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER;
+
+    node_->declare_parameter(node_->get_sub_namespace() + "/rotation_type", 0, param_desc);
+  }
 
   drs_params_.kpxy             = gains_.kpxy;
   drs_params_.kvxy             = gains_.kvxy;
@@ -373,14 +599,22 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
   drs_params_.km_lim           = gains_.km_lim;
   drs_params_.jerk_feedforward = true;
 
-  drs_.reset(new Drs_t(mutex_drs_, nh_));
-  drs_->updateConfig(drs_params_);
-  Drs_t::CallbackType f = boost::bind(&Se3Controller::callbackDrs, this, _1, _2);
-  drs_->setCallback(f);
+  setParamsToServer(drs_params_);
+
+  param_callback_handle_ = node_->add_on_set_parameters_callback(std::bind(&Se3Controller::callbackParameters, this, std::placeholders::_1));
 
   // | ------------------------- timers ------------------------- |
 
-  timer_gains_ = nh_.createTimer(ros::Rate(_gain_filtering_rate_), &Se3Controller::timerGains, this, false, false);
+  mrs_lib::TimerHandlerOptions timer_opts_no_start;
+
+  timer_opts_no_start.node      = node_;
+  timer_opts_no_start.autostart = false;
+
+  {
+    std::function<void()> callback_fcn = std::bind(&Se3Controller::timerGains, this);
+
+    timer_gains_ = std::make_shared<TimerType>(timer_opts_no_start, rclcpp::Rate(_gain_filtering_rate_, clock_), callback_fcn);
+  }
 
   // | ---------------------- position pid ---------------------- |
 
@@ -391,11 +625,11 @@ bool Se3Controller::initialize(const ros::NodeHandle& nh, std::shared_ptr<mrs_ua
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(common_handlers_->parent_nh, "Se3Controller", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(common_handlers->parent_node, "Se3Controller", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[Se3Controller]: initialized");
+  RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: initialized");
 
   is_initialized_ = true;
 
@@ -415,7 +649,7 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
   if (activation_control_output_.diagnostics.mass_estimator) {
     uav_mass_difference_ = activation_control_output_.diagnostics.mass_difference;
     activation_mass += uav_mass_difference_;
-    ROS_INFO("[Se3Controller]: setting mass difference from the last control output: %.2f kg", uav_mass_difference_);
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: setting mass difference from the last control output: %.2f kg", uav_mass_difference_);
   }
 
   last_control_output_.diagnostics.controller_enforcing_constraints = false;
@@ -427,10 +661,10 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
     Iw_w_(0) = -activation_control_output_.diagnostics.disturbance_wx_w;
     Iw_w_(1) = -activation_control_output_.diagnostics.disturbance_wy_w;
 
-    ROS_INFO(
-        "[Se3Controller]: setting disturbances from the last control output: Ib_b_: %.2f, %.2f N, Iw_w_: "
-        "%.2f, %.2f N",
-        Ib_b_(0), Ib_b_(1), Iw_w_(0), Iw_w_(1));
+    RCLCPP_INFO(node_->get_logger(),
+                "[Se3Controller]: setting disturbances from the last control output: Ib_b_: %.2f, %.2f N, Iw_w_: "
+                "%.2f, %.2f N",
+                Ib_b_(0), Ib_b_(1), Iw_w_(0), Iw_w_(1));
   }
 
   // did the last controller use manual throttle control?
@@ -451,11 +685,11 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
       rampup_direction_ = 0;
     }
 
-    ROS_INFO("[Se3Controller]: activating rampup with initial throttle: %.4f, target: %.4f", throttle_last_controller.value(), hover_throttle);
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: activating rampup with initial throttle: %.4f, target: %.4f", throttle_last_controller.value(), hover_throttle);
 
     rampup_active_     = true;
-    rampup_start_time_ = ros::Time::now();
-    rampup_last_time_  = ros::Time::now();
+    rampup_start_time_ = clock_->now();
+    rampup_last_time_  = clock_->now();
     rampup_throttle_   = throttle_last_controller.value();
 
     rampup_duration_ = std::abs(throttle_difference) / _rampup_speed_;
@@ -464,11 +698,11 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
   first_iteration_ = true;
   mute_gains_      = true;
 
-  timer_gains_.start();
+  timer_gains_->start();
 
   // | ------------------ finish the activation ----------------- |
 
-  ROS_INFO("[Se3Controller]: activated");
+  RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: activated");
 
   is_active_ = true;
 
@@ -485,16 +719,16 @@ void Se3Controller::deactivate(void) {
   first_iteration_     = false;
   uav_mass_difference_ = 0;
 
-  timer_gains_.stop();
+  timer_gains_->stop();
 
-  ROS_INFO("[Se3Controller]: deactivated");
+  RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: deactivated");
 }
 
 //}
 
 /* updateInactive() //{ */
 
-void Se3Controller::updateInactive(const mrs_msgs::UavState& uav_state, [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand>& tracker_command) {
+void Se3Controller::updateInactive(const mrs_msgs::msg::UavState& uav_state, [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand>& tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -505,12 +739,12 @@ void Se3Controller::updateInactive(const mrs_msgs::UavState& uav_state, [[maybe_
 
 //}
 
-/* //{ updateWhenActive() */
+/* //{ updateActive() */
 
-Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
+Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("updateActive");
-  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::updateActive", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "Se3Controller::updateActive", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
 
@@ -529,14 +763,14 @@ Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavStat
     dt               = 0.01;
     first_iteration_ = false;
   } else {
-    dt = (uav_state.header.stamp - last_update_time_).toSec();
+    dt = rclcpp::Time(uav_state.header.stamp).seconds() - last_update_time_.seconds();
   }
 
   last_update_time_ = uav_state.header.stamp;
 
   if (std::abs(dt) < 0.001) {
 
-    ROS_DEBUG("[Se3Controller]: the last odometry message came too close (%.2f s)!", dt);
+    RCLCPP_DEBUG(node_->get_logger(), "[Se3Controller]: the last odometry message came too close (%.2f s)!", dt);
 
     dt = 0.01;
   }
@@ -547,7 +781,7 @@ Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavStat
 
   if (!lowest_modality) {
 
-    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: output modalities are empty! This error should never appear.");
+    RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: output modalities are empty! This error should never appear.");
 
     return last_control_output_;
   }
@@ -555,16 +789,16 @@ Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavStat
   // | ----- we might prefer some output mode over the other ---- |
 
   if (drs_params.preferred_output_mode == OUTPUT_ATTITUDE_RATE && common_handlers_->control_output_modalities.attitude_rate) {
-    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing attitude rate output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: prioritizing attitude rate output");
     lowest_modality = common::ATTITUDE_RATE;
   } else if (drs_params.preferred_output_mode == OUTPUT_ATTITUDE && common_handlers_->control_output_modalities.attitude) {
-    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing attitude output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: prioritizing attitude output");
     lowest_modality = common::ATTITUDE;
   } else if (drs_params.preferred_output_mode == OUTPUT_CONTROL_GROUP && common_handlers_->control_output_modalities.control_group) {
-    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing control group output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: prioritizing control group output");
     lowest_modality = common::CONTROL_GROUP;
   } else if (drs_params.preferred_output_mode == OUTPUT_ACTUATORS && common_handlers_->control_output_modalities.actuators) {
-    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: prioritizing actuators output");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: prioritizing actuators output");
     lowest_modality = common::ACTUATORS_CMD;
   }
 
@@ -626,9 +860,9 @@ Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::UavStat
 
 /* //{ getStatus() */
 
-const mrs_msgs::ControllerStatus Se3Controller::getStatus() {
+const mrs_msgs::msg::ControllerStatus Se3Controller::getStatus() {
 
-  mrs_msgs::ControllerStatus controller_status;
+  mrs_msgs::msg::ControllerStatus controller_status;
 
   controller_status.active = is_active_;
 
@@ -639,17 +873,17 @@ const mrs_msgs::ControllerStatus Se3Controller::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void Se3Controller::switchOdometrySource(const mrs_msgs::UavState& new_uav_state) {
+void Se3Controller::switchOdometrySource(const mrs_msgs::msg::UavState& new_uav_state) {
 
-  ROS_INFO("[Se3Controller]: switching the odometry source");
+  RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: switching the odometry source");
 
   auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
 
   // | ----- transform world disturabances to the new frame ----- |
 
-  geometry_msgs::Vector3Stamped world_integrals;
+  geometry_msgs::msg::Vector3Stamped world_integrals;
 
-  world_integrals.header.stamp    = ros::Time::now();
+  world_integrals.header.stamp    = clock_->now();
   world_integrals.header.frame_id = uav_state.header.frame_id;
 
   world_integrals.vector.x = Iw_w_(0);
@@ -667,7 +901,7 @@ void Se3Controller::switchOdometrySource(const mrs_msgs::UavState& new_uav_state
 
   } else {
 
-    ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform world integral to the new frame");
+    RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: could not transform world integral to the new frame");
 
     std::scoped_lock lock(mutex_integrals_);
 
@@ -692,22 +926,24 @@ void Se3Controller::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3Controller::setConstraints([
-    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> Se3Controller::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints) {
+
+  std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
   if (!is_initialized_) {
-    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+    response->success = false;
+    response->message = "not initialized";
+    return response;
   }
 
   mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
 
-  ROS_INFO("[Se3Controller]: updating constraints");
+  RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: updating constraints");
 
-  mrs_msgs::DynamicsConstraintsSrvResponse res;
-  res.success = true;
-  res.message = "constraints updated";
+  response->success = true;
+  response->message = "constraints updated";
 
-  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
+  return response;
 }
 
 //}
@@ -718,8 +954,7 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3Controller::setConst
 
 /* SE3Controller() //{ */
 
-void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command, const double& dt,
-                                  const common::CONTROL_OUTPUT& output_modality) {
+void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt, const common::CONTROL_OUTPUT& output_modality) {
 
   auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
@@ -805,8 +1040,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // velocity control error
   Eigen::Vector3d Ev(0, 0, 0);
 
-  if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
-      tracker_command.use_position_vertical) {  // use_position_vertical == true, not a mistake, this provides dampening
+  if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical || tracker_command.use_position_vertical) {  // use_position_vertical == true, not a mistake, this provides dampening
     Ev = Rv - Ov;
   }
 
@@ -884,9 +1118,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);
 
   {
-    geometry_msgs::Vector3Stamped Ib_b_stamped;
+    geometry_msgs::msg::Vector3Stamped Ib_b_stamped;
 
-    Ib_b_stamped.header.stamp    = ros::Time::now();
+    Ib_b_stamped.header.stamp    = clock_->now();
     Ib_b_stamped.header.frame_id = "fcu_untilted";
     Ib_b_stamped.vector.x        = Ib_b_(0);
     Ib_b_stamped.vector.y        = Ib_b_(1);
@@ -898,7 +1132,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       Ib_w(0) = res.value().vector.x;
       Ib_w(1) = res.value().vector.y;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform the Ib_b_ to the world frame");
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: could not transform the Ib_b_ to the world frame");
     }
   }
 
@@ -942,7 +1176,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     bool world_integral_saturated = false;
     if (!std::isfinite(Iw_w_(0))) {
       Iw_w_(0) = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_(0)', setting it to 0!!!");
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: NaN detected in variable 'Iw_w_(0)', setting it to 0!!!");
     } else if (Iw_w_(0) > gains.kiwxy_lim) {
       Iw_w_(0)                 = gains.kiwxy_lim;
       world_integral_saturated = true;
@@ -952,14 +1186,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     }
 
     if (gains.kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's world X integral is being saturated!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: SE3's world X integral is being saturated!");
     }
 
     // saturate the world Y
     world_integral_saturated = false;
     if (!std::isfinite(Iw_w_(1))) {
       Iw_w_(1) = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Iw_w_(1)', setting it to 0!!!");
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: NaN detected in variable 'Iw_w_(1)', setting it to 0!!!");
     } else if (Iw_w_(1) > gains.kiwxy_lim) {
       Iw_w_(1)                 = gains.kiwxy_lim;
       world_integral_saturated = true;
@@ -969,7 +1203,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     }
 
     if (gains.kiwxy_lim >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's world Y integral is being saturated!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: SE3's world Y integral is being saturated!");
     }
   }
 
@@ -990,9 +1224,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     // get the position control error in the fcu_untilted frame
     {
 
-      geometry_msgs::Vector3Stamped Ep_stamped;
+      geometry_msgs::msg::Vector3Stamped Ep_stamped;
 
-      Ep_stamped.header.stamp    = ros::Time::now();
+      Ep_stamped.header.stamp    = clock_->now();
       Ep_stamped.header.frame_id = uav_state_.header.frame_id;
       Ep_stamped.vector.x        = Ep(0);
       Ep_stamped.vector.y        = Ep(1);
@@ -1004,15 +1238,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
         Ep_fcu_untilted(0) = res.value().vector.x;
         Ep_fcu_untilted(1) = res.value().vector.y;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform the position error to fcu_untilted");
+        RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: could not transform the position error to fcu_untilted");
       }
     }
 
     // get the velocity control error in the fcu_untilted frame
     {
-      geometry_msgs::Vector3Stamped Ev_stamped;
+      geometry_msgs::msg::Vector3Stamped Ev_stamped;
 
-      Ev_stamped.header.stamp    = ros::Time::now();
+      Ev_stamped.header.stamp    = clock_->now();
       Ev_stamped.header.frame_id = uav_state_.header.frame_id;
       Ev_stamped.vector.x        = Ev(0);
       Ev_stamped.vector.y        = Ev(1);
@@ -1024,7 +1258,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
         Ev_fcu_untilted(0) = res.value().vector.x;
         Ev_fcu_untilted(1) = res.value().vector.x;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not transform the velocity error to fcu_untilted");
+        RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: could not transform the velocity error to fcu_untilted");
       }
     }
 
@@ -1039,7 +1273,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     bool body_integral_saturated = false;
     if (!std::isfinite(Ib_b_(0))) {
       Ib_b_(0) = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_(0)', setting it to 0!!!");
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: NaN detected in variable 'Ib_b_(0)', setting it to 0!!!");
     } else if (Ib_b_(0) > gains.kibxy_lim) {
       Ib_b_(0)                = gains.kibxy_lim;
       body_integral_saturated = true;
@@ -1049,14 +1283,14 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     }
 
     if (gains.kibxy_lim > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's body pitch integral is being saturated!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: SE3's body pitch integral is being saturated!");
     }
 
     // saturate the body
     body_integral_saturated = false;
     if (!std::isfinite(Ib_b_(1))) {
       Ib_b_(1) = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'Ib_b_(1)', setting it to 0!!!");
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: NaN detected in variable 'Ib_b_(1)', setting it to 0!!!");
     } else if (Ib_b_(1) > gains.kibxy_lim) {
       Ib_b_(1)                = gains.kibxy_lim;
       body_integral_saturated = true;
@@ -1066,7 +1300,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     }
 
     if (gains.kibxy_lim > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: SE3's body roll integral is being saturated!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: SE3's body roll integral is being saturated!");
     }
   }
 
@@ -1078,7 +1312,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
     if (output_modality == common::ACCELERATION_HDG) {
 
-      mrs_msgs::HwApiAccelerationHdgCmd cmd;
+      mrs_msgs::msg::HwApiAccelerationHdgCmd cmd;
 
       cmd.acceleration.x = des_acc(0);
       cmd.acceleration.y = des_acc(1);
@@ -1096,7 +1330,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
         des_hdg_ff = tracker_command.heading_rate;
       }
 
-      mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
+      mrs_msgs::msg::HwApiAccelerationHdgRateCmd cmd;
 
       cmd.acceleration.x = des_acc(0);
       cmd.acceleration.y = des_acc(1);
@@ -1123,9 +1357,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
       Eigen::Vector3d unbiased_des_acc_world = (position_feedback + velocity_feedback) / total_mass + Ra;
 
-      geometry_msgs::Vector3Stamped world_accel;
+      geometry_msgs::msg::Vector3Stamped world_accel;
 
-      world_accel.header.stamp    = ros::Time::now();
+      world_accel.header.stamp    = clock_->now();
       world_accel.header.frame_id = uav_state.header.frame_id;
       world_accel.vector.x        = unbiased_des_acc_world(0);
       world_accel.vector.y        = unbiased_des_acc_world(1);
@@ -1186,7 +1420,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
         uav_mass_difference_ += 1.0 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
 
-        ROS_INFO_THROTTLE(0.1, "[Se3Controller]: mass estimation using IMU acc runs, mass difference %.3f kg", uav_mass_difference_);
+        RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: mass estimation using IMU acc runs, mass difference %.3f kg", uav_mass_difference_);
       }
 
     } else if (tracker_command.use_position_vertical) {
@@ -1202,7 +1436,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
     } else if (uav_mass_difference_ > gains.km_lim) {
       uav_mass_difference_ = gains.km_lim;
       uav_mass_saturated   = true;
@@ -1212,7 +1446,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: The UAV mass difference is being saturated to %.2f!", uav_mass_difference_);
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: The UAV mass difference is being saturated to %.2f!", uav_mass_difference_);
     }
   }
 
@@ -1226,7 +1460,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // if the downwards part of the force is close to counter-act the gravity acceleration
   if (f(2) < 0) {
 
-    ROS_WARN_THROTTLE(1.0, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f(2));
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f(2));
 
     f << 0, 0, 1;
   }
@@ -1235,17 +1469,15 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   double tilt_safety_limit = _tilt_angle_failsafe_enabled_ ? _tilt_angle_failsafe_ : std::numeric_limits<double>::max();
 
-  auto f_normed_sanitized = common::sanitizeDesiredForce(f.normalized(), tilt_safety_limit, constraints.tilt, "Se3Controller");
+  auto f_normed_sanitized = common::sanitizeDesiredForce(node_, f.normalized(), tilt_safety_limit, constraints.tilt, "Se3Controller");
 
   if (!f_normed_sanitized) {
 
-    ROS_INFO("[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback(0), position_feedback(1), position_feedback(2));
-    ROS_INFO("[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback(0), velocity_feedback(1), velocity_feedback(2));
-    ROS_INFO("[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback(0), integral_feedback(1), integral_feedback(2));
-    ROS_INFO("[Se3Controller]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", tracker_command.position.x, tracker_command.position.y,
-             tracker_command.position.z, tracker_command.heading);
-    ROS_INFO("[Se3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state.pose.position.x, uav_state.pose.position.y,
-             uav_state.pose.position.z, uav_heading);
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback(0), position_feedback(1), position_feedback(2));
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback(0), velocity_feedback(1), velocity_feedback(2));
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback(0), integral_feedback(1), integral_feedback(2));
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
 
     return;
   }
@@ -1270,7 +1502,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
         Rd = mrs_lib::AttitudeConverter(Rd).setHeading(tracker_command.heading);
       }
       catch (...) {
-        ROS_ERROR_THROTTLE(1.0, "[Se3Controller]: could not set the desired heading");
+        RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: could not set the desired heading");
       }
     }
 
@@ -1281,11 +1513,11 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (tracker_command.use_heading) {
       bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
     } else {
-      ROS_WARN_THROTTLE(10.0, "[Se3Controller]: desired heading was not specified, using current heading instead!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 10000, "[Se3Controller]: desired heading was not specified, using current heading instead!");
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
-    Rd = common::so3transform(f_normed, bxd, drs_params.rotation_type == 1);
+    Rd = common::so3transform(node_, f_normed, bxd, drs_params.rotation_type == 1);
   }
 
   // | -------------------- desired throttle -------------------- |
@@ -1302,23 +1534,23 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   } else if (rampup_active_) {
 
     // deactivate the rampup when the times up
-    if (std::abs((ros::Time::now() - rampup_start_time_).toSec()) >= rampup_duration_) {
+    if (std::abs((clock_->now() - rampup_start_time_).seconds()) >= rampup_duration_) {
 
       rampup_active_ = false;
 
-      ROS_INFO("[Se3Controller]: rampup finished");
+      RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: rampup finished");
 
     } else {
 
-      double rampup_dt = (ros::Time::now() - rampup_last_time_).toSec();
+      double rampup_dt = (clock_->now() - rampup_last_time_).seconds();
 
       rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
 
-      rampup_last_time_ = ros::Time::now();
+      rampup_last_time_ = clock_->now();
 
       throttle = rampup_throttle_;
 
-      ROS_INFO_THROTTLE(0.1, "[Se3Controller]: ramping up throttle, %.4f", throttle);
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ramping up throttle, %.4f", throttle);
     }
 
   } else {
@@ -1326,7 +1558,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
     if (desired_thrust_force >= 0) {
       throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, desired_thrust_force);
     } else {
-      ROS_WARN_THROTTLE(1.0, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", desired_thrust_force);
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", desired_thrust_force);
     }
   }
 
@@ -1336,33 +1568,27 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   if (!std::isfinite(throttle)) {
 
-    ROS_ERROR("[Se3Controller]: NaN detected in variable 'throttle'!!!");
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: NaN detected in variable 'throttle'!!!");
     return;
 
   } else if (throttle > _throttle_saturation_) {
     throttle = _throttle_saturation_;
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to %.2f", _throttle_saturation_);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: saturating throttle to %.2f", _throttle_saturation_);
   } else if (throttle < 0.0) {
     throttle = 0.0;
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: saturating throttle to 0.0");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: saturating throttle to 0.0");
   }
 
   if (throttle_saturated) {
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.position.x, tracker_command.position.y,
-                      tracker_command.position.z, tracker_command.heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.velocity.x, tracker_command.velocity.y,
-                      tracker_command.velocity.z, tracker_command.heading_rate);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.acceleration.x,
-                      tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.jerk.x, tracker_command.jerk.y,
-                      tracker_command.jerk.z, tracker_command.heading_jerk);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state.pose.position.x, uav_state.pose.position.y,
-                      uav_state.pose.position.z, uav_heading);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state.velocity.linear.x,
-                      uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
-    ROS_WARN_THROTTLE(0.1, "[Se3Controller]: ---------------------------");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ---------------------------");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.acceleration.x, tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ---------------------------");
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ---------------------------");
   }
 
   // | -------------- unbiased desired acceleration ------------- |
@@ -1372,9 +1598,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   {
     Eigen::Vector3d unbiased_des_acc_world = (position_feedback + velocity_feedback) / total_mass + Ra;
 
-    geometry_msgs::Vector3Stamped world_accel;
+    geometry_msgs::msg::Vector3Stamped world_accel;
 
-    world_accel.header.stamp    = ros::Time::now();
+    world_accel.header.stamp    = clock_->now();
     world_accel.header.frame_id = uav_state.header.frame_id;
     world_accel.vector.x        = unbiased_des_acc_world(0);
     world_accel.vector.y        = unbiased_des_acc_world(1);
@@ -1420,9 +1646,9 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   // | ------------ construct the attitude reference ------------ |
 
-  mrs_msgs::HwApiAttitudeCmd attitude_cmd;
+  mrs_msgs::msg::HwApiAttitudeCmd attitude_cmd;
 
-  attitude_cmd.stamp       = ros::Time::now();
+  attitude_cmd.stamp       = clock_->now();
   attitude_cmd.orientation = mrs_lib::AttitudeConverter(Rd);
   attitude_cmd.throttle    = throttle;
   last_throttle_           = throttle;
@@ -1453,7 +1679,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
       desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(tracker_command.heading_rate);
     }
     catch (...) {
-      ROS_ERROR("[Se3Controller]: exception caught while calculating the desired_yaw_rate feedforward");
+      RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: exception caught while calculating the desired_yaw_rate feedforward");
     }
 
     rate_feedforward << 0, 0, desired_yaw_rate;
@@ -1465,7 +1691,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   if (tracker_command.use_jerk && drs_params.jerk_feedforward) {
 
-    ROS_DEBUG_THROTTLE(1.0, "[Se3Controller]: using jerk feedforward");
+    RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: using jerk feedforward");
 
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
@@ -1477,8 +1703,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   Eigen::Vector3d attitude_rate_saturation(constraints.roll_rate, constraints.pitch_rate, constraints.yaw_rate);
 
-  auto attitude_rate_command = common::attitudeController(uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq,
-                                                          drs_params.pitch_roll_heading_rate_compensation);
+  auto attitude_rate_command = common::attitudeController(node_, uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq, drs_params.pitch_roll_heading_rate_compensation);
 
   if (!attitude_rate_command) {
     return;
@@ -1509,7 +1734,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
   Kw = common_handlers_->detailed_model_params->inertia.diagonal().array() * Kw;
 
-  auto control_group_command = common::attitudeRateController(uav_state, attitude_rate_command.value(), Kw);
+  auto control_group_command = common::attitudeRateController(node_, uav_state, attitude_rate_command.value(), Kw);
 
   if (!control_group_command) {
     return;
@@ -1526,7 +1751,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
   // |                        output mixer                        |
   // --------------------------------------------------------------
 
-  mrs_msgs::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
 
   last_control_output_.control_output = actuator_cmd;
 
@@ -1537,17 +1762,17 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
 /* positionPassthrough() //{ */
 
-void Se3Controller::positionPassthrough(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
+void Se3Controller::positionPassthrough(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
 
   if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
-    ROS_ERROR("[Se3Controller]: the tracker did not provide position+hdg reference");
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: the tracker did not provide position+hdg reference");
     return;
   }
 
-  mrs_msgs::HwApiPositionCmd cmd;
+  mrs_msgs::msg::HwApiPositionCmd cmd;
 
   cmd.header.frame_id = uav_state.header.frame_id;
-  cmd.header.stamp    = ros::Time::now();
+  cmd.header.stamp    = clock_->now();
 
   cmd.position = tracker_command.position;
   cmd.heading  = tracker_command.heading;
@@ -1586,11 +1811,10 @@ void Se3Controller::positionPassthrough(const mrs_msgs::UavState& uav_state, con
 
 /* PIDVelocityOutput() //{ */
 
-void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command,
-                                      const common::CONTROL_OUTPUT& control_output, const double& dt) {
+void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const common::CONTROL_OUTPUT& control_output, const double& dt) {
 
   if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
-    ROS_ERROR("[Se3Controller]: the tracker did not provide position+hdg reference");
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: the tracker did not provide position+hdg reference");
     return;
   }
 
@@ -1643,10 +1867,10 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 
     // | --------------------- fill the output -------------------- |
 
-    mrs_msgs::HwApiVelocityHdgCmd cmd;
+    mrs_msgs::msg::HwApiVelocityHdgCmd cmd;
 
     cmd.header.frame_id = uav_state.header.frame_id;
-    cmd.header.stamp    = ros::Time::now();
+    cmd.header.stamp    = clock_->now();
 
     cmd.velocity.x = des_vel(0);
     cmd.velocity.y = des_vel(1);
@@ -1674,10 +1898,10 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 
     // | --------------------- fill the output -------------------- |
 
-    mrs_msgs::HwApiVelocityHdgRateCmd cmd;
+    mrs_msgs::msg::HwApiVelocityHdgRateCmd cmd;
 
     cmd.header.frame_id = uav_state.header.frame_id;
-    cmd.header.stamp    = ros::Time::now();
+    cmd.header.stamp    = clock_->now();
 
     cmd.velocity.x = des_vel(0);
     cmd.velocity.y = des_vel(1);
@@ -1688,7 +1912,7 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
     last_control_output_.control_output = cmd;
   } else {
 
-    ROS_ERROR("[Se3Controller]: the required output of the position PID is not supported");
+    RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: the required output of the position PID is not supported");
     return;
   }
 
@@ -1724,15 +1948,120 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::UavState& uav_state, const
 
 // --------------------------------------------------------------
 // |                          callbacks                         |
+// --------------------------------------------------------------
 
+/* callbackParameters() //{ */
 
-/* //{ callbackDrs() */
+rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::vector<rclcpp::Parameter> parameters) {
 
-void Se3Controller::callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, [[maybe_unused]] uint32_t level) {
+  rcl_interfaces::msg::SetParametersResult result;
 
-  mrs_lib::set_mutexed(mutex_drs_params_, config, drs_params_);
+  if (params_setting_running_) {
 
-  ROS_INFO("[Se3Controller]: DRS updated gains");
+    result.successful = true;
+    result.reason     = "not seting, params update triggered from the inside";
+
+    return result;
+  }
+
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+
+  // Note that setting a parameter to a nonsensical value (such as setting the `param_namespace.floating_number` parameter to `hello`)
+  // doesn't have any effect - it doesn't even call this callback.
+  for (auto& param : parameters) {
+
+    RCLCPP_INFO_STREAM(node_->get_logger(), "[Se3Controller]: got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
+
+    if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kpxy") {
+
+      drs_params.kpxy = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kvxy") {
+
+      drs_params.kvxy = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kaxy") {
+
+      drs_params.kaxy = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy") {
+
+      drs_params.kiwxy = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy") {
+
+      drs_params.kibxy = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy_lim") {
+
+      drs_params.kiwxy_lim = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy_lim") {
+
+      drs_params.kibxy_lim = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kpz") {
+
+      drs_params.kpz = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kvz") {
+
+      drs_params.kvz = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kaz") {
+
+      drs_params.kaz = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_roll_pitch") {
+
+      drs_params.kq_roll_pitch = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_yaw") {
+
+      drs_params.kq_yaw = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km") {
+
+      drs_params.km = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.fuse_acceleration") {
+
+      drs_params.fuse_acceleration = param.as_bool();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km_lim") {
+
+      drs_params.km_lim = param.as_double();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/preferred_output_mode") {
+
+      drs_params.preferred_output_mode = param.as_int();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/jerk_feedforward") {
+
+      drs_params.jerk_feedforward = param.as_bool();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/pitch_roll_heading_rate_compensation") {
+
+      drs_params.pitch_roll_heading_rate_compensation = param.as_bool();
+
+    } else if (param.get_name() == node_->get_sub_namespace() + "/rotation_type") {
+
+      drs_params.rotation_type = param.as_int();
+
+    } else {
+
+      RCLCPP_WARN_STREAM(node_->get_logger(), "[Se3Controller]: parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
+    }
+  }
+
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: params updated");
+
+  result.successful = true;
+  result.reason     = "OK";
+
+  mrs_lib::set_mutexed(mutex_drs_params_, drs_params, drs_params_);
+
+  return result;
 }
 
 //}
@@ -1743,10 +2072,10 @@ void Se3Controller::callbackDrs(mrs_uav_controllers::se3_controllerConfig& confi
 
 /* timerGains() //{ */
 
-void Se3Controller::timerGains(const ros::TimerEvent& event) {
+void Se3Controller::timerGains() {
 
-  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains", _gain_filtering_rate_, 1.0, event);
-  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains");
+  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);
@@ -1758,7 +2087,7 @@ void Se3Controller::timerGains(const ros::TimerEvent& event) {
 
   mute_gains_ = false;
 
-  double dt = (event.current_real - event.last_real).toSec();
+  double dt = 1.0 / _gain_filtering_rate_;
 
   if (!std::isfinite(dt) || (dt <= 0) || (dt > 5 * (1.0 / _gain_filtering_rate_))) {
     return;
@@ -1804,9 +2133,9 @@ void Se3Controller::timerGains(const ros::TimerEvent& event) {
     drs_params.km            = gains.km;
     drs_params.km_lim        = gains.km_lim;
 
-    drs_->updateConfig(drs_params);
+    setParamsToServer(drs_params);
 
-    ROS_INFO_THROTTLE(10.0, "[Se3Controller]: gains have been updated");
+    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 10000, "[Se3Controller]: gains have been updated");
   }
 }
 
@@ -1818,8 +2147,7 @@ void Se3Controller::timerGains(const ros::TimerEvent& event) {
 
 /* calculateGainChange() //{ */
 
-double Se3Controller::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
-                                          bool& updated) {
+double Se3Controller::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated) {
 
   double change = desired_value - current_value;
 
@@ -1855,7 +2183,7 @@ double Se3Controller::calculateGainChange(const double dt, const double current_
   }
 
   if (std::abs(change) > 1e-3) {
-    ROS_DEBUG("[Se3Controller]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    RCLCPP_DEBUG(node_->get_logger(), "[Se3Controller]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
     updated = true;
   }
 
@@ -1866,7 +2194,7 @@ double Se3Controller::calculateGainChange(const double dt, const double current_
 
 /* getHeadingSafely() //{ */
 
-double Se3Controller::getHeadingSafely(const mrs_msgs::UavState& uav_state, const mrs_msgs::TrackerCommand& tracker_command) {
+double Se3Controller::getHeadingSafely(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
 
   try {
     return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
@@ -1889,9 +2217,39 @@ double Se3Controller::getHeadingSafely(const mrs_msgs::UavState& uav_state, cons
 
 //}
 
+/* setParamsToServer() //{ */
+
+void Se3Controller::setParamsToServer(const DrsParams_t& drs_params) {
+
+  mrs_lib::AtomicScopeFlag unset_running(params_setting_running_);
+
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kpxy", drs_params.kpxy));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kvxy", drs_params.kvxy));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kaxy", drs_params.kaxy));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/vertical.kpz", drs_params.kpz));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/vertical.kvz", drs_params.kvz));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/vertical.kaz", drs_params.kaz));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/jerk_feedforward", drs_params.jerk_feedforward));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/preferred_output_mode", drs_params.preferred_output_mode));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", drs_params.kiwxy));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy", drs_params.kibxy));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", drs_params.kiwxy_lim));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", drs_params.kibxy_lim));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", drs_params.kq_roll_pitch));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", drs_params.kq_yaw));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km", drs_params.km));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km_lim", drs_params.km_lim));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/pitch_roll_heading_rate_compensation", drs_params.pitch_roll_heading_rate_compensation));
+  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/rotation_type", drs_params.rotation_type));
+}
+
+//}
+
 }  // namespace se3_controller
 
 }  // namespace mrs_uav_controllers
 
-#include <pluginlib/class_list_macros.h>
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::se3_controller::Se3Controller, mrs_uav_managers::Controller)

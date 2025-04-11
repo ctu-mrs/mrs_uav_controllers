@@ -111,14 +111,6 @@ private:
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  // original ROS1 drs
-  /* boost::recursive_mutex                            mutex_drs_; */
-  /* typedef mrs_uav_controllers::mpc_controllerConfig DrsConfig_t; */
-  /* typedef dynamic_reconfigure::Server<DrsConfig_t>  Drs_t; */
-  /* boost::shared_ptr<Drs_t>                          drs_; */
-  /* void                                              callbackDrs(mrs_uav_controllers::mpc_controllerConfig &config, uint32_t level); */
-  /* DrsConfig_t                                       drs_params_; */
-
   struct DrsParams_t
   {
     double kiwxy;
