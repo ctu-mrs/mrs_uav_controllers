@@ -15,3 +15,9 @@
     <description>FailsafeController</description>
   </class>
 </library>
+
+<library path="MrsUavControllers_MidairActivationController">
+  <class type="mrs_uav_controllers::midair_activation_controller::MidairActivationController" base_class_type="mrs_uav_managers::Controller">
+    <description>MidairActivationController</description>
+  </class>
+</library>

@@ -1,7 +1,6 @@
 /* includes //{ */
 
-#include <ros/ros.h>
-#include <ros/package.h>
+#include <rclcpp/rclcpp.hpp>
 
 #include <common.h>
 
@@ -11,6 +10,8 @@
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/param_loader.h>
+
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 //}
 
@@ -25,27 +26,27 @@ namespace midair_activation_controller
 class MidairActivationController : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
-                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
+  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   bool activate(const ControlOutput &last_control_output);
 
   void deactivate(void);
 
-  void updateInactive(const mrs_msgs::UavState &uav_state, const std::optional<mrs_msgs::TrackerCommand> &tracker_command);
+  void updateInactive(const mrs_msgs::msg::UavState &uav_state, const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command);
 
-  ControlOutput updateActive(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+  ControlOutput updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command);
 
-  const mrs_msgs::ControllerStatus getStatus();
+  const mrs_msgs::msg::ControllerStatus getStatus();
 
-  void switchOdometrySource(const mrs_msgs::UavState &new_uav_state);
+  void switchOdometrySource(const mrs_msgs::msg::UavState &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
-  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &cmd);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
 private:
-  ros::NodeHandle nh_;
+  rclcpp::Node::SharedPtr  node_;
+  rclcpp::Clock::SharedPtr clock_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
@@ -55,8 +56,8 @@ private:
 
   // | ------------------------ uav state ----------------------- |
 
-  mrs_msgs::UavState uav_state_;
-  std::mutex         mutex_uav_state_;
+  mrs_msgs::msg::UavState uav_state_;
+  std::mutex              mutex_uav_state_;
 
   // | --------------------- thrust control --------------------- |
 
@@ -72,7 +73,7 @@ private:
 
   // | ------------------------ routines ------------------------ |
 
-  double getHeadingSafely(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command);
+  double getHeadingSafely(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command);
 };
 
 //}
@@ -83,34 +84,32 @@ private:
 
 /* initialize() //{ */
 
-bool MidairActivationController::initialize(const ros::NodeHandle &nh, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
-                                            std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
+bool MidairActivationController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
-  nh_ = nh;
+  node_  = node;
+  clock_ = node->get_clock();
 
   common_handlers_  = common_handlers;
   private_handlers_ = private_handlers;
 
   _uav_mass_ = common_handlers->getMass();
 
-  ros::Time::waitForValid();
-
   // | ---------- loading params using the parent's nh ---------- |
 
   private_handlers->parent_param_loader->loadParamReusable("enable_profiler", _profiler_enabled_);
 
   if (!private_handlers->parent_param_loader->loadedSuccessfully()) {
-    ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
+    RCLCPP_ERROR(node_->get_logger(), "[MidairActivationController]: Could not load all parameters!");
     return false;
   }
 
   // | -------------------- loading my params ------------------- |
 
-  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/private/midair_activation_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ros::package::getPath("mrs_uav_controllers") + "/config/public/midair_activation_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/midair_activation_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/midair_activation_controller.yaml");
 
   if (!private_handlers->param_loader->loadedSuccessfully()) {
-    ROS_ERROR("[MidairActivationController]: Could not load all parameters!");
+    RCLCPP_ERROR(node_->get_logger(), "[MidairActivationController]: Could not load all parameters!");
     return false;
   }
 
@@ -118,11 +117,11 @@ bool MidairActivationController::initialize(const ros::NodeHandle &nh, std::shar
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(common_handlers->parent_nh, "MidairActivationController", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(common_handlers->parent_node, "MidairActivationController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[MidairActivationController]: initialized");
+  RCLCPP_INFO(node_->get_logger(), "[MidairActivationController]: initialized");
 
   is_initialized_ = true;
 
@@ -135,7 +134,7 @@ bool MidairActivationController::initialize(const ros::NodeHandle &nh, std::shar
 
 bool MidairActivationController::activate([[maybe_unused]] const ControlOutput &last_control_output) {
 
-  ROS_INFO("[MidairActivationController]: activating");
+  RCLCPP_INFO(node_->get_logger(), "[MidairActivationController]: activating");
 
   auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
 
@@ -143,7 +142,7 @@ bool MidairActivationController::activate([[maybe_unused]] const ControlOutput &
 
   is_active_ = true;
 
-  ROS_INFO("[MidairActivationController]: activated, hover throttle %.2f", hover_throttle_);
+  RCLCPP_INFO(node_->get_logger(), "[MidairActivationController]: activated, hover throttle %.2f", hover_throttle_);
 
   return true;
 }
@@ -157,15 +156,14 @@ void MidairActivationController::deactivate(void) {
   is_active_           = false;
   uav_mass_difference_ = 0;
 
-  ROS_INFO("[MidairActivationController]: deactivated");
+  RCLCPP_INFO(node_->get_logger(), "[MidairActivationController]: deactivated");
 }
 
 //}
 
 /* updateInactive() //{ */
 
-void MidairActivationController::updateInactive(const mrs_msgs::UavState &                                      uav_state,
-                                                [[maybe_unused]] const std::optional<mrs_msgs::TrackerCommand> &tracker_command) {
+void MidairActivationController::updateInactive(const mrs_msgs::msg::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 }
@@ -174,12 +172,10 @@ void MidairActivationController::updateInactive(const mrs_msgs::UavState &      
 
 /* //{ updateWhenAcctive() */
 
-MidairActivationController::ControlOutput MidairActivationController::updateActive(const mrs_msgs::UavState &      uav_state,
-                                                                                   const mrs_msgs::TrackerCommand &tracker_command) {
+MidairActivationController::ControlOutput MidairActivationController::updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
-  mrs_lib::ScopeTimer timer =
-      mrs_lib::ScopeTimer("MidairActivationController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "MidairActivationController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -197,7 +193,7 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
   if (!highest_modality) {
 
-    ROS_ERROR_THROTTLE(1.0, "[MidairActivationController]: output modalities are empty! This error should never appear.");
+    RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[MidairActivationController]: output modalities are empty! This error should never appear.");
 
     return control_output;
   }
@@ -206,9 +202,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::POSITION: {
 
-      mrs_msgs::HwApiPositionCmd cmd;
+      mrs_msgs::msg::HwApiPositionCmd cmd;
 
-      cmd.header.stamp    = ros::Time::now();
+      cmd.header.stamp    = clock_->now();
       cmd.header.frame_id = uav_state.header.frame_id;
 
       cmd.position.x = uav_state.pose.position.x;
@@ -224,9 +220,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::VELOCITY_HDG: {
 
-      mrs_msgs::HwApiVelocityHdgCmd cmd;
+      mrs_msgs::msg::HwApiVelocityHdgCmd cmd;
 
-      cmd.header.stamp    = ros::Time::now();
+      cmd.header.stamp    = clock_->now();
       cmd.header.frame_id = uav_state.header.frame_id;
 
       cmd.velocity.x = uav_state.velocity.linear.x;
@@ -242,9 +238,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::VELOCITY_HDG_RATE: {
 
-      mrs_msgs::HwApiVelocityHdgRateCmd cmd;
+      mrs_msgs::msg::HwApiVelocityHdgRateCmd cmd;
 
-      cmd.header.stamp    = ros::Time::now();
+      cmd.header.stamp    = clock_->now();
       cmd.header.frame_id = uav_state.header.frame_id;
 
       cmd.velocity.x = uav_state.velocity.linear.x;
@@ -260,9 +256,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::ACCELERATION_HDG: {
 
-      mrs_msgs::HwApiAccelerationHdgCmd cmd;
+      mrs_msgs::msg::HwApiAccelerationHdgCmd cmd;
 
-      cmd.header.stamp    = ros::Time::now();
+      cmd.header.stamp    = clock_->now();
       cmd.header.frame_id = uav_state.header.frame_id;
 
       cmd.acceleration.x = uav_state.acceleration.linear.x;
@@ -278,9 +274,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::ACCELERATION_HDG_RATE: {
 
-      mrs_msgs::HwApiAccelerationHdgRateCmd cmd;
+      mrs_msgs::msg::HwApiAccelerationHdgRateCmd cmd;
 
-      cmd.header.stamp    = ros::Time::now();
+      cmd.header.stamp    = clock_->now();
       cmd.header.frame_id = uav_state.header.frame_id;
 
       cmd.acceleration.x = uav_state.acceleration.linear.x;
@@ -296,9 +292,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::ATTITUDE: {
 
-      mrs_msgs::HwApiAttitudeCmd cmd;
+      mrs_msgs::msg::HwApiAttitudeCmd cmd;
 
-      cmd.stamp = ros::Time::now();
+      cmd.stamp = clock_->now();
 
       cmd.orientation = uav_state.pose.orientation;
       cmd.throttle    = hover_throttle_;
@@ -310,9 +306,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::ATTITUDE_RATE: {
 
-      mrs_msgs::HwApiAttitudeRateCmd cmd;
+      mrs_msgs::msg::HwApiAttitudeRateCmd cmd;
 
-      cmd.stamp = ros::Time::now();
+      cmd.stamp = clock_->now();
 
       cmd.body_rate.x = 0;
       cmd.body_rate.y = 0;
@@ -327,9 +323,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::CONTROL_GROUP: {
 
-      mrs_msgs::HwApiControlGroupCmd cmd;
+      mrs_msgs::msg::HwApiControlGroupCmd cmd;
 
-      cmd.stamp = ros::Time::now();
+      cmd.stamp = clock_->now();
 
       cmd.roll     = 0;
       cmd.pitch    = 0;
@@ -343,9 +339,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
     case common::ACTUATORS_CMD: {
 
-      mrs_msgs::HwApiActuatorCmd cmd;
+      mrs_msgs::msg::HwApiActuatorCmd cmd;
 
-      cmd.stamp = ros::Time::now();
+      cmd.stamp = clock_->now();
 
       for (int i = 0; i < common_handlers_->throttle_model.n_motors; i++) {
         cmd.motors.push_back(hover_throttle_);
@@ -364,9 +360,9 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
 /* getStatus() //{ */
 
-const mrs_msgs::ControllerStatus MidairActivationController::getStatus() {
+const mrs_msgs::msg::ControllerStatus MidairActivationController::getStatus() {
 
-  mrs_msgs::ControllerStatus controller_status;
+  mrs_msgs::msg::ControllerStatus controller_status;
 
   controller_status.active = is_active_;
 
@@ -377,7 +373,7 @@ const mrs_msgs::ControllerStatus MidairActivationController::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void MidairActivationController::switchOdometrySource([[maybe_unused]] const mrs_msgs::UavState &new_uav_state) {
+void MidairActivationController::switchOdometrySource([[maybe_unused]] const mrs_msgs::msg::UavState &new_uav_state) {
 }
 
 //}
@@ -391,17 +387,16 @@ void MidairActivationController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr MidairActivationController::setConstraints([
-    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MidairActivationController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
-  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  return nullptr;
 }
 
 //}
 
 /* getHeadingSafely() //{ */
 
-double MidairActivationController::getHeadingSafely(const mrs_msgs::UavState &uav_state, const mrs_msgs::TrackerCommand &tracker_command) {
+double MidairActivationController::getHeadingSafely(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   try {
     return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
@@ -428,5 +423,5 @@ double MidairActivationController::getHeadingSafely(const mrs_msgs::UavState &ua
 
 }  // namespace mrs_uav_controllers
 
-#include <pluginlib/class_list_macros.h>
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::midair_activation_controller::MidairActivationController, mrs_uav_managers::Controller)

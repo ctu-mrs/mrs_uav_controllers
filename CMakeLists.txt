@@ -49,6 +49,7 @@ set(LIBRARIES
   MrsUavControllers_MpcController
   MrsUavControllers_Se3Controller
   MrsUavControllers_FailsafeController
+  MrsUavControllers_MidairActivationController
   )
 
 foreach(DEP IN LISTS DEPENDENCIES)
@@ -103,6 +104,19 @@ ament_target_dependencies(MrsUavControllers_FailsafeController
   )
 
 target_compile_definitions(MrsUavControllers_FailsafeController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
+
+# Midair Activation Controller
+
+add_library(MrsUavControllers_MidairActivationController SHARED
+  src/midair_activation_controller.cpp
+  src/common.cpp
+  )
+
+ament_target_dependencies(MrsUavControllers_MidairActivationController
+  ${DEPENDENCIES}
+  )
+
+target_compile_definitions(MrsUavControllers_MidairActivationController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
 ## --------------------------------------------------------------
 ## |                       export plugins                       |
