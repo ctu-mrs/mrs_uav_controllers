@@ -1514,10 +1514,10 @@ void MpcController::MPC(const mrs_msgs::UavState &uav_state, const mrs_msgs::Tra
 
       rampup_last_time_ = ros::Time::now();
 
-      throttle = rampup_throttle_;
-
       ROS_INFO_THROTTLE(0.1, "[%s]: ramping up throttle, %.4f", name_.c_str(), throttle);
     }
+
+    throttle = rampup_throttle_;
 
   } else {
 

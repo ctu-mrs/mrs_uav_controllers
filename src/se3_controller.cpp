@@ -1266,10 +1266,10 @@ void Se3Controller::SE3Controller(const mrs_msgs::UavState& uav_state, const mrs
 
       rampup_last_time_ = ros::Time::now();
 
-      throttle = rampup_throttle_;
-
       ROS_INFO_THROTTLE(0.1, "[Se3Controller]: ramping up throttle, %.4f", throttle);
     }
+
+    throttle = rampup_throttle_;
 
   } else {
 
