@@ -1533,23 +1533,25 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
   } else if (rampup_active_) {
 
-    double rampup_dt = (clock_->now() - rampup_last_time_).seconds();
-
-    rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
-
-    rampup_last_time_ = clock_->now();
-
-    throttle = rampup_throttle_;
-
-    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ramping up throttle, %.4f", throttle);
-
     // deactivate the rampup when the times up
     if (std::abs((clock_->now() - rampup_start_time_).seconds()) >= rampup_duration_) {
 
       rampup_active_ = false;
 
       RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: rampup finished");
+
+    } else {
+
+      double rampup_dt = (clock_->now() - rampup_last_time_).seconds();
+
+      rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
+
+      rampup_last_time_ = clock_->now();
+
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ramping up throttle, %.4f", throttle);
     }
+
+    throttle = rampup_throttle_;
 
   } else {
 

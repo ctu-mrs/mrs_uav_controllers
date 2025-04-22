@@ -663,7 +663,6 @@ bool MpcController::activate(const ControlOutput &last_control_output) {
     rampup_duration_ = std::abs(throttle_difference) / _rampup_speed_;
 
     RCLCPP_INFO(node_->get_logger(), "[%s]: activating rampup with initial throttle: %.4f, target: %.4f", name_.c_str(), throttle_last_controller.value(), hover_throttle);
-
   }
 
   first_iteration_ = true;
@@ -1670,23 +1669,25 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
   if (rampup_active_) {
 
-    double rampup_dt = (clock_->now() - rampup_last_time_).seconds();
-
-    rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
-
-    rampup_last_time_ = clock_->now();
-
-    throttle = rampup_throttle_;
-
-    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: ramping up throttle, %.4f", name_.c_str(), throttle);
-
     // deactivate the rampup when the times up
     if (std::abs((clock_->now() - rampup_start_time_).seconds()) >= rampup_duration_) {
 
       rampup_active_ = false;
 
       RCLCPP_INFO(node_->get_logger(), "[%s]: rampup finished", name_.c_str());
+
+    } else {
+
+      double rampup_dt = (clock_->now() - rampup_last_time_).seconds();
+
+      rampup_throttle_ += double(rampup_direction_) * _rampup_speed_ * rampup_dt;
+
+      rampup_last_time_ = clock_->now();
+
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: ramping up throttle, %.4f", name_.c_str(), throttle);
     }
+
+    throttle = rampup_throttle_;
 
   } else {
 
