@@ -2133,7 +2133,7 @@ rcl_interfaces::msg::SetParametersResult MpcController::callbackParameters(std::
   // doesn't have any effect - it doesn't even call this callback.
   for (auto &param : parameters) {
 
-    RCLCPP_INFO_STREAM(node_->get_logger(), "got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
+    RCLCPP_DEBUG_STREAM(node_->get_logger(), "got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
 
     if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy") {
 

@@ -1970,7 +1970,7 @@ rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::
   // doesn't have any effect - it doesn't even call this callback.
   for (auto& param : parameters) {
 
-    RCLCPP_INFO_STREAM(node_->get_logger(), "[Se3Controller]: got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
+    RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
 
     if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kpxy") {
 
@@ -2050,7 +2050,7 @@ rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::
 
     } else {
 
-      RCLCPP_WARN_STREAM(node_->get_logger(), "[Se3Controller]: parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
+      RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
     }
   }
 
