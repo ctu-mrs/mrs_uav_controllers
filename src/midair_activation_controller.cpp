@@ -28,6 +28,8 @@ class MidairActivationController : public mrs_uav_managers::Controller {
 public:
   bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
+  void destroy();
+
   bool activate(const ControlOutput &last_control_output);
 
   void deactivate(void);
@@ -126,6 +128,14 @@ bool MidairActivationController::initialize(const rclcpp::Node::SharedPtr &node,
   is_initialized_ = true;
 
   return true;
+}
+
+//}
+
+/* destroy() //{ */
+
+void MidairActivationController::destroy() {
+
 }
 
 //}
