@@ -11,6 +11,6 @@ done
 
 colcon test-result --delete-yes
 
-colcon test --packages-select mrs_uav_controllers --ctest-args -R 'failsafe_controller' --event-handlers console_direct+ console_stderr- console_start_end-
+colcon test --packages-select mrs_uav_controllers --ctest-args -R 'modalities' --event-handlers console_direct+ console_stderr- console_start_end-
 
 colcon test-result --all --verbose

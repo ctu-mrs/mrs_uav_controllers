@@ -8,3 +8,5 @@ function(add_ros_isolated_launch_test path)
 endfunction()
 
 add_subdirectory(./failsafe_controller)
+
+add_subdirectory(./modalities)
