@@ -22,14 +22,14 @@ endif()
 
 if(MRS_ENABLE_TESTING)
   message(WARNING "Setting optimizaton levels for tests")
-  add_definitions("-O0")
+  add_definitions("-O1")
   add_definitions("-g")
 endif()
 
 if(COVERAGE)
   message(WARNING "building with --coverage, the performance might be limited")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -fprofile-arcs")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -fprofile-arcs")
 endif()
 
 set(DEPENDENCIES
@@ -43,6 +43,7 @@ set(DEPENDENCIES
   mrs_uav_managers
   Eigen3
   mrs_mpc_solvers
+  mrs_uav_testing
 )
 
 set(LIBRARIES
@@ -58,10 +59,11 @@ endforeach()
 
 include_directories(
   include
-  ${rclcpp_INCLUDE_DIRS}
   ${mrs_lib_INCLUDE_DIRS}
   ${mrs_uav_managers_INCLUDE_DIRS}
   ${mrs_mpc_solvers_INCLUDE_DIRS}
+  ${mrs_uav_testing_INCLUDE_DIRS}
+  ${rclcpp_INCLUDE_DIRS}
 )
 
 # MPC Controller
@@ -124,6 +126,17 @@ target_compile_definitions(MrsUavControllers_MidairActivationController PRIVATE 
 
 # <package of the base class>, <relative path to the xml>
 pluginlib_export_plugin_description_file(mrs_uav_managers plugins.xml)
+
+## --------------------------------------------------------------
+## |                           testing                          |
+## --------------------------------------------------------------
+
+# BUILD_TESTING is true by default when building with colcon
+if(BUILD_TESTING)
+
+  add_subdirectory(test)
+
+endif()
 
 ## --------------------------------------------------------------
 ## |                           install                          |

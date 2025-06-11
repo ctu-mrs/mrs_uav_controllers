@@ -31,6 +31,7 @@
   <depend>mrs_msgs</depend>
   <depend>mrs_uav_managers</depend>
   <depend>mrs_mpc_solvers</depend>
+  <depend>mrs_uav_testing</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
