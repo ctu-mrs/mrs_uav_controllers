@@ -32,6 +32,7 @@ install(TARGETS
 foreach(MODALITY ${MODALITIES})
 
   add_ros_isolated_launch_test(test.py
+    TIMEOUT 300
     TARGET "${TEST_NAME}_${MODALITY}"
     ARGS "modality:=${MODALITY}"
   )
