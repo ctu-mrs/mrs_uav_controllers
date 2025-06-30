@@ -1695,7 +1695,7 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
       rampup_last_time_ = clock_->now();
 
-      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: ramping up throttle, %.4f", name_.c_str(), throttle);
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: ramping up throttle, %.4f", name_.c_str(), rampup_throttle_);
     }
 
     throttle = rampup_throttle_;

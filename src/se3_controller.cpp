@@ -1559,7 +1559,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
       rampup_last_time_ = clock_->now();
 
-      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ramping up throttle, %.4f", throttle);
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ramping up throttle, %.4f", rampup_throttle_);
     }
 
     throttle = rampup_throttle_;
