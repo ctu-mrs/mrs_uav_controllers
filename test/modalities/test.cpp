@@ -43,7 +43,7 @@ bool Tester::test(void) {
     }
   }
 
-  this->sleep(1.0);
+  sleep(3.0);
 
   {
     auto [success, message] = uh->gotoAbs(0, 0, 2.0, 0);

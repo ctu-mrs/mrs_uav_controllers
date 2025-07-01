@@ -43,6 +43,8 @@ bool Tester::test(void) {
     }
   }
 
+  sleep(3.0);
+
   // | -------------------- trigger failsafe -------------------- |
 
   {
