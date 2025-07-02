@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 import os
 
 class ParamsGetter:
@@ -9,9 +9,7 @@ class ParamsGetter:
 
         package_name = "mrs_uav_controllers"
 
-        rospack = rospkg.RosPack()
-
-        package_path = rospack.get_path(package_name)
+        package_path = get_package_share_directory(package_name)
 
         file_paths = []
 
