@@ -149,18 +149,15 @@ bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::sh
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
 
-  /* const std::string yaml_namespace = "mrs_uav_controllers/failsafe_controller/"; */
-  const std::string yaml_namespace = "";
+  private_handlers->param_loader->loadParam("throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
+  private_handlers->param_loader->loadParam("throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
+  private_handlers->param_loader->loadParam("attitude_controller/gains/kp", _kq_);
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "attitude_controller/gains/kp", _kq_);
+  private_handlers->param_loader->loadParam("rate_controller/gains/kp", _kw_);
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "rate_controller/gains/kp", _kw_);
-
-  private_handlers->param_loader->loadParam(yaml_namespace + "velocity_output/descend_speed", _descend_speed_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "acceleration_output/descend_acceleration", _descend_acceleration_);
+  private_handlers->param_loader->loadParam("velocity_output/descend_speed", _descend_speed_);
+  private_handlers->param_loader->loadParam("acceleration_output/descend_acceleration", _descend_acceleration_);
 
   if (!private_handlers->param_loader->loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: Could not load all parameters!");

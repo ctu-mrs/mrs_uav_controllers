@@ -13,6 +13,7 @@
 #include <mrs_lib/attitude_converter.h>
 #include <mrs_lib/geometry/cyclic.h>
 #include <mrs_lib/subscriber_handler.h>
+#include <mrs_lib/dynparam_mgr.h>
 
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -115,6 +116,8 @@ private:
 
   // | --------------- dynamic reconfigure server --------------- |
 
+  std::shared_ptr<mrs_lib::DynparamMgr> dynparam_mgr_;
+
   struct DrsParams_t
   {
     double kpxy;
@@ -141,11 +144,9 @@ private:
   DrsParams_t drs_params_;
   std::mutex  mutex_drs_params_;
 
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+  /* rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_; */
 
-  rcl_interfaces::msg::SetParametersResult callbackParameters(std::vector<rclcpp::Parameter> parameters);
-
-  void setParamsToServer(const DrsParams_t& drs_params);
+  /* rcl_interfaces::msg::SetParametersResult callbackParameters(std::vector<rclcpp::Parameter> parameters); */
 
   std::atomic<bool> params_setting_running_ = false;
 
@@ -276,52 +277,53 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
     return false;
   }
 
+  dynparam_mgr_ = std::make_shared<mrs_lib::DynparamMgr>(node_, mutex_drs_params_);
+
   // | -------------------- loading my params ------------------- |
 
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
 
-  /* const std::string yaml_namespace = "mrs_uav_controllers/se3_controller/"; */
-  const std::string yaml_namespace = "";
-
   // lateral gains
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kp", gains_.kpxy);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kv", gains_.kvxy);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/ka", gains_.kaxy);
+  private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kp", gains_.kpxy);
+  private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kv", gains_.kvxy);
+  private_handlers->param_loader->loadParam("se3/default_gains/horizontal/ka", gains_.kaxy);
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw", gains_.kiwxy);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kib", gains_.kibxy);
+  private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kiw", gains_.kiwxy);
+  private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kib", gains_.kibxy);
 
   // | ------------------------- rampup ------------------------- |
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/rampup/enabled", _rampup_enabled_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/rampup/speed", _rampup_speed_);
+  private_handlers->param_loader->loadParam("se3/rampup/enabled", _rampup_enabled_);
+  private_handlers->param_loader->loadParam("se3/rampup/speed", _rampup_speed_);
 
   // height gains
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/vertical/kp", gains_.kpz);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/vertical/kv", gains_.kvz);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/vertical/ka", gains_.kaz);
+  private_handlers->param_loader->loadParam("se3/default_gains/vertical/kp", gains_.kpz);
+  private_handlers->param_loader->loadParam("se3/default_gains/vertical/kv", gains_.kvz);
+  private_handlers->param_loader->loadParam("se3/default_gains/vertical/ka", gains_.kaz);
 
   // attitude gains
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/attitude/kq_roll_pitch", gains_.kq_roll_pitch);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/attitude/kq_yaw", gains_.kq_yaw);
+  private_handlers->param_loader->loadParam("se3/default_gains/attitude/kq_roll_pitch", gains_.kq_roll_pitch);
+  private_handlers->param_loader->loadParam("se3/default_gains/attitude/kq_yaw", gains_.kq_yaw);
 
   // attitude rate gains
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_roll_pitch", gains_.kw_roll_pitch);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/attitude_rate_gains/kw_yaw", gains_.kw_yaw);
+  private_handlers->param_loader->loadParam("se3/attitude_rate_gains/kw_roll_pitch", gains_.kw_roll_pitch);
+  private_handlers->param_loader->loadParam("se3/attitude_rate_gains/kw_yaw", gains_.kw_yaw);
 
   // mass estimator
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km", gains_.km);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
+  private_handlers->param_loader->loadParam("se3/default_gains/mass_estimator/km", gains_.km);
+  private_handlers->param_loader->loadParam("se3/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
+  private_handlers->param_loader->loadParam("se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
+
+  dynparam_mgr_->register_param("se3/mass_estimator/fuse_acceleration", &drs_params_.fuse_acceleration, drs_params_.fuse_acceleration);
 
   // integrator limits
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kiw_lim", gains_.kiwxy_lim);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/default_gains/horizontal/kib_lim", gains_.kibxy_lim);
+  private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kiw_lim", gains_.kiwxy_lim);
+  private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kib_lim", gains_.kibxy_lim);
 
   // constraints
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  private_handlers->param_loader->loadParam("se3/constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  private_handlers->param_loader->loadParam("se3/constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
 
   _tilt_angle_failsafe_ = M_PI * (_tilt_angle_failsafe_ / 180.0);
 
@@ -330,32 +332,36 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
     return false;
   }
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/constraints/throttle_saturation", _throttle_saturation_);
+  private_handlers->param_loader->loadParam("se3/constraints/throttle_saturation", _throttle_saturation_);
 
   // gain filtering
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/rate", _gain_filtering_rate_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
+  private_handlers->param_loader->loadParam("se3/gain_filtering/perc_change_rate", _gains_filter_change_rate_);
+  private_handlers->param_loader->loadParam("se3/gain_filtering/min_change_rate", _gains_filter_min_change_rate_);
+  private_handlers->param_loader->loadParam("se3/gain_filtering/rate", _gain_filtering_rate_);
+  private_handlers->param_loader->loadParam("se3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/preferred_output", drs_params_.preferred_output_mode);
+  private_handlers->param_loader->loadParam("se3/preferred_output", drs_params_.preferred_output_mode);
+  dynparam_mgr_->register_param("se3/preferred_output", &drs_params_.preferred_output_mode, drs_params_.preferred_output_mode, mrs_lib::DynparamMgr::range_t<int>(0, 3));
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/rotation_matrix", drs_params_.rotation_type);
+  private_handlers->param_loader->loadParam("se3/rotation_matrix", drs_params_.rotation_type);
+  dynparam_mgr_->register_param("se3/rotation_matrix", &drs_params_.rotation_type, drs_params_.rotation_type, mrs_lib::DynparamMgr::range_t<int>(0, 1));
 
   // angular rate feed forward
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
-  private_handlers->param_loader->loadParam(yaml_namespace + "se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  private_handlers->param_loader->loadParam("se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
+  dynparam_mgr_->register_param("se3/angular_rate_feedforward/parasitic_pitch_roll", &drs_params_.pitch_roll_heading_rate_compensation, drs_params_.pitch_roll_heading_rate_compensation);
+  private_handlers->param_loader->loadParam("se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  dynparam_mgr_->register_param("se3/angular_rate_feedforward/jerk", &drs_params_.jerk_feedforward, drs_params_.jerk_feedforward);
 
   // | ------------------- position pid params ------------------ |
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/p", _pos_pid_p_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/i", _pos_pid_i_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/translation_gains/d", _pos_pid_d_);
+  private_handlers->param_loader->loadParam("position_controller/translation_gains/p", _pos_pid_p_);
+  private_handlers->param_loader->loadParam("position_controller/translation_gains/i", _pos_pid_i_);
+  private_handlers->param_loader->loadParam("position_controller/translation_gains/d", _pos_pid_d_);
 
-  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/p", _hdg_pid_p_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/i", _hdg_pid_i_);
-  private_handlers->param_loader->loadParam(yaml_namespace + "position_controller/heading_gains/d", _hdg_pid_d_);
+  private_handlers->param_loader->loadParam("position_controller/heading_gains/p", _hdg_pid_p_);
+  private_handlers->param_loader->loadParam("position_controller/heading_gains/i", _hdg_pid_i_);
+  private_handlers->param_loader->loadParam("position_controller/heading_gains/d", _hdg_pid_d_);
 
   // | ------------------ finish loading params ----------------- |
 
@@ -391,219 +397,47 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
 
   // | --------------- dynamic reconfigure server --------------- |
 
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+  dynparam_mgr_->register_param("horizontal.kpxy", &drs_params_.kpxy, gains_.kpxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 40.0));
+  dynparam_mgr_->register_param("horizontal.kvxy", &drs_params_.kvxy, gains_.kvxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 40.0));
 
-    rcl_interfaces::msg::FloatingPointRange range;
+  dynparam_mgr_->register_param("horizontal.kaxy", &drs_params_.kaxy, gains_.kaxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 2.0));
 
-    range.from_value = 0.0;
-    range.to_value   = 40.0;
+  dynparam_mgr_->register_param("horizontal.kiwxy", &drs_params_.kiwxy, gains_.kiwxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
+  dynparam_mgr_->register_param("horizontal.kibxy", &drs_params_.kibxy, gains_.kibxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
+  dynparam_mgr_->register_param("horizontal.kiwxy_lim", &drs_params_.kiwxy_lim, gains_.kiwxy_lim, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
+  dynparam_mgr_->register_param("horizontal.kibxy_lim", &drs_params_.kibxy_lim, gains_.kibxy_lim, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
 
-    param_desc.floating_point_range = {range};
+  dynparam_mgr_->register_param("vertical.kpz", &drs_params_.kpz, gains_.kpz, mrs_lib::DynparamMgr::range_t<double>(0.0, 200.0));
+  dynparam_mgr_->register_param("vertical.kvz", &drs_params_.kvz, gains_.kvz, mrs_lib::DynparamMgr::range_t<double>(0.0, 200.0));
 
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+  dynparam_mgr_->register_param("vertical.kaz", &drs_params_.kaz, gains_.kaz, mrs_lib::DynparamMgr::range_t<double>(0.0, 2.0));
 
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kpxy", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kvxy", 0.0, param_desc);
-  }
+  dynparam_mgr_->register_param("vertical.kq_roll_pitch", &drs_params_.kq_roll_pitch, gains_.kq_roll_pitch, mrs_lib::DynparamMgr::range_t<double>(0.0, 20.0));
 
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+  dynparam_mgr_->register_param("attitude.kq_yaw", &drs_params_.kq_yaw, gains_.kq_yaw, mrs_lib::DynparamMgr::range_t<double>(0.0, 40.0));
 
-    rcl_interfaces::msg::FloatingPointRange range;
+  dynparam_mgr_->register_param("mass.km", &drs_params_.km, gains_.km, mrs_lib::DynparamMgr::range_t<double>(0.0, 2.0));
 
-    range.from_value = 0.0;
-    range.to_value   = 2.0;
+  dynparam_mgr_->register_param("mass.km_lim", &drs_params_.km_lim, gains_.km_lim, mrs_lib::DynparamMgr::range_t<double>(0.0, 50.0));
 
-    param_desc.floating_point_range = {range};
+  drs_params_.kpxy          = gains_.kpxy;
+  drs_params_.kvxy          = gains_.kvxy;
+  drs_params_.kaxy          = gains_.kaxy;
+  drs_params_.kiwxy         = gains_.kiwxy;
+  drs_params_.kibxy         = gains_.kibxy;
+  drs_params_.kiwxy_lim     = gains_.kiwxy_lim;
+  drs_params_.kibxy_lim     = gains_.kibxy_lim;
+  drs_params_.kpz           = gains_.kpz;
+  drs_params_.kvz           = gains_.kvz;
+  drs_params_.kaz           = gains_.kaz;
+  drs_params_.kq_roll_pitch = gains_.kq_roll_pitch;
+  drs_params_.kq_yaw        = gains_.kq_yaw;
+  drs_params_.km            = gains_.km;
+  drs_params_.km_lim        = gains_.km_lim;
 
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
+  dynparam_mgr_->update_to_ros();
 
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kaxy", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 10.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 200.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/vertical.kpz", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/vertical.kvz", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 2.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/vertical.kaz", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 20.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 40.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 2.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", false, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 50.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km_lim", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::IntegerRange range;
-
-    range.from_value = 0;
-    range.to_value   = 3;
-
-    param_desc.integer_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/preferred_output_mode", 0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/jerk_feedforward", false, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/pitch_roll_heading_rate_compensation", false, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::IntegerRange range;
-
-    range.from_value = 0;
-    range.to_value   = 1;
-
-    param_desc.integer_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/rotation_type", 0, param_desc);
-  }
-
-  drs_params_.kpxy             = gains_.kpxy;
-  drs_params_.kvxy             = gains_.kvxy;
-  drs_params_.kaxy             = gains_.kaxy;
-  drs_params_.kiwxy            = gains_.kiwxy;
-  drs_params_.kibxy            = gains_.kibxy;
-  drs_params_.kpz              = gains_.kpz;
-  drs_params_.kvz              = gains_.kvz;
-  drs_params_.kaz              = gains_.kaz;
-  drs_params_.kq_roll_pitch    = gains_.kq_roll_pitch;
-  drs_params_.kq_yaw           = gains_.kq_yaw;
-  drs_params_.kiwxy_lim        = gains_.kiwxy_lim;
-  drs_params_.kibxy_lim        = gains_.kibxy_lim;
-  drs_params_.km               = gains_.km;
-  drs_params_.km_lim           = gains_.km_lim;
-  drs_params_.jerk_feedforward = true;
-
-  setParamsToServer(drs_params_);
-
-  param_callback_handle_ = node_->add_on_set_parameters_callback(std::bind(&Se3Controller::callbackParameters, this, std::placeholders::_1));
+  /* param_callback_handle_ = node_->add_on_set_parameters_callback(std::bind(&Se3Controller::callbackParameters, this, std::placeholders::_1)); */
 
   // | ------------------------- timers ------------------------- |
 
@@ -1963,117 +1797,97 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, 
 
 /* callbackParameters() //{ */
 
-rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::vector<rclcpp::Parameter> parameters) {
+/* rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::vector<rclcpp::Parameter> parameters) { */
 
-  rcl_interfaces::msg::SetParametersResult result;
+/*   rcl_interfaces::msg::SetParametersResult result; */
 
-  if (params_setting_running_) {
+/*   if (params_setting_running_) { */
 
-    result.successful = true;
-    result.reason     = "not seting, params update triggered from the inside";
+/*     result.successful = true; */
+/*     result.reason     = "not seting, params update triggered from the inside"; */
 
-    return result;
-  }
+/*     return result; */
+/*   } */
 
-  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+/*   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_); */
 
-  // Note that setting a parameter to a nonsensical value (such as setting the `param_namespace.floating_number` parameter to `hello`)
-  // doesn't have any effect - it doesn't even call this callback.
-  for (auto& param : parameters) {
+/*   // Note that setting a parameter to a nonsensical value (such as setting the `param_namespace.floating_number` parameter to `hello`) */
+/*   // doesn't have any effect - it doesn't even call this callback. */
+/*   for (auto& param : parameters) { */
 
-    RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
+/*     RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'"); */
 
-    if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kpxy") {
+/*     if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kpxy") { */
 
-      drs_params.kpxy = param.as_double();
+/*       drs_params.kpxy = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kvxy") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kvxy") { */
 
-      drs_params.kvxy = param.as_double();
+/*       drs_params.kvxy = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kaxy") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kaxy") { */
 
-      drs_params.kaxy = param.as_double();
+/*       drs_params.kaxy = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy") { */
 
-      drs_params.kiwxy = param.as_double();
+/*       drs_params.kiwxy = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy") { */
 
-      drs_params.kibxy = param.as_double();
+/*       drs_params.kibxy = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy_lim") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy_lim") { */
 
-      drs_params.kiwxy_lim = param.as_double();
+/*       drs_params.kiwxy_lim = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy_lim") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy_lim") { */
 
-      drs_params.kibxy_lim = param.as_double();
+/*       drs_params.kibxy_lim = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kpz") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kpz") { */
 
-      drs_params.kpz = param.as_double();
+/*       drs_params.kpz = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kvz") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kvz") { */
 
-      drs_params.kvz = param.as_double();
+/*       drs_params.kvz = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kaz") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kaz") { */
 
-      drs_params.kaz = param.as_double();
+/*       drs_params.kaz = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_roll_pitch") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_roll_pitch") { */
 
-      drs_params.kq_roll_pitch = param.as_double();
+/*       drs_params.kq_roll_pitch = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_yaw") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_yaw") { */
 
-      drs_params.kq_yaw = param.as_double();
+/*       drs_params.kq_yaw = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km") { */
 
-      drs_params.km = param.as_double();
+/*       drs_params.km = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.fuse_acceleration") {
+/*     } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km_lim") { */
 
-      drs_params.fuse_acceleration = param.as_bool();
+/*       drs_params.km_lim = param.as_double(); */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km_lim") {
+/*     } else { */
 
-      drs_params.km_lim = param.as_double();
+/*       RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: parameter: '" << param.get_name() << "' is not dynamically reconfigurable!"); */
+/*     } */
+/*   } */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/preferred_output_mode") {
+/*   RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: params updated"); */
 
-      drs_params.preferred_output_mode = param.as_int();
+/*   result.successful = true; */
+/*   result.reason     = "OK"; */
 
-    } else if (param.get_name() == node_->get_sub_namespace() + "/jerk_feedforward") {
+/*   mrs_lib::set_mutexed(mutex_drs_params_, drs_params, drs_params_); */
 
-      drs_params.jerk_feedforward = param.as_bool();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/pitch_roll_heading_rate_compensation") {
-
-      drs_params.pitch_roll_heading_rate_compensation = param.as_bool();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/rotation_type") {
-
-      drs_params.rotation_type = param.as_int();
-
-    } else {
-
-      RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
-    }
-  }
-
-  RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: params updated");
-
-  result.successful = true;
-  result.reason     = "OK";
-
-  mrs_lib::set_mutexed(mutex_drs_params_, drs_params, drs_params_);
-
-  return result;
-}
+/*   return result; */
+/* } */
 
 //}
 
@@ -2128,25 +1942,7 @@ void Se3Controller::timerGains() {
   // set the gains back to dynamic reconfigure
   // and only do it when some filtering occurs
   if (updated) {
-
-    drs_params.kpxy          = gains.kpxy;
-    drs_params.kvxy          = gains.kvxy;
-    drs_params.kaxy          = gains.kaxy;
-    drs_params.kiwxy         = gains.kiwxy;
-    drs_params.kibxy         = gains.kibxy;
-    drs_params.kpz           = gains.kpz;
-    drs_params.kvz           = gains.kvz;
-    drs_params.kaz           = gains.kaz;
-    drs_params.kq_roll_pitch = gains.kq_roll_pitch;
-    drs_params.kq_yaw        = gains.kq_yaw;
-    drs_params.kiwxy_lim     = gains.kiwxy_lim;
-    drs_params.kibxy_lim     = gains.kibxy_lim;
-    drs_params.km            = gains.km;
-    drs_params.km_lim        = gains.km_lim;
-
-    setParamsToServer(drs_params);
-
-    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 10000, "[Se3Controller]: gains have been updated");
+    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: filtering gains after a dynamic parameter update");
   }
 }
 
@@ -2224,36 +2020,6 @@ double Se3Controller::getHeadingSafely(const mrs_msgs::msg::UavState& uav_state,
   }
 
   return 0;
-}
-
-//}
-
-/* setParamsToServer() //{ */
-
-void Se3Controller::setParamsToServer(const DrsParams_t& drs_params) {
-
-  mrs_lib::AtomicScopeFlag unset_running(params_setting_running_);
-
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kpxy", drs_params.kpxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kvxy", drs_params.kvxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kaxy", drs_params.kaxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/vertical.kpz", drs_params.kpz));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/vertical.kvz", drs_params.kvz));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/vertical.kaz", drs_params.kaz));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/jerk_feedforward", drs_params.jerk_feedforward));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/preferred_output_mode", drs_params.preferred_output_mode));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", drs_params.kiwxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy", drs_params.kibxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", drs_params.kiwxy_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", drs_params.kibxy_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", drs_params.kq_roll_pitch));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", drs_params.kq_yaw));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km", drs_params.km));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km_lim", drs_params.km_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/pitch_roll_heading_rate_compensation", drs_params.pitch_roll_heading_rate_compensation));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/rotation_type", drs_params.rotation_type));
 }
 
 //}

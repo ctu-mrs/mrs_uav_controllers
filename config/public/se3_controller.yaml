@@ -31,7 +31,7 @@ mrs_uav_controllers:
                           #  1 = control_group,
                           #  2 = attitude_rate,
                           #  3 = attitude,}
-                          #
+
       mass_estimator:
 
         fuse_acceleration: false
