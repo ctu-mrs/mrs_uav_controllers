@@ -412,7 +412,7 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
 
   dynparam_mgr_->register_param("vertical.kaz", &drs_params_.kaz, gains_.kaz, mrs_lib::DynparamMgr::range_t<double>(0.0, 2.0));
 
-  dynparam_mgr_->register_param("vertical.kq_roll_pitch", &drs_params_.kq_roll_pitch, gains_.kq_roll_pitch, mrs_lib::DynparamMgr::range_t<double>(0.0, 20.0));
+  dynparam_mgr_->register_param("attitude.kq_roll_pitch", &drs_params_.kq_roll_pitch, gains_.kq_roll_pitch, mrs_lib::DynparamMgr::range_t<double>(0.0, 20.0));
 
   dynparam_mgr_->register_param("attitude.kq_yaw", &drs_params_.kq_yaw, gains_.kq_yaw, mrs_lib::DynparamMgr::range_t<double>(0.0, 40.0));
 
