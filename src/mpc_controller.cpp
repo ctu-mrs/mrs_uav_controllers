@@ -19,6 +19,7 @@
 #include <mrs_lib/subscriber_handler.h>
 #include <mrs_lib/timer_handler.h>
 #include <mrs_lib/utils.h>
+#include <mrs_lib/dynparam_mgr.h>
 
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -113,6 +114,8 @@ private:
 
   // | --------------- dynamic reconfigure server --------------- |
 
+  std::shared_ptr<mrs_lib::DynparamMgr> dynparam_mgr_;
+
   struct DrsParams_t
   {
     double kiwxy;
@@ -130,14 +133,6 @@ private:
 
   DrsParams_t drs_params_;
   std::mutex  mutex_drs_params_;
-
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
-
-  rcl_interfaces::msg::SetParametersResult callbackParameters(std::vector<rclcpp::Parameter> parameters);
-
-  void setParamsToServer(const DrsParams_t &drs_params);
-
-  std::atomic<bool> params_setting_running_ = false;
 
   // | ----------------------- controllers ---------------------- |
 
@@ -311,6 +306,8 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
     return false;
   }
 
+  dynparam_mgr_ = std::make_shared<mrs_lib::DynparamMgr>(node_, mutex_drs_params_);
+
   // | -------------------- loading my params ------------------- |
 
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/mpc_controller.yaml");
@@ -368,7 +365,9 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // mass estimator
   private_handlers->param_loader->loadParam("so3/mass_estimator/km", gains_.km);
-  private_handlers->param_loader->loadParam("so3/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
+
+  dynparam_mgr_->register_param("se3/mass_estimator/fuse_acceleration", &drs_params_.fuse_acceleration, drs_params_.fuse_acceleration);
+
   private_handlers->param_loader->loadParam("so3/mass_estimator/km_lim", gains_.km_lim);
 
   // constraints
@@ -392,9 +391,11 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // angular rate feed forward
   private_handlers->param_loader->loadParam("so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+  dynparam_mgr_->register_param("so3/angular_rate_feedforward/jerk", &drs_params_.jerk_feedforward, drs_params_.jerk_feedforward);
 
   // output mode
   private_handlers->param_loader->loadParam("so3/preferred_output", drs_params_.preferred_output_mode);
+  dynparam_mgr_->register_param("so3/preferred_output", &drs_params_.preferred_output_mode, drs_params_.preferred_output_mode, mrs_lib::DynparamMgr::range_t<int>(0, 3));
 
   // | ------------------- position pid params ------------------ |
 
@@ -446,127 +447,29 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // | --------------- declare dynamic parameters --------------- |
 
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
+  dynparam_mgr_->register_param("horizontal.kiwxy", &drs_params_.kiwxy, gains_.kiwxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
+  dynparam_mgr_->register_param("horizontal.kibxy", &drs_params_.kibxy, gains_.kibxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
+  dynparam_mgr_->register_param("horizontal.kiwxy_lim", &drs_params_.kiwxy_lim, gains_.kiwxy_lim, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
+  dynparam_mgr_->register_param("horizontal.kibxy_lim", &drs_params_.kibxy_lim, gains_.kibxy_lim, mrs_lib::DynparamMgr::range_t<double>(0.0, 10.0));
 
-    rcl_interfaces::msg::FloatingPointRange range;
+  dynparam_mgr_->register_param("attitude.kq_roll_pitch", &drs_params_.kq_roll_pitch, gains_.kq_roll_pitch, mrs_lib::DynparamMgr::range_t<double>(0.0, 20.0));
 
-    range.from_value = 0.0;
-    range.to_value   = 10.0;
+  dynparam_mgr_->register_param("attitude.kq_yaw", &drs_params_.kq_yaw, gains_.kq_yaw, mrs_lib::DynparamMgr::range_t<double>(0.0, 40.0));
 
-    param_desc.floating_point_range = {range};
+  dynparam_mgr_->register_param("mass.km", &drs_params_.km, gains_.km, mrs_lib::DynparamMgr::range_t<double>(0.0, 2.0));
 
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", 0.0, param_desc);
-    node_->declare_parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 20.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 40.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 2.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", false, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::FloatingPointRange range;
-
-    range.from_value = 0.0;
-    range.to_value   = 50.0;
-
-    param_desc.floating_point_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/mass.km_lim", 0.0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    rcl_interfaces::msg::IntegerRange range;
-
-    range.from_value = 0;
-    range.to_value   = 3;
-
-    param_desc.integer_range = {range};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/preferred_output_mode", 0, param_desc);
-  }
-
-  {
-    auto param_desc = rcl_interfaces::msg::ParameterDescriptor{};
-
-    param_desc.type = rcl_interfaces::msg::ParameterType::PARAMETER_BOOL;
-
-    node_->declare_parameter(node_->get_sub_namespace() + "/jerk_feedforward", false, param_desc);
-  }
+  dynparam_mgr_->register_param("mass.km_lim", &drs_params_.km_lim, gains_.km_lim, mrs_lib::DynparamMgr::range_t<double>(0.0, 50.0));
 
   drs_params_.kiwxy         = gains_.kiwxy;
   drs_params_.kibxy         = gains_.kibxy;
+  drs_params_.kiwxy_lim     = gains_.kiwxy_lim;
+  drs_params_.kibxy_lim     = gains_.kibxy_lim;
   drs_params_.kq_roll_pitch = gains_.kq_roll_pitch;
   drs_params_.kq_yaw        = gains_.kq_yaw;
   drs_params_.km            = gains_.km;
   drs_params_.km_lim        = gains_.km_lim;
-  drs_params_.kiwxy_lim     = gains_.kiwxy_lim;
-  drs_params_.kibxy_lim     = gains_.kibxy_lim;
 
-  setParamsToServer(drs_params_);
-
-  param_callback_handle_ = node_->add_on_set_parameters_callback(std::bind(&MpcController::callbackParameters, this, std::placeholders::_1));
+  dynparam_mgr_->update_to_ros();
 
   // | --------------------- service servers -------------------- |
 
@@ -2121,90 +2024,6 @@ void MpcController::PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, 
 // |                          callbacks                         |
 // --------------------------------------------------------------
 
-/* callbackParameters() //{ */
-
-rcl_interfaces::msg::SetParametersResult MpcController::callbackParameters(std::vector<rclcpp::Parameter> parameters) {
-
-  rcl_interfaces::msg::SetParametersResult result;
-
-  if (params_setting_running_) {
-
-    result.successful = true;
-    result.reason     = "not seting, params update triggered from the inside";
-
-    return result;
-  }
-
-  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
-
-  // Note that setting a parameter to a nonsensical value (such as setting the `param_namespace.floating_number` parameter to `hello`)
-  // doesn't have any effect - it doesn't even call this callback.
-  for (auto &param : parameters) {
-
-    RCLCPP_DEBUG_STREAM(node_->get_logger(), "got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'");
-
-    if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy") {
-
-      drs_params.kiwxy = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy") {
-
-      drs_params.kibxy = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy_lim") {
-
-      drs_params.kiwxy_lim = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy_lim") {
-
-      drs_params.kibxy_lim = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_roll_pitch") {
-
-      drs_params.kq_roll_pitch = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_yaw") {
-
-      drs_params.kq_yaw = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km") {
-
-      drs_params.km = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.fuse_acceleration") {
-
-      drs_params.fuse_acceleration = param.as_bool();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km_lim") {
-
-      drs_params.km_lim = param.as_double();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/preferred_output_mode") {
-
-      drs_params.preferred_output_mode = param.as_int();
-
-    } else if (param.get_name() == node_->get_sub_namespace() + "/jerk_feedforward") {
-
-      drs_params.jerk_feedforward = param.as_bool();
-
-    } else {
-
-      RCLCPP_DEBUG_STREAM(node_->get_logger(), "parameter: '" << param.get_name() << "' is not dynamically reconfigurable!");
-    }
-  }
-
-  RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[MpcController]: params updated");
-
-  result.successful = true;
-  result.reason     = "OK";
-
-  mrs_lib::set_mutexed(mutex_drs_params_, drs_params, drs_params_);
-
-  return result;
-}
-
-//}
-
 /* //{ callbackSetIntegralTerms() */
 
 bool MpcController::callbackSetIntegralTerms(const std::shared_ptr<std_srvs::srv::SetBool::Request> &request, const std::shared_ptr<std_srvs::srv::SetBool::Response> &response) {
@@ -2269,19 +2088,7 @@ void MpcController::timerGains() {
   // set the gains back to dynamic reconfigure
   // and only do it when some filtering occurs
   if (updated) {
-
-    drs_params.kiwxy         = gains.kiwxy;
-    drs_params.kibxy         = gains.kibxy;
-    drs_params.kq_roll_pitch = gains.kq_roll_pitch;
-    drs_params.kq_yaw        = gains.kq_yaw;
-    drs_params.km            = gains.km;
-    drs_params.km_lim        = gains.km_lim;
-    drs_params.kiwxy_lim     = gains.kiwxy_lim;
-    drs_params.kibxy_lim     = gains.kibxy_lim;
-
-    setParamsToServer(drs_params);
-
-    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 10000, "[%s]: gains have been updated", name_.c_str());
+    RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: filtering gains after a dynamic parameter update", name_.c_str());
   }
 }
 
@@ -2359,28 +2166,6 @@ double MpcController::getHeadingSafely(const mrs_msgs::msg::UavState &uav_state,
   }
 
   return 0;
-}
-
-//}
-
-/* setParamsToServer() //{ */
-
-void MpcController::setParamsToServer(const DrsParams_t &drs_params) {
-
-  mrs_lib::AtomicScopeFlag unset_running(params_setting_running_);
-
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/jerk_feedforward", drs_params.jerk_feedforward));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/preferred_output_mode", drs_params.preferred_output_mode));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy", drs_params.kiwxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy", drs_params.kibxy));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kiwxy_lim", drs_params.kiwxy_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/horizontal.kibxy_lim", drs_params.kibxy_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_roll_pitch", drs_params.kq_roll_pitch));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/attitude.kq_yaw", drs_params.kq_yaw));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km", drs_params.km));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.km_lim", drs_params.km_lim));
-  node_->set_parameter(rclcpp::Parameter(node_->get_sub_namespace() + "/mass.fuse_acceleration", drs_params.fuse_acceleration));
 }
 
 //}

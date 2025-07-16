@@ -144,12 +144,6 @@ private:
   DrsParams_t drs_params_;
   std::mutex  mutex_drs_params_;
 
-  /* rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_; */
-
-  /* rcl_interfaces::msg::SetParametersResult callbackParameters(std::vector<rclcpp::Parameter> parameters); */
-
-  std::atomic<bool> params_setting_running_ = false;
-
   // | ----------------------- controllers ---------------------- |
 
   void positionPassthrough(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
@@ -350,6 +344,7 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
   // angular rate feed forward
   private_handlers->param_loader->loadParam("se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
   dynparam_mgr_->register_param("se3/angular_rate_feedforward/parasitic_pitch_roll", &drs_params_.pitch_roll_heading_rate_compensation, drs_params_.pitch_roll_heading_rate_compensation);
+
   private_handlers->param_loader->loadParam("se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
   dynparam_mgr_->register_param("se3/angular_rate_feedforward/jerk", &drs_params_.jerk_feedforward, drs_params_.jerk_feedforward);
 
@@ -1788,106 +1783,6 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, 
 
   last_control_output_.diagnostics.controller = "Se3Controller";
 }
-
-//}
-
-// --------------------------------------------------------------
-// |                          callbacks                         |
-// --------------------------------------------------------------
-
-/* callbackParameters() //{ */
-
-/* rcl_interfaces::msg::SetParametersResult Se3Controller::callbackParameters(std::vector<rclcpp::Parameter> parameters) { */
-
-/*   rcl_interfaces::msg::SetParametersResult result; */
-
-/*   if (params_setting_running_) { */
-
-/*     result.successful = true; */
-/*     result.reason     = "not seting, params update triggered from the inside"; */
-
-/*     return result; */
-/*   } */
-
-/*   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_); */
-
-/*   // Note that setting a parameter to a nonsensical value (such as setting the `param_namespace.floating_number` parameter to `hello`) */
-/*   // doesn't have any effect - it doesn't even call this callback. */
-/*   for (auto& param : parameters) { */
-
-/*     RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: got parameter: '" << param.get_name() << "' with value '" << param.value_to_string() << "'"); */
-
-/*     if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kpxy") { */
-
-/*       drs_params.kpxy = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kvxy") { */
-
-/*       drs_params.kvxy = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kaxy") { */
-
-/*       drs_params.kaxy = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy") { */
-
-/*       drs_params.kiwxy = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy") { */
-
-/*       drs_params.kibxy = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kiwxy_lim") { */
-
-/*       drs_params.kiwxy_lim = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/horizontal.kibxy_lim") { */
-
-/*       drs_params.kibxy_lim = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kpz") { */
-
-/*       drs_params.kpz = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kvz") { */
-
-/*       drs_params.kvz = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/vertical.kaz") { */
-
-/*       drs_params.kaz = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_roll_pitch") { */
-
-/*       drs_params.kq_roll_pitch = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/attitude.kq_yaw") { */
-
-/*       drs_params.kq_yaw = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km") { */
-
-/*       drs_params.km = param.as_double(); */
-
-/*     } else if (param.get_name() == node_->get_sub_namespace() + "/mass.km_lim") { */
-
-/*       drs_params.km_lim = param.as_double(); */
-
-/*     } else { */
-
-/*       RCLCPP_DEBUG_STREAM(node_->get_logger(), "[Se3Controller]: parameter: '" << param.get_name() << "' is not dynamically reconfigurable!"); */
-/*     } */
-/*   } */
-
-/*   RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: params updated"); */
-
-/*   result.successful = true; */
-/*   result.reason     = "OK"; */
-
-/*   mrs_lib::set_mutexed(mutex_drs_params_, drs_params, drs_params_); */
-
-/*   return result; */
-/* } */
 
 //}
 
