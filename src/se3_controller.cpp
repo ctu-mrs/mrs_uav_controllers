@@ -278,6 +278,8 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/se3_controller.yaml");
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/se3_controller.yaml");
 
+  dynparam_mgr_->get_param_provider().copyYamls(private_handlers->param_loader->getParamProvider());
+
   // lateral gains
   private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kp", gains_.kpxy);
   private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kv", gains_.kvxy);
@@ -306,10 +308,8 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
 
   // mass estimator
   private_handlers->param_loader->loadParam("se3/default_gains/mass_estimator/km", gains_.km);
-  private_handlers->param_loader->loadParam("se3/mass_estimator/fuse_acceleration", drs_params_.fuse_acceleration);
   private_handlers->param_loader->loadParam("se3/default_gains/mass_estimator/km_lim", gains_.km_lim);
-
-  dynparam_mgr_->register_param("se3/mass_estimator/fuse_acceleration", &drs_params_.fuse_acceleration, drs_params_.fuse_acceleration);
+  dynparam_mgr_->register_param("se3/mass_estimator/fuse_acceleration", &drs_params_.fuse_acceleration);
 
   // integrator limits
   private_handlers->param_loader->loadParam("se3/default_gains/horizontal/kiw_lim", gains_.kiwxy_lim);
@@ -335,18 +335,12 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
   private_handlers->param_loader->loadParam("se3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // output mode
-  private_handlers->param_loader->loadParam("se3/preferred_output", drs_params_.preferred_output_mode);
-  dynparam_mgr_->register_param("se3/preferred_output", &drs_params_.preferred_output_mode, drs_params_.preferred_output_mode, mrs_lib::DynparamMgr::range_t<int>(0, 3));
-
-  private_handlers->param_loader->loadParam("se3/rotation_matrix", drs_params_.rotation_type);
-  dynparam_mgr_->register_param("se3/rotation_matrix", &drs_params_.rotation_type, drs_params_.rotation_type, mrs_lib::DynparamMgr::range_t<int>(0, 1));
+  dynparam_mgr_->register_param("se3/preferred_output", &drs_params_.preferred_output_mode, mrs_lib::DynparamMgr::range_t<int>(0, 3));
+  dynparam_mgr_->register_param("se3/rotation_matrix", &drs_params_.rotation_type, mrs_lib::DynparamMgr::range_t<int>(0, 1));
 
   // angular rate feed forward
-  private_handlers->param_loader->loadParam("se3/angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
-  dynparam_mgr_->register_param("se3/angular_rate_feedforward/parasitic_pitch_roll", &drs_params_.pitch_roll_heading_rate_compensation, drs_params_.pitch_roll_heading_rate_compensation);
-
-  private_handlers->param_loader->loadParam("se3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
-  dynparam_mgr_->register_param("se3/angular_rate_feedforward/jerk", &drs_params_.jerk_feedforward, drs_params_.jerk_feedforward);
+  dynparam_mgr_->register_param("se3/angular_rate_feedforward/parasitic_pitch_roll", &drs_params_.pitch_roll_heading_rate_compensation);
+  dynparam_mgr_->register_param("se3/angular_rate_feedforward/jerk", &drs_params_.jerk_feedforward);
 
   // | ------------------- position pid params ------------------ |
 
@@ -360,7 +354,7 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
 
   // | ------------------ finish loading params ----------------- |
 
-  if (!private_handlers->param_loader->loadedSuccessfully()) {
+  if (!private_handlers->param_loader->loadedSuccessfully() || !dynparam_mgr_->loaded_successfully()) {
     RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: could not load all parameters!");
     return false;
   }
@@ -1259,8 +1253,6 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
       if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
         uav_mass_difference_ += 1.0 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
-
-        RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: mass estimation using IMU acc runs, mass difference %.3f kg", uav_mass_difference_);
       }
 
     } else if (tracker_command.use_position_vertical) {

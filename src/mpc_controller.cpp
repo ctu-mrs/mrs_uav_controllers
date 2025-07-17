@@ -315,6 +315,8 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/" + private_handlers->name_space + ".yaml");
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/" + private_handlers->name_space + ".yaml");
 
+  dynparam_mgr_->get_param_provider().copyYamls(private_handlers->param_loader->getParamProvider());
+
   // load the dynamicall model parameters
   private_handlers->param_loader->loadParam("mpc/mpc_model/number_of_states", _n_states_);
   private_handlers->param_loader->loadParam("mpc/mpc_model/dt1", _dt1_);
@@ -365,9 +367,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // mass estimator
   private_handlers->param_loader->loadParam("so3/mass_estimator/km", gains_.km);
-
-  dynparam_mgr_->register_param("se3/mass_estimator/fuse_acceleration", &drs_params_.fuse_acceleration, drs_params_.fuse_acceleration);
-
+  dynparam_mgr_->register_param("so3/mass_estimator/fuse_acceleration", &drs_params_.fuse_acceleration);
   private_handlers->param_loader->loadParam("so3/mass_estimator/km_lim", gains_.km_lim);
 
   // constraints
@@ -390,12 +390,10 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
   private_handlers->param_loader->loadParam("so3/gain_filtering/gain_mute_coefficient", _gain_mute_coefficient_);
 
   // angular rate feed forward
-  private_handlers->param_loader->loadParam("so3/angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
-  dynparam_mgr_->register_param("so3/angular_rate_feedforward/jerk", &drs_params_.jerk_feedforward, drs_params_.jerk_feedforward);
+  dynparam_mgr_->register_param("so3/angular_rate_feedforward/jerk", &drs_params_.jerk_feedforward);
 
   // output mode
-  private_handlers->param_loader->loadParam("so3/preferred_output", drs_params_.preferred_output_mode);
-  dynparam_mgr_->register_param("so3/preferred_output", &drs_params_.preferred_output_mode, drs_params_.preferred_output_mode, mrs_lib::DynparamMgr::range_t<int>(0, 3));
+  dynparam_mgr_->register_param("so3/preferred_output", &drs_params_.preferred_output_mode, mrs_lib::DynparamMgr::range_t<int>(0, 3));
 
   // | ------------------- position pid params ------------------ |
 
@@ -409,7 +407,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // | ------------------ finish loading params ----------------- |
 
-  if (!private_handlers->param_loader->loadedSuccessfully()) {
+  if (!private_handlers->param_loader->loadedSuccessfully() || !dynparam_mgr_->loaded_successfully()) {
     RCLCPP_ERROR(node_->get_logger(), "[%s]: Could not load all parameters!", this->name_.c_str());
     return false;
   }
@@ -1463,8 +1461,6 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
       if (last_throttle_ < (_throttle_saturation_ - 0.01) && last_throttle_ > 0) {
         uav_mass_difference_ += 1.0 * gains.km * (desired_bodyz_acc - measured_bodyz_acc) * dt;
-
-        RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: mass estimation using IMU acc runs, mass difference %.3f kg", this->name_.c_str(), uav_mass_difference_);
       }
 
     } else if (tracker_command.use_position_vertical) {
