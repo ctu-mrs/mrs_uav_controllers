@@ -123,6 +123,7 @@ def generate_test_description():
                 output="screen",
                 parameters=[
                         {'test_name': [test_name,"_",modality]},
+                        {'modality': [modality]},
                 ],
             )
         )
