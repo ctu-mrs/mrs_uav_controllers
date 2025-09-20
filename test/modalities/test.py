@@ -76,7 +76,7 @@ def generate_test_description():
                     PathJoinSubstitution([
                         FindPackageShare('mrs_uav_testing'),
                         'launch',
-                        'mrs_uav_system.py'
+                        'mrs_uav_system.launch.py'
                         ])
                     ]),
                     launch_arguments={
@@ -99,7 +99,7 @@ def generate_test_description():
                     PathJoinSubstitution([
                         FindPackageShare('mrs_uav_testing'),
                             'launch',
-                            'mrs_multirotor_simulator.py'
+                            'mrs_multirotor_simulator.launch.py'
                         ])
                     ]),
                     # launch_arguments={
@@ -117,7 +117,7 @@ def generate_test_description():
                     PathJoinSubstitution([
                         FindPackageShare('mrs_multirotor_simulator'),
                             'launch',
-                            'hw_api.py'
+                            'hw_api.launch.py'
                         ])
                     ]),
                     launch_arguments={

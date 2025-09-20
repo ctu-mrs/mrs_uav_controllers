@@ -11,6 +11,8 @@ while [ ! -e "build/COLCON_IGNORE" ]; do
   fi
 done
 
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
 colcon test-result --delete-yes
 
 colcon test --paths $MY_PATH/.. -p 1 --event-handlers console_direct+
