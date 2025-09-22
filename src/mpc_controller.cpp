@@ -20,6 +20,7 @@
 #include <mrs_lib/timer_handler.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/dynparam_mgr.h>
+#include <mrs_lib/service_server_handler.h>
 
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -73,7 +74,8 @@ typedef struct
 class MpcController : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
+  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   void destroy();
 
@@ -91,11 +93,16 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
+      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
 private:
   rclcpp::Node::SharedPtr  node_;
   rclcpp::Clock::SharedPtr clock_;
+
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_subs_;
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_ss_;
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_timers_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
@@ -138,9 +145,11 @@ private:
 
   void positionPassthrough(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command);
 
-  void PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const common::CONTROL_OUTPUT &control_output, const double &dt);
+  void PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command,
+                         const common::CONTROL_OUTPUT &control_output, const double &dt);
 
-  void MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const double &dt, const common::CONTROL_OUTPUT &output_modality);
+  void MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const double &dt,
+           const common::CONTROL_OUTPUT &output_modality);
 
   // | ----------------------- constraints ---------------------- |
 
@@ -197,9 +206,10 @@ private:
 
   // | ----------------- integral terms enabler ----------------- |
 
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr service_set_integral_terms_;
+  mrs_lib::ServiceServerHandler<std_srvs::srv::SetBool> ss_set_integral_terms_;
 
-  bool callbackSetIntegralTerms(const std::shared_ptr<std_srvs::srv::SetBool::Request> &request, const std::shared_ptr<std_srvs::srv::SetBool::Response> &response);
+  bool callbackSetIntegralTerms(const std::shared_ptr<std_srvs::srv::SetBool::Request>  &request,
+                                const std::shared_ptr<std_srvs::srv::SetBool::Response> &response);
   bool integral_terms_enabled_ = true;
 
   // | --------------------- MPC controller --------------------- |
@@ -284,10 +294,15 @@ private:
 
 /* //{ initialize() */
 
-bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
+bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                               std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
   node_  = node;
   clock_ = node->get_clock();
+
+  cbkgrp_subs_   = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  cbkgrp_ss_     = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  cbkgrp_timers_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
   RCLCPP_INFO(node_->get_logger(), "initializing");
 
@@ -312,8 +327,10 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/mpc_controller.yaml");
   private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/mpc_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/" + private_handlers->name_space + ".yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/" + private_handlers->name_space + ".yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/" +
+                                              private_handlers->name_space + ".yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/" +
+                                              private_handlers->name_space + ".yaml");
 
   dynparam_mgr_->get_param_provider().copyYamls(private_handlers->param_loader->getParamProvider());
 
@@ -416,17 +433,19 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   mrs_lib::SubscriberHandlerOptions shopts;
 
-  shopts.node               = node_;
-  shopts.node_name          = "Se3Controller";
-  shopts.no_message_timeout = mrs_lib::no_timeout;
-  shopts.threadsafe         = true;
-  shopts.autostart          = true;
+  shopts.node                                = node_;
+  shopts.node_name                           = "Se3Controller";
+  shopts.no_message_timeout                  = mrs_lib::no_timeout;
+  shopts.threadsafe                          = true;
+  shopts.autostart                           = true;
+  shopts.subscription_options.callback_group = cbkgrp_subs_;
 
   sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "/" + common_handlers->uav_name + "/hw_api/imu");
 
   // | ---------------- prepare stuff from params --------------- |
 
-  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
+  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
+        drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
     RCLCPP_ERROR(node_->get_logger(), "[%s]: preferred output mode has to be {0, 1, 2, 3}!", this->name_.c_str());
     return false;
   }
@@ -439,9 +458,12 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // | ----------------- prepare the MPC solver ----------------- |
 
-  mpc_solver_x_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_, _dt2_, 0, 1.0);
-  mpc_solver_y_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_, _dt2_, 0, 1.0);
-  mpc_solver_z_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_z_, _mat_S_z_, _dt1_, _dt2_, 0.5, 0.5);
+  mpc_solver_x_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_,
+                                                                            _dt2_, 0, 1.0);
+  mpc_solver_y_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_, _mat_S_, _dt1_,
+                                                                            _dt2_, 0, 1.0);
+  mpc_solver_z_ = std::make_shared<mrs_mpc_solvers::mpc_controller::Solver>(name_, _mpc_solver_verbose_, _mpc_solver_max_iterations_, _mat_Q_z_, _mat_S_z_,
+                                                                            _dt1_, _dt2_, 0.5, 0.5);
 
   // | --------------- declare dynamic parameters --------------- |
 
@@ -471,14 +493,16 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // | --------------------- service servers -------------------- |
 
-  service_set_integral_terms_ = node_->create_service<std_srvs::srv::SetBool>("set_integral_terms_in", std::bind(&MpcController::callbackSetIntegralTerms, this, std::placeholders::_1, std::placeholders::_2));
+  ss_set_integral_terms_ = mrs_lib::ServiceServerHandler<std_srvs::srv::SetBool>(
+      node_, "set_integral_terms_in", std::bind(&MpcController::callbackSetIntegralTerms, this, std::placeholders::_1, std::placeholders::_2), cbkgrp_ss_);
 
   // | ------------------------- timers ------------------------- |
 
   mrs_lib::TimerHandlerOptions timer_opts_no_start;
 
-  timer_opts_no_start.node      = node_;
-  timer_opts_no_start.autostart = false;
+  timer_opts_no_start.node           = node_;
+  timer_opts_no_start.autostart      = false;
+  timer_opts_no_start.callback_group = cbkgrp_timers_;
 
   {
     std::function<void()> callback_fcn = std::bind(&MpcController::timerGains, this);
@@ -571,7 +595,8 @@ bool MpcController::activate(const ControlOutput &last_control_output) {
 
     rampup_duration_ = std::abs(throttle_difference) / _rampup_speed_;
 
-    RCLCPP_INFO(node_->get_logger(), "[%s]: activating rampup with initial throttle: %.4f, target: %.4f", name_.c_str(), throttle_last_controller.value(), hover_throttle);
+    RCLCPP_INFO(node_->get_logger(), "[%s]: activating rampup with initial throttle: %.4f, target: %.4f", name_.c_str(), throttle_last_controller.value(),
+                hover_throttle);
   }
 
   first_iteration_ = true;
@@ -605,7 +630,8 @@ void MpcController::deactivate(void) {
 
 /* updateInactive() //{ */
 
-void MpcController::updateInactive(const mrs_msgs::msg::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
+void MpcController::updateInactive(const mrs_msgs::msg::UavState                                       &uav_state,
+                                   [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -621,7 +647,8 @@ void MpcController::updateInactive(const mrs_msgs::msg::UavState &uav_state, [[m
 MpcController::ControlOutput MpcController::updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("updateActive");
-  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "MpcController::updateActive", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer(node_, "MpcController::updateActive", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
 
@@ -808,7 +835,8 @@ void MpcController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MpcController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MpcController::setConstraints(
+    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
   std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
@@ -836,7 +864,8 @@ const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MpcContro
 
 /* Mpc() //{ */
 
-void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const double &dt, const common::CONTROL_OUTPUT &output_modality) {
+void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const double &dt,
+                        const common::CONTROL_OUTPUT &output_modality) {
 
   auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
@@ -858,13 +887,17 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
   if (tracker_command.use_full_state_prediction) {
 
     max_speed_horizontal = 1.5 * (constraints.horizontal_speed);
-    max_speed_vertical   = 1.5 * (constraints.vertical_ascending_speed < constraints.vertical_descending_speed ? constraints.vertical_ascending_speed : constraints.vertical_descending_speed);
+    max_speed_vertical   = 1.5 * (constraints.vertical_ascending_speed < constraints.vertical_descending_speed ? constraints.vertical_ascending_speed
+                                                                                                               : constraints.vertical_descending_speed);
 
     max_acceleration_horizontal = 1.5 * (constraints.horizontal_acceleration);
-    max_acceleration_vertical   = 1.5 * (constraints.vertical_ascending_acceleration < constraints.vertical_descending_acceleration ? constraints.vertical_ascending_acceleration : constraints.vertical_descending_acceleration);
+    max_acceleration_vertical =
+        1.5 * (constraints.vertical_ascending_acceleration < constraints.vertical_descending_acceleration ? constraints.vertical_ascending_acceleration
+                                                                                                          : constraints.vertical_descending_acceleration);
 
     max_jerk       = 1.5 * constraints.horizontal_jerk;
-    max_u_vertical = 1.5 * (constraints.vertical_ascending_jerk < constraints.vertical_descending_jerk ? constraints.vertical_ascending_jerk : constraints.vertical_descending_jerk);
+    max_u_vertical = 1.5 * (constraints.vertical_ascending_jerk < constraints.vertical_descending_jerk ? constraints.vertical_ascending_jerk
+                                                                                                       : constraints.vertical_descending_jerk);
   }
 
   // --------------------------------------------------------------
@@ -922,7 +955,9 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     } else {
       acceleration = tracker_command.acceleration.x;
 
-      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(), std::abs(uav_state.acceleration.linear.x), coef, max_acceleration_horizontal);
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000,
+                            "[%s]: odometry x acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
+                            std::abs(uav_state.acceleration.linear.x), coef, max_acceleration_horizontal);
     }
 
     if (std::abs(uav_state.velocity.linear.x) < coef * max_speed_horizontal) {
@@ -930,7 +965,9 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     } else {
       velocity = tracker_command.velocity.x;
 
-      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(), std::abs(uav_state.velocity.linear.x), coef, max_speed_horizontal);
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000,
+                            "[%s]: odometry x velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
+                            std::abs(uav_state.velocity.linear.x), coef, max_speed_horizontal);
     }
 
     initial_x << uav_state.pose.position.x, velocity, acceleration;
@@ -950,7 +987,9 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     } else {
       acceleration = tracker_command.acceleration.y;
 
-      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(), std::abs(uav_state.acceleration.linear.y), coef, max_acceleration_horizontal);
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000,
+                            "[%s]: odometry y acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
+                            std::abs(uav_state.acceleration.linear.y), coef, max_acceleration_horizontal);
     }
 
     if (std::abs(uav_state.velocity.linear.y) < coef * max_speed_horizontal) {
@@ -958,7 +997,9 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     } else {
       velocity = tracker_command.velocity.y;
 
-      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(), std::abs(uav_state.velocity.linear.y), coef, max_speed_horizontal);
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000,
+                            "[%s]: odometry y velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
+                            std::abs(uav_state.velocity.linear.y), coef, max_speed_horizontal);
     }
 
     initial_y << uav_state.pose.position.y, velocity, acceleration;
@@ -978,7 +1019,9 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     } else {
       acceleration = tracker_command.acceleration.z;
 
-      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(), std::abs(uav_state.acceleration.linear.z), coef, max_acceleration_horizontal);
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000,
+                            "[%s]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
+                            std::abs(uav_state.acceleration.linear.z), coef, max_acceleration_horizontal);
     }
 
     if (std::abs(uav_state.velocity.linear.z) < coef * max_speed_vertical) {
@@ -986,7 +1029,9 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     } else {
       velocity = tracker_command.velocity.z;
 
-      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(), std::abs(uav_state.velocity.linear.z), coef, max_speed_vertical);
+      RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000,
+                            "[%s]: odometry z velocity exceeds constraints (%.2f > %0.1f * %.2f m), using reference for initial condition", name_.c_str(),
+                            std::abs(uav_state.velocity.linear.z), coef, max_speed_vertical);
     }
 
     initial_z << uav_state.pose.position.z, velocity, acceleration;
@@ -1472,7 +1517,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
       // antiwindup
       double temp_gain = gains.km;
 
-      if (rampup_active_ || (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
+      if (rampup_active_ ||
+          (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
         temp_gain = 0;
         RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
       }
@@ -1484,7 +1530,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
-      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!", this->name_.c_str());
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!",
+                           this->name_.c_str());
     } else if (uav_mass_difference_ > gains.km_lim) {
       uav_mass_difference_ = gains.km_lim;
       uav_mass_saturated   = true;
@@ -1494,7 +1541,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     }
 
     if (uav_mass_saturated) {
-      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: The UAV mass difference is being saturated to %.2f!", this->name_.c_str(), uav_mass_difference_);
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: The UAV mass difference is being saturated to %.2f!", this->name_.c_str(),
+                           uav_mass_difference_);
     }
   }
 
@@ -1508,7 +1556,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
   // if the downwards part of the force is close to counter-act the gravity acceleration
   if (f(2) < 0) {
 
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", this->name_.c_str(), f(2));
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: the calculated downwards desired force is negative (%.2f) -> mitigating flip",
+                         this->name_.c_str(), f(2));
 
     f << 0, 0, 1;
   }
@@ -1522,10 +1571,13 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
   if (!f_normed_sanitized) {
 
     RCLCPP_INFO(node_->get_logger(), "[%s]: f = [%.2f, %.2f, %.2f]", this->name_.c_str(), f(0), f(1), f(2));
-    RCLCPP_INFO(node_->get_logger(), "[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback(0), integral_feedback(1), integral_feedback(2));
+    RCLCPP_INFO(node_->get_logger(), "[%s]: integral feedback: [%.2f, %.2f, %.2f]", this->name_.c_str(), integral_feedback(0), integral_feedback(1),
+                integral_feedback(2));
     RCLCPP_INFO(node_->get_logger(), "[%s]: feed forward: [%.2f, %.2f, %.2f]", this->name_.c_str(), feed_forward(0), feed_forward(1), feed_forward(2));
-    RCLCPP_INFO(node_->get_logger(), "[%s]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
-    RCLCPP_INFO(node_->get_logger(), "[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
+    RCLCPP_INFO(node_->get_logger(), "[%s]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), tracker_command.position.x,
+                tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    RCLCPP_INFO(node_->get_logger(), "[%s]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", this->name_.c_str(), uav_state.pose.position.x,
+                uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
 
     return;
   }
@@ -1601,7 +1653,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     if (desired_thrust_force >= 0) {
       throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, desired_thrust_force);
     } else {
-      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: just so you know, the desired throttle force is negative (%.2f)", name_.c_str(), desired_thrust_force);
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: just so you know, the desired throttle force is negative (%.2f)", name_.c_str(),
+                           desired_thrust_force);
     }
   }
 
@@ -1624,13 +1677,19 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
   if (throttle_saturated) {
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: ---------------------------", name_.c_str());
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.acceleration.x, tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(),
+                         tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(),
+                         tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(),
+                         tracker_command.acceleration.x, tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(),
+                         tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: ---------------------------", name_.c_str());
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(), uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", name_.c_str(), uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", name_.c_str(),
+                         uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", name_.c_str(),
+                         uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[%s]: ---------------------------", name_.c_str());
   }
 
@@ -1766,7 +1825,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
   Eigen::Vector3d attitude_rate_saturation(constraints.roll_rate, constraints.pitch_rate, constraints.yaw_rate);
 
-  auto attitude_rate_command = common::attitudeController(node_, uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq, false);
+  auto attitude_rate_command =
+      common::attitudeController(node_, uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq, false);
 
   if (!attitude_rate_command) {
     return;
@@ -1814,7 +1874,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
   // |                        output mixer                        |
   // --------------------------------------------------------------
 
-  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd =
+      common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
 
   last_control_output_.control_output = actuator_cmd;
 
@@ -1883,7 +1944,8 @@ void MpcController::positionPassthrough(const mrs_msgs::msg::UavState &uav_state
 
 /* PIDVelocityOutput() //{ */
 
-void MpcController::PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const common::CONTROL_OUTPUT &control_output, const double &dt) {
+void MpcController::PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command,
+                                      const common::CONTROL_OUTPUT &control_output, const double &dt) {
 
   if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
     RCLCPP_ERROR(node_->get_logger(), "[%s]: the tracker did not provide position+hdg reference", name_.c_str());
@@ -2022,7 +2084,8 @@ void MpcController::PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, 
 
 /* //{ callbackSetIntegralTerms() */
 
-bool MpcController::callbackSetIntegralTerms(const std::shared_ptr<std_srvs::srv::SetBool::Request> &request, const std::shared_ptr<std_srvs::srv::SetBool::Response> &response) {
+bool MpcController::callbackSetIntegralTerms(const std::shared_ptr<std_srvs::srv::SetBool::Request>  &request,
+                                             const std::shared_ptr<std_srvs::srv::SetBool::Response> &response) {
 
   if (!is_initialized_)
     return false;
@@ -2052,7 +2115,8 @@ bool MpcController::callbackSetIntegralTerms(const std::shared_ptr<std_srvs::srv
 void MpcController::timerGains() {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains");
-  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "MpcController::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer(node_, "MpcController::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);
@@ -2096,7 +2160,8 @@ void MpcController::timerGains() {
 
 /* calculateGainChange() //{ */
 
-double MpcController::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated) {
+double MpcController::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
+                                          bool &updated) {
 
   double change = desired_value - current_value;
 

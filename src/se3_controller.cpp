@@ -77,7 +77,8 @@ typedef struct
 class Se3Controller : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
+  bool initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   void destroy();
 
@@ -95,11 +96,15 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
+      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints);
 
 private:
   rclcpp::Node::SharedPtr  node_;
   rclcpp::Clock::SharedPtr clock_;
+
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_subs_;
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_timers_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
@@ -148,9 +153,11 @@ private:
 
   void positionPassthrough(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
 
-  void PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const common::CONTROL_OUTPUT& control_output, const double& dt);
+  void PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command,
+                         const common::CONTROL_OUTPUT& control_output, const double& dt);
 
-  void SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt, const common::CONTROL_OUTPUT& output_modality);
+  void SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt,
+                     const common::CONTROL_OUTPUT& output_modality);
 
   // | ----------------------- constraints ---------------------- |
 
@@ -250,10 +257,14 @@ private:
 
 /* //{ initialize() */
 
-bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
+bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                               std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
   node_  = node;
   clock_ = node->get_clock();
+
+  cbkgrp_subs_   = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  cbkgrp_timers_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
   RCLCPP_INFO(node_->get_logger(), "initializing");
 
@@ -363,16 +374,18 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
 
   mrs_lib::SubscriberHandlerOptions shopts;
 
-  shopts.node               = node_;
-  shopts.no_message_timeout = mrs_lib::no_timeout;
-  shopts.threadsafe         = true;
-  shopts.autostart          = true;
+  shopts.node                                = node_;
+  shopts.no_message_timeout                  = mrs_lib::no_timeout;
+  shopts.threadsafe                          = true;
+  shopts.autostart                           = true;
+  shopts.subscription_options.callback_group = cbkgrp_subs_;
 
   sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "/" + common_handlers->uav_name + "/hw_api/imu");
 
   // | ---------------- prepare stuff from params --------------- |
 
-  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
+  if (!(drs_params_.preferred_output_mode == OUTPUT_ACTUATORS || drs_params_.preferred_output_mode == OUTPUT_CONTROL_GROUP ||
+        drs_params_.preferred_output_mode == OUTPUT_ATTITUDE_RATE || drs_params_.preferred_output_mode == OUTPUT_ATTITUDE)) {
     RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: preferred output mode has to be {0, 1, 2, 3}!");
     return false;
   }
@@ -426,14 +439,13 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
 
   dynparam_mgr_->update_to_ros();
 
-  /* param_callback_handle_ = node_->add_on_set_parameters_callback(std::bind(&Se3Controller::callbackParameters, this, std::placeholders::_1)); */
-
   // | ------------------------- timers ------------------------- |
 
   mrs_lib::TimerHandlerOptions timer_opts_no_start;
 
-  timer_opts_no_start.node      = node_;
-  timer_opts_no_start.autostart = false;
+  timer_opts_no_start.node           = node_;
+  timer_opts_no_start.autostart      = false;
+  timer_opts_no_start.callback_group = cbkgrp_timers_;
 
   {
     std::function<void()> callback_fcn = std::bind(&Se3Controller::timerGains, this);
@@ -519,7 +531,8 @@ bool Se3Controller::activate(const ControlOutput& last_control_output) {
       rampup_direction_ = 0;
     }
 
-    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: activating rampup with initial throttle: %.4f, target: %.4f", throttle_last_controller.value(), hover_throttle);
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: activating rampup with initial throttle: %.4f, target: %.4f", throttle_last_controller.value(),
+                hover_throttle);
 
     rampup_active_     = true;
     rampup_start_time_ = clock_->now();
@@ -562,7 +575,8 @@ void Se3Controller::deactivate(void) {
 
 /* updateInactive() //{ */
 
-void Se3Controller::updateInactive(const mrs_msgs::msg::UavState& uav_state, [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand>& tracker_command) {
+void Se3Controller::updateInactive(const mrs_msgs::msg::UavState&                                       uav_state,
+                                   [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand>& tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -578,7 +592,8 @@ void Se3Controller::updateInactive(const mrs_msgs::msg::UavState& uav_state, [[m
 Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("updateActive");
-  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "Se3Controller::updateActive", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer(node_, "Se3Controller::updateActive", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
 
@@ -760,7 +775,8 @@ void Se3Controller::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> Se3Controller::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> Se3Controller::setConstraints(
+    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints) {
 
   std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
@@ -788,7 +804,8 @@ const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> Se3Contro
 
 /* SE3Controller() //{ */
 
-void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt, const common::CONTROL_OUTPUT& output_modality) {
+void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt,
+                                  const common::CONTROL_OUTPUT& output_modality) {
 
   auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
@@ -874,7 +891,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
   // velocity control error
   Eigen::Vector3d Ev(0, 0, 0);
 
-  if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical || tracker_command.use_position_vertical) {  // use_position_vertical == true, not a mistake, this provides dampening
+  if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
+      tracker_command.use_position_vertical) {  // use_position_vertical == true, not a mistake, this provides dampening
     Ev = Rv - Ov;
   }
 
@@ -1268,7 +1286,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
-      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000,
+                           "[Se3Controller]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
     } else if (uav_mass_difference_ > gains.km_lim) {
       uav_mass_difference_ = gains.km_lim;
       uav_mass_saturated   = true;
@@ -1292,7 +1311,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
   // if the downwards part of the force is close to counter-act the gravity acceleration
   if (f(2) < 0) {
 
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f(2));
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: the calculated downwards desired force is negative (%.2f) -> mitigating flip",
+                         f(2));
 
     f << 0, 0, 1;
   }
@@ -1305,11 +1325,16 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
   if (!f_normed_sanitized) {
 
-    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback(0), position_feedback(1), position_feedback(2));
-    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback(0), velocity_feedback(1), velocity_feedback(2));
-    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback(0), integral_feedback(1), integral_feedback(2));
-    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
-    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: position feedback: [%.2f, %.2f, %.2f]", position_feedback(0), position_feedback(1),
+                position_feedback(2));
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback(0), velocity_feedback(1),
+                velocity_feedback(2));
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback(0), integral_feedback(1),
+                integral_feedback(2));
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: tracker_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", tracker_command.position.x,
+                tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state.pose.position.x,
+                uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
 
     return;
   }
@@ -1390,7 +1415,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
     if (desired_thrust_force >= 0) {
       throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, desired_thrust_force);
     } else {
-      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)", desired_thrust_force);
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)",
+                           desired_thrust_force);
     }
   }
 
@@ -1413,13 +1439,19 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
   if (throttle_saturated) {
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ---------------------------");
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.acceleration.x, tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]",
+                         tracker_command.position.x, tracker_command.position.y, tracker_command.position.z, tracker_command.heading);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: vel [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]",
+                         tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z, tracker_command.heading_rate);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: acc [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]",
+                         tracker_command.acceleration.x, tracker_command.acceleration.y, tracker_command.acceleration.z, tracker_command.heading_acceleration);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: desired state: jerk [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]",
+                         tracker_command.jerk.x, tracker_command.jerk.y, tracker_command.jerk.z, tracker_command.heading_jerk);
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ---------------------------");
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]", uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]", uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: current state: pos [x: %.2f, y: %.2f, z: %.2f, hdg: %.2f]",
+                         uav_state.pose.position.x, uav_state.pose.position.y, uav_state.pose.position.z, uav_heading);
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: current state: vel [x: %.2f, y: %.2f, z: %.2f, yaw rate: %.2f]",
+                         uav_state.velocity.linear.x, uav_state.velocity.linear.y, uav_state.velocity.linear.z, uav_state.velocity.angular.z);
     RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 100, "[Se3Controller]: ---------------------------");
   }
 
@@ -1535,7 +1567,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
   Eigen::Vector3d attitude_rate_saturation(constraints.roll_rate, constraints.pitch_rate, constraints.yaw_rate);
 
-  auto attitude_rate_command = common::attitudeController(node_, uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq, drs_params.pitch_roll_heading_rate_compensation);
+  auto attitude_rate_command = common::attitudeController(node_, uav_state, attitude_cmd, jerk_feedforward + rate_feedforward, attitude_rate_saturation, Kq,
+                                                          drs_params.pitch_roll_heading_rate_compensation);
 
   if (!attitude_rate_command) {
     return;
@@ -1583,7 +1616,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
   // |                        output mixer                        |
   // --------------------------------------------------------------
 
-  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd =
+      common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
 
   last_control_output_.control_output = actuator_cmd;
 
@@ -1643,7 +1677,8 @@ void Se3Controller::positionPassthrough(const mrs_msgs::msg::UavState& uav_state
 
 /* PIDVelocityOutput() //{ */
 
-void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const common::CONTROL_OUTPUT& control_output, const double& dt) {
+void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command,
+                                      const common::CONTROL_OUTPUT& control_output, const double& dt) {
 
   if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
     RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: the tracker did not provide position+hdg reference");
@@ -1787,7 +1822,8 @@ void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, 
 void Se3Controller::timerGains() {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("timerGains");
-  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer(node_, "Se3Controller::timerGains", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto gains      = mrs_lib::get_mutexed(mutex_gains_, gains_);
@@ -1841,7 +1877,8 @@ void Se3Controller::timerGains() {
 
 /* calculateGainChange() //{ */
 
-double Se3Controller::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated) {
+double Se3Controller::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
+                                          bool& updated) {
 
   double change = desired_value - current_value;
 

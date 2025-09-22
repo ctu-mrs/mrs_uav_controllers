@@ -36,7 +36,8 @@ namespace failsafe_controller
 class FailsafeController : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
+  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   void destroy();
 
@@ -54,13 +55,16 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
+      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
   double getHeadingSafely(const geometry_msgs::msg::QuaternionStamped::ConstSharedPtr quaternion);
 
 private:
   rclcpp::Node::SharedPtr  node_;
   rclcpp::Clock::SharedPtr clock_;
+
+  rclcpp::CallbackGroup::SharedPtr cbkgrp_subs_;
 
   bool is_initialized_ = false;
   bool is_active_      = false;
@@ -124,10 +128,13 @@ private:
 
 /* initialize() //{ */
 
-bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
+bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                                    std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
   node_  = node;
   clock_ = node->get_clock();
+
+  cbkgrp_subs_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
   RCLCPP_INFO(node_->get_logger(), "initializing");
 
@@ -173,12 +180,14 @@ bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::sh
 
   mrs_lib::SubscriberHandlerOptions shopts;
 
-  shopts.node               = node_;
-  shopts.no_message_timeout = mrs_lib::no_timeout;
-  shopts.threadsafe         = true;
-  shopts.autostart          = true;
+  shopts.node                                = node_;
+  shopts.no_message_timeout                  = mrs_lib::no_timeout;
+  shopts.threadsafe                          = true;
+  shopts.autostart                           = true;
+  shopts.subscription_options.callback_group = cbkgrp_subs_;
 
-  sh_hw_api_orientation_ = mrs_lib::SubscriberHandler<geometry_msgs::msg::QuaternionStamped>(shopts, "/" + common_handlers->uav_name + "/" + "hw_api/orientation");
+  sh_hw_api_orientation_ =
+      mrs_lib::SubscriberHandler<geometry_msgs::msg::QuaternionStamped>(shopts, "/" + common_handlers->uav_name + "/" + "hw_api/orientation");
 
   // | ----------- calculate the default hover throttle ----------- |
 
@@ -202,7 +211,6 @@ bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::sh
 /* destroy() //{ */
 
 void FailsafeController::destroy() {
-
 }
 
 //}
@@ -248,9 +256,11 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
 
     activation_control_output_.diagnostics.controller_enforcing_constraints = false;
 
-    hover_throttle_ = _initial_throttle_percentage_ * mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
+    hover_throttle_ = _initial_throttle_percentage_ * mrs_lib::quadratic_throttle_model::forceToThrottle(
+                                                          common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
 
-    RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: activated with uav_mass_difference %.2f kg, hover_throttle %.3f", uav_mass_difference_, hover_throttle_);
+    RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: activated with uav_mass_difference %.2f kg, hover_throttle %.3f", uav_mass_difference_,
+                hover_throttle_);
   }
 
   first_iteration_ = true;
@@ -277,7 +287,8 @@ void FailsafeController::deactivate(void) {
 
 /* updateInactive() //{ */
 
-void FailsafeController::updateInactive(const mrs_msgs::msg::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
+void FailsafeController::updateInactive(const mrs_msgs::msg::UavState                                       &uav_state,
+                                        [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -290,10 +301,12 @@ void FailsafeController::updateInactive(const mrs_msgs::msg::UavState &uav_state
 
 /* //{ updateWhenAcctive() */
 
-FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msgs::msg::UavState &uav_state, [[maybe_unused]] const mrs_msgs::msg::TrackerCommand &tracker_command) {
+FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msgs::msg::UavState                        &uav_state,
+                                                                   [[maybe_unused]] const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
-  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer(node_, "FailsafeController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   {
     std::scoped_lock lock(mutex_uav_state_);
@@ -477,7 +490,8 @@ FailsafeController::ControlOutput FailsafeController::updateActive(const mrs_msg
   // |                            mixer                           |
   // --------------------------------------------------------------
 
-  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd = common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
+  mrs_msgs::msg::HwApiActuatorCmd actuator_cmd =
+      common::actuatorMixer(node_, control_group_command.value(), common_handlers_->detailed_model_params->control_group_mixer);
 
   RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[FailsafeController]: returning actuators output");
   control_output.control_output = actuator_cmd;
@@ -516,7 +530,8 @@ void FailsafeController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> FailsafeController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> FailsafeController::setConstraints(
+    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
   std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
