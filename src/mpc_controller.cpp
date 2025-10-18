@@ -119,7 +119,7 @@ private:
   mrs_msgs::msg::UavState uav_state_;
   std::mutex              mutex_uav_state_;
 
-  // | --------------- dynamic reconfigure server --------------- |
+  // | ------------------- dynamic reconfigure ------------------ |
 
   std::shared_ptr<mrs_lib::DynparamMgr> dynparam_mgr_;
 
@@ -434,7 +434,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
   mrs_lib::SubscriberHandlerOptions shopts;
 
   shopts.node                                = node_;
-  shopts.node_name                           = "Se3Controller";
+  shopts.node_name                           = "MpcController";
   shopts.no_message_timeout                  = mrs_lib::no_timeout;
   shopts.threadsafe                          = true;
   shopts.autostart                           = true;
@@ -494,7 +494,7 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
   // | --------------------- service servers -------------------- |
 
   ss_set_integral_terms_ = mrs_lib::ServiceServerHandler<std_srvs::srv::SetBool>(
-      node_, "set_integral_terms_in", std::bind(&MpcController::callbackSetIntegralTerms, this, std::placeholders::_1, std::placeholders::_2), cbkgrp_ss_);
+      node_, "~/set_integral_terms", std::bind(&MpcController::callbackSetIntegralTerms, this, std::placeholders::_1, std::placeholders::_2), cbkgrp_ss_);
 
   // | ------------------------- timers ------------------------- |
 
@@ -862,7 +862,7 @@ const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MpcContro
 // |                         controllers                        |
 // --------------------------------------------------------------
 
-/* Mpc() //{ */
+/* MPC() //{ */
 
 void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const double &dt,
                         const common::CONTROL_OUTPUT &output_modality) {

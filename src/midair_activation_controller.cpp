@@ -26,7 +26,8 @@ namespace midair_activation_controller
 class MidairActivationController : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
+  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+                  std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   void destroy();
 
@@ -44,7 +45,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
+      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
 private:
   rclcpp::Node::SharedPtr  node_;
@@ -86,7 +88,9 @@ private:
 
 /* initialize() //{ */
 
-bool MidairActivationController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers, std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
+bool MidairActivationController::initialize(const rclcpp::Node::SharedPtr                                        &node,
+                                            std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t>  common_handlers,
+                                            std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
   node_  = node;
   clock_ = node->get_clock();
@@ -107,8 +111,10 @@ bool MidairActivationController::initialize(const rclcpp::Node::SharedPtr &node,
 
   // | -------------------- loading my params ------------------- |
 
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/midair_activation_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/midair_activation_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                              "/config/private/midair_activation_controller.yaml");
+  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                              "/config/public/midair_activation_controller.yaml");
 
   if (!private_handlers->param_loader->loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "[MidairActivationController]: Could not load all parameters!");
@@ -135,7 +141,6 @@ bool MidairActivationController::initialize(const rclcpp::Node::SharedPtr &node,
 /* destroy() //{ */
 
 void MidairActivationController::destroy() {
-
 }
 
 //}
@@ -173,7 +178,8 @@ void MidairActivationController::deactivate(void) {
 
 /* updateInactive() //{ */
 
-void MidairActivationController::updateInactive(const mrs_msgs::msg::UavState &uav_state, [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
+void MidairActivationController::updateInactive(const mrs_msgs::msg::UavState                                       &uav_state,
+                                                [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 }
@@ -182,10 +188,12 @@ void MidairActivationController::updateInactive(const mrs_msgs::msg::UavState &u
 
 /* //{ updateWhenAcctive() */
 
-MidairActivationController::ControlOutput MidairActivationController::updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
+MidairActivationController::ControlOutput MidairActivationController::updateActive(const mrs_msgs::msg::UavState       &uav_state,
+                                                                                   const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("update");
-  mrs_lib::ScopeTimer timer            = mrs_lib::ScopeTimer(node_, "MidairActivationController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+  mrs_lib::ScopeTimer timer =
+      mrs_lib::ScopeTimer(node_, "MidairActivationController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -397,7 +405,8 @@ void MidairActivationController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MidairActivationController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MidairActivationController::setConstraints(
+    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
   return nullptr;
 }

@@ -119,7 +119,7 @@ private:
   mrs_msgs::msg::UavState uav_state_;
   std::mutex              mutex_uav_state_;
 
-  // | --------------- dynamic reconfigure server --------------- |
+  // | ------------------- dynamic reconfigure ------------------ |
 
   std::shared_ptr<mrs_lib::DynparamMgr> dynparam_mgr_;
 
@@ -397,7 +397,7 @@ bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_
   Iw_w_                = Eigen::Vector2d::Zero(2);
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
-  // | --------------- dynamic reconfigure server --------------- |
+  // | ------------------- dynamic reconfigure ------------------ |
 
   dynparam_mgr_->register_param("horizontal.kpxy", &drs_params_.kpxy, gains_.kpxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 40.0));
   dynparam_mgr_->register_param("horizontal.kvxy", &drs_params_.kvxy, gains_.kvxy, mrs_lib::DynparamMgr::range_t<double>(0.0, 40.0));
