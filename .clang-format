@@ -1,0 +1,41 @@
+---
+Language: Cpp
+Standard: c++20
+
+AccessModifierOffset: -2
+ColumnLimit: 160
+MaxEmptyLinesToKeep: 2
+
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+AlwaysBreakTemplateDeclarations: true
+BreakBeforeBinaryOperators: false
+BreakBeforeBraces: Custom
+BreakConstructorInitializers: BeforeColon
+
+KeepEmptyLinesAtTheStartOfBlocks: true
+NamespaceIndentation: None
+SortIncludes: false
+SpaceBeforeParens: ControlStatements
+
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: true
+  AfterFunction: false
+  AfterNamespace: true
+  AfterObjCDeclaration: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: false
+  IndentBraces: false
+...
