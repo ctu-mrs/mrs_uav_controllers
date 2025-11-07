@@ -55,8 +55,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
-      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+  setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
   double getHeadingSafely(const geometry_msgs::msg::QuaternionStamped::ConstSharedPtr quaternion);
 
@@ -530,8 +530,8 @@ void FailsafeController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> FailsafeController::setConstraints(
-    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+FailsafeController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
   std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
@@ -576,9 +576,9 @@ double FailsafeController::getHeadingSafely(const geometry_msgs::msg::Quaternion
 
 //}
 
-}  // namespace failsafe_controller
+} // namespace failsafe_controller
 
-}  // namespace mrs_uav_controllers
+} // namespace mrs_uav_controllers
 
 #include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::failsafe_controller::FailsafeController, mrs_uav_managers::Controller)

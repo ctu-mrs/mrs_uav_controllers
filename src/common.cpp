@@ -8,7 +8,7 @@ namespace common
 
 /* orientationError() //{ */
 
-Eigen::Vector3d orientationError(const Eigen::Matrix3d& R, const Eigen::Matrix3d& Rd) {
+Eigen::Vector3d orientationError(const Eigen::Matrix3d &R, const Eigen::Matrix3d &Rd) {
 
   // orientation error
   Eigen::Matrix3d R_error = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
@@ -28,8 +28,8 @@ Eigen::Vector3d orientationError(const Eigen::Matrix3d& R, const Eigen::Matrix3d
 
 /* sanitizeDesiredForce() //{ */
 
-std::optional<Eigen::Vector3d> sanitizeDesiredForce(const rclcpp::Node::SharedPtr& node, const Eigen::Vector3d& input, const double& tilt_safety_limit,
-                                                    const double& tilt_saturation, const std::string& node_name) {
+std::optional<Eigen::Vector3d> sanitizeDesiredForce(const rclcpp::Node::SharedPtr &node, const Eigen::Vector3d &input, const double &tilt_safety_limit,
+                                                    const double &tilt_saturation, const std::string &node_name) {
 
   // calculate the force in spherical coordinates
   double theta = acos(input(2));
@@ -68,8 +68,8 @@ std::optional<Eigen::Vector3d> sanitizeDesiredForce(const rclcpp::Node::SharedPt
 
 /* so3transform() //{ */
 
-Eigen::Matrix3d so3transform(const rclcpp::Node::SharedPtr& node, const Eigen::Vector3d& body_z, const ::Eigen::Vector3d& heading,
-                             const bool& preserve_heading) {
+Eigen::Matrix3d so3transform(const rclcpp::Node::SharedPtr &node, const Eigen::Vector3d &body_z, const ::Eigen::Vector3d &heading,
+                             const bool &preserve_heading) {
 
   Eigen::Vector3d body_z_normed = body_z.normalized();
 
@@ -128,7 +128,7 @@ Eigen::Matrix3d so3transform(const rclcpp::Node::SharedPtr& node, const Eigen::V
 
 /* getLowestOutput() //{ */
 
-std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t& outputs) {
+std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t &outputs) {
 
   if (outputs.actuators) {
     return ACTUATORS_CMD;
@@ -173,7 +173,7 @@ std::optional<CONTROL_OUTPUT> getLowestOuput(const mrs_uav_managers::control_man
 
 /* getHighestOutput() //{ */
 
-std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t& outputs) {
+std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::control_manager::ControlOutputModalities_t &outputs) {
 
   if (outputs.position) {
     return POSITION;
@@ -218,7 +218,7 @@ std::optional<CONTROL_OUTPUT> getHighestOuput(const mrs_uav_managers::control_ma
 
 /* extractThrottle() //{ */
 
-std::optional<double> extractThrottle(const mrs_uav_managers::Controller::ControlOutput& control_output) {
+std::optional<double> extractThrottle(const mrs_uav_managers::Controller::ControlOutput &control_output) {
 
   if (!control_output.control_output) {
     return {};
@@ -231,10 +231,10 @@ std::optional<double> extractThrottle(const mrs_uav_managers::Controller::Contro
 
 /* attitudeController() //{ */
 
-std::optional<mrs_msgs::msg::HwApiAttitudeRateCmd> attitudeController(const rclcpp::Node::SharedPtr& node, const mrs_msgs::msg::UavState& uav_state,
-                                                                      const mrs_msgs::msg::HwApiAttitudeCmd& reference, const Eigen::Vector3d& ff_rate,
-                                                                      const Eigen::Vector3d& rate_saturation, const Eigen::Vector3d& gains,
-                                                                      const bool& parasitic_heading_rate_compensation) {
+std::optional<mrs_msgs::msg::HwApiAttitudeRateCmd> attitudeController(const rclcpp::Node::SharedPtr &node, const mrs_msgs::msg::UavState &uav_state,
+                                                                      const mrs_msgs::msg::HwApiAttitudeCmd &reference, const Eigen::Vector3d &ff_rate,
+                                                                      const Eigen::Vector3d &rate_saturation, const Eigen::Vector3d &gains,
+                                                                      const bool &parasitic_heading_rate_compensation) {
 
   Eigen::Matrix3d R  = mrs_lib::AttitudeConverter(uav_state.pose.orientation);
   Eigen::Matrix3d Rd = mrs_lib::AttitudeConverter(reference.orientation);
@@ -254,7 +254,7 @@ std::optional<mrs_msgs::msg::HwApiAttitudeRateCmd> attitudeController(const rclc
     Eigen::Vector3d rp_heading_rate_compensation(0, 0, 0);
 
     Eigen::Vector3d q_feedback_yawless = rate_feedback;
-    q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
+    q_feedback_yawless(2)              = 0; // nullyfy the effect of the original yaw feedback
 
     double parasitic_heading_rate = 0;
 
@@ -314,8 +314,8 @@ std::optional<mrs_msgs::msg::HwApiAttitudeRateCmd> attitudeController(const rclc
 
 /* attitudeRateController() //{ */
 
-std::optional<mrs_msgs::msg::HwApiControlGroupCmd> attitudeRateController(const rclcpp::Node::SharedPtr& node, const mrs_msgs::msg::UavState& uav_state,
-                                                                          const mrs_msgs::msg::HwApiAttitudeRateCmd& reference, const Eigen::Vector3d& gains) {
+std::optional<mrs_msgs::msg::HwApiControlGroupCmd> attitudeRateController(const rclcpp::Node::SharedPtr &node, const mrs_msgs::msg::UavState &uav_state,
+                                                                          const mrs_msgs::msg::HwApiAttitudeRateCmd &reference, const Eigen::Vector3d &gains) {
 
   Eigen::Vector3d des_rate(reference.body_rate.x, reference.body_rate.y, reference.body_rate.z);
   Eigen::Vector3d cur_rate(uav_state.velocity.angular.x, uav_state.velocity.angular.y, uav_state.velocity.angular.z);
@@ -339,8 +339,8 @@ std::optional<mrs_msgs::msg::HwApiControlGroupCmd> attitudeRateController(const 
 
 /* actuatorMixer() //{ */
 
-mrs_msgs::msg::HwApiActuatorCmd actuatorMixer(const rclcpp::Node::SharedPtr& node, const mrs_msgs::msg::HwApiControlGroupCmd& ctrl_group_cmd,
-                                              const Eigen::MatrixXd& mixer) {
+mrs_msgs::msg::HwApiActuatorCmd actuatorMixer(const rclcpp::Node::SharedPtr &node, const mrs_msgs::msg::HwApiControlGroupCmd &ctrl_group_cmd,
+                                              const Eigen::MatrixXd &mixer) {
 
   Eigen::Vector4d ctrl_group(ctrl_group_cmd.roll, ctrl_group_cmd.pitch, ctrl_group_cmd.yaw, ctrl_group_cmd.throttle);
 
@@ -385,6 +385,6 @@ mrs_msgs::msg::HwApiActuatorCmd actuatorMixer(const rclcpp::Node::SharedPtr& nod
 
 //}
 
-}  // namespace common
+} // namespace common
 
-}  // namespace mrs_uav_controllers
+} // namespace mrs_uav_controllers

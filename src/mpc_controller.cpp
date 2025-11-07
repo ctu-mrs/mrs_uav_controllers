@@ -55,16 +55,16 @@ namespace mpc_controller
 
 typedef struct
 {
-  double kiwxy;          // world xy integral gain
-  double kibxy;          // body xy integral gain
-  double kiwxy_lim;      // world xy integral limit
-  double kibxy_lim;      // body xy integral limit
-  double km;             // mass estimator gain
-  double km_lim;         // mass estimator limit
-  double kq_roll_pitch;  // pitch/roll attitude gain
-  double kq_yaw;         // yaw attitude gain
-  double kw_rp;          // attitude rate gain
-  double kw_y;           // attitude rate gain
+  double kiwxy;         // world xy integral gain
+  double kibxy;         // body xy integral gain
+  double kiwxy_lim;     // world xy integral limit
+  double kibxy_lim;     // body xy integral limit
+  double km;            // mass estimator gain
+  double km_lim;        // mass estimator limit
+  double kq_roll_pitch; // pitch/roll attitude gain
+  double kq_yaw;        // yaw attitude gain
+  double kw_rp;         // attitude rate gain
+  double kw_y;          // attitude rate gain
 } Gains_t;
 
 //}
@@ -93,8 +93,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
-      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+  setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
 private:
   rclcpp::Node::SharedPtr  node_;
@@ -167,7 +167,7 @@ private:
 
   // | ------------------- configurable gains ------------------- |
 
-  std::mutex mutex_gains_;  // locks the gains the are used and filtered
+  std::mutex mutex_gains_; // locks the gains the are used and filtered
 
   std::shared_ptr<TimerType> timer_gains_;
   void                       timerGains();
@@ -218,8 +218,8 @@ private:
   int _n_states_;
 
   // time steps
-  double _dt1_;  // the first time step
-  double _dt2_;  // all the other steps
+  double _dt1_; // the first time step
+  double _dt2_; // all the other steps
 
   // the last control input
   double mpc_solver_x_u_ = 0;
@@ -254,8 +254,8 @@ private:
 
   // | ------------------------ integrals ----------------------- |
 
-  Eigen::Vector2d Ib_b_;  // body error integral in the body frame
-  Eigen::Vector2d Iw_w_;  // world error integral in the world_frame
+  Eigen::Vector2d Ib_b_; // body error integral in the body frame
+  Eigen::Vector2d Iw_w_; // world error integral in the world_frame
   std::mutex      mutex_integrals_;
 
   // | ------------------------- rampup ------------------------- |
@@ -712,54 +712,54 @@ MpcController::ControlOutput MpcController::updateActive(const mrs_msgs::msg::Ua
 
   switch (lowest_modality.value()) {
 
-    case common::POSITION: {
-      positionPassthrough(uav_state, tracker_command);
-      break;
-    }
+  case common::POSITION: {
+    positionPassthrough(uav_state, tracker_command);
+    break;
+  }
 
-    case common::VELOCITY_HDG: {
-      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG, dt);
-      break;
-    }
+  case common::VELOCITY_HDG: {
+    PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG, dt);
+    break;
+  }
 
-    case common::VELOCITY_HDG_RATE: {
-      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG_RATE, dt);
-      break;
-    }
+  case common::VELOCITY_HDG_RATE: {
+    PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG_RATE, dt);
+    break;
+  }
 
-    case common::ACCELERATION_HDG: {
-      MPC(uav_state, tracker_command, dt, common::ACCELERATION_HDG);
-      break;
-    }
+  case common::ACCELERATION_HDG: {
+    MPC(uav_state, tracker_command, dt, common::ACCELERATION_HDG);
+    break;
+  }
 
-    case common::ACCELERATION_HDG_RATE: {
-      MPC(uav_state, tracker_command, dt, common::ACCELERATION_HDG_RATE);
-      break;
-    }
+  case common::ACCELERATION_HDG_RATE: {
+    MPC(uav_state, tracker_command, dt, common::ACCELERATION_HDG_RATE);
+    break;
+  }
 
-    case common::ATTITUDE: {
-      MPC(uav_state, tracker_command, dt, common::ATTITUDE);
-      break;
-    }
+  case common::ATTITUDE: {
+    MPC(uav_state, tracker_command, dt, common::ATTITUDE);
+    break;
+  }
 
-    case common::ATTITUDE_RATE: {
-      MPC(uav_state, tracker_command, dt, common::ATTITUDE_RATE);
-      break;
-    }
+  case common::ATTITUDE_RATE: {
+    MPC(uav_state, tracker_command, dt, common::ATTITUDE_RATE);
+    break;
+  }
 
-    case common::CONTROL_GROUP: {
-      MPC(uav_state, tracker_command, dt, common::CONTROL_GROUP);
-      break;
-    }
+  case common::CONTROL_GROUP: {
+    MPC(uav_state, tracker_command, dt, common::CONTROL_GROUP);
+    break;
+  }
 
-    case common::ACTUATORS_CMD: {
-      MPC(uav_state, tracker_command, dt, common::ACTUATORS_CMD);
-      break;
-    }
+  case common::ACTUATORS_CMD: {
+    MPC(uav_state, tracker_command, dt, common::ACTUATORS_CMD);
+    break;
+  }
 
-    default: {
-      break;
-    }
+  default: {
+    break;
+  }
   }
 
   return last_control_output_;
@@ -835,8 +835,8 @@ void MpcController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MpcController::setConstraints(
-    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+MpcController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
   std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
@@ -912,7 +912,7 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
   Eigen::Vector3d Rv = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Ra = Eigen::Vector3d::Zero(3);
 
-  Rp << tracker_command.position.x, tracker_command.position.y, tracker_command.position.z;  // fill the desired position
+  Rp << tracker_command.position.x, tracker_command.position.y, tracker_command.position.z; // fill the desired position
   Rv << tracker_command.velocity.x, tracker_command.velocity.y, tracker_command.velocity.z;
 
   // | ------ store the estimated values from the uav state ----- |
@@ -1287,8 +1287,8 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
   {
     std::scoped_lock lock(mutex_gains_);
 
-    Eigen::Vector2d Ep_fcu_untilted = Eigen::Vector2d(0, 0);  // position error in the untilted frame of the UAV
-    Eigen::Vector2d Ev_fcu_untilted = Eigen::Vector2d(0, 0);  // velocity error in the untilted frame of the UAV
+    Eigen::Vector2d Ep_fcu_untilted = Eigen::Vector2d(0, 0); // position error in the untilted frame of the UAV
+    Eigen::Vector2d Ev_fcu_untilted = Eigen::Vector2d(0, 0); // velocity error in the untilted frame of the UAV
 
     // get the position control error in the fcu_untilted frame
     {
@@ -1608,7 +1608,7 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
   } else {
 
-    Eigen::Vector3d bxd;  // desired heading vector
+    Eigen::Vector3d bxd; // desired heading vector
 
     if (tracker_command.use_heading) {
       bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
@@ -2233,9 +2233,9 @@ double MpcController::getHeadingSafely(const mrs_msgs::msg::UavState &uav_state,
 
 //}
 
-}  // namespace mpc_controller
+} // namespace mpc_controller
 
-}  // namespace mrs_uav_controllers
+} // namespace mrs_uav_controllers
 
 #include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::mpc_controller::MpcController, mrs_uav_managers::Controller)

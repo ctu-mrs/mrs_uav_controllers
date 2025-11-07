@@ -52,22 +52,22 @@ namespace se3_controller
 
 typedef struct
 {
-  double kpxy;           // position xy gain
-  double kvxy;           // velocity xy gain
-  double kaxy;           // acceleration xy gain (feed forward, =1)
-  double kiwxy;          // world xy integral gain
-  double kibxy;          // body xy integral gain
-  double kiwxy_lim;      // world xy integral limit
-  double kibxy_lim;      // body xy integral limit
-  double kpz;            // position z gain
-  double kvz;            // velocity z gain
-  double kaz;            // acceleration z gain (feed forward, =1)
-  double km;             // mass estimator gain
-  double km_lim;         // mass estimator limit
-  double kq_roll_pitch;  // pitch/roll attitude gain
-  double kq_yaw;         // yaw attitude gain
-  double kw_roll_pitch;  // attitude rate gain
-  double kw_yaw;         // attitude rate gain
+  double kpxy;          // position xy gain
+  double kvxy;          // velocity xy gain
+  double kaxy;          // acceleration xy gain (feed forward, =1)
+  double kiwxy;         // world xy integral gain
+  double kibxy;         // body xy integral gain
+  double kiwxy_lim;     // world xy integral limit
+  double kibxy_lim;     // body xy integral limit
+  double kpz;           // position z gain
+  double kvz;           // velocity z gain
+  double kaz;           // acceleration z gain (feed forward, =1)
+  double km;            // mass estimator gain
+  double km_lim;        // mass estimator limit
+  double kq_roll_pitch; // pitch/roll attitude gain
+  double kq_yaw;        // yaw attitude gain
+  double kw_roll_pitch; // attitude rate gain
+  double kw_yaw;        // attitude rate gain
 } Gains_t;
 
 //}
@@ -77,27 +77,27 @@ typedef struct
 class Se3Controller : public mrs_uav_managers::Controller {
 
 public:
-  bool initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+  bool initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
                   std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers);
 
   void destroy();
 
-  bool activate(const ControlOutput& last_control_output);
+  bool activate(const ControlOutput &last_control_output);
 
   void deactivate(void);
 
-  void updateInactive(const mrs_msgs::msg::UavState& uav_state, const std::optional<mrs_msgs::msg::TrackerCommand>& tracker_command);
+  void updateInactive(const mrs_msgs::msg::UavState &uav_state, const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command);
 
-  ControlOutput updateActive(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
+  ControlOutput updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command);
 
   const mrs_msgs::msg::ControllerStatus getStatus();
 
-  void switchOdometrySource(const mrs_msgs::msg::UavState& new_uav_state);
+  void switchOdometrySource(const mrs_msgs::msg::UavState &new_uav_state);
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
-      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+  setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
 private:
   rclcpp::Node::SharedPtr  node_;
@@ -151,13 +151,13 @@ private:
 
   // | ----------------------- controllers ---------------------- |
 
-  void positionPassthrough(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
+  void positionPassthrough(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command);
 
-  void PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command,
-                         const common::CONTROL_OUTPUT& control_output, const double& dt);
+  void PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command,
+                         const common::CONTROL_OUTPUT &control_output, const double &dt);
 
-  void SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt,
-                     const common::CONTROL_OUTPUT& output_modality);
+  void SE3Controller(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const double &dt,
+                     const common::CONTROL_OUTPUT &output_modality);
 
   // | ----------------------- constraints ---------------------- |
 
@@ -173,7 +173,7 @@ private:
 
   Gains_t gains_;
 
-  std::mutex mutex_gains_;  // locks the gains the are used and filtered
+  std::mutex mutex_gains_; // locks the gains the are used and filtered
 
   std::shared_ptr<TimerType> timer_gains_;
   void                       timerGains();
@@ -188,9 +188,9 @@ private:
 
   // | --------------------- gain filtering --------------------- |
 
-  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool &updated);
 
-  double getHeadingSafely(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command);
+  double getHeadingSafely(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command);
 
   double _gains_filter_change_rate_;
   double _gains_filter_min_change_rate_;
@@ -217,8 +217,8 @@ private:
 
   // | ------------------------ integrals ----------------------- |
 
-  Eigen::Vector2d Ib_b_;  // body error integral in the body frame
-  Eigen::Vector2d Iw_w_;  // world error integral in the world_frame
+  Eigen::Vector2d Ib_b_; // body error integral in the body frame
+  Eigen::Vector2d Iw_w_; // world error integral in the world_frame
   std::mutex      mutex_integrals_;
 
   // | ------------------------- rampup ------------------------- |
@@ -257,7 +257,7 @@ private:
 
 /* //{ initialize() */
 
-bool Se3Controller::initialize(const rclcpp::Node::SharedPtr& node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
+bool Se3Controller::initialize(const rclcpp::Node::SharedPtr &node, std::shared_ptr<mrs_uav_managers::control_manager::CommonHandlers_t> common_handlers,
                                std::shared_ptr<mrs_uav_managers::control_manager::PrivateHandlers_t> private_handlers) {
 
   node_  = node;
@@ -486,7 +486,7 @@ void Se3Controller::destroy() {
 
 /* //{ activate() */
 
-bool Se3Controller::activate(const ControlOutput& last_control_output) {
+bool Se3Controller::activate(const ControlOutput &last_control_output) {
 
   activation_control_output_ = last_control_output;
 
@@ -575,8 +575,8 @@ void Se3Controller::deactivate(void) {
 
 /* updateInactive() //{ */
 
-void Se3Controller::updateInactive(const mrs_msgs::msg::UavState&                                       uav_state,
-                                   [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand>& tracker_command) {
+void Se3Controller::updateInactive(const mrs_msgs::msg::UavState                                       &uav_state,
+                                   [[maybe_unused]] const std::optional<mrs_msgs::msg::TrackerCommand> &tracker_command) {
 
   mrs_lib::set_mutexed(mutex_uav_state_, uav_state, uav_state_);
 
@@ -589,7 +589,7 @@ void Se3Controller::updateInactive(const mrs_msgs::msg::UavState&               
 
 /* //{ updateActive() */
 
-Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
+Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   mrs_lib::Routine    profiler_routine = profiler_.createRoutine("updateActive");
   mrs_lib::ScopeTimer timer =
@@ -653,53 +653,53 @@ Se3Controller::ControlOutput Se3Controller::updateActive(const mrs_msgs::msg::Ua
 
   switch (lowest_modality.value()) {
 
-    case common::POSITION: {
-      positionPassthrough(uav_state, tracker_command);
-      break;
-    }
+  case common::POSITION: {
+    positionPassthrough(uav_state, tracker_command);
+    break;
+  }
 
-    case common::VELOCITY_HDG: {
-      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG, dt);
-      break;
-    }
+  case common::VELOCITY_HDG: {
+    PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG, dt);
+    break;
+  }
 
-    case common::VELOCITY_HDG_RATE: {
-      PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG_RATE, dt);
-      break;
-    }
+  case common::VELOCITY_HDG_RATE: {
+    PIDVelocityOutput(uav_state, tracker_command, common::VELOCITY_HDG_RATE, dt);
+    break;
+  }
 
-    case common::ACCELERATION_HDG: {
-      SE3Controller(uav_state, tracker_command, dt, common::ACCELERATION_HDG);
-      break;
-    }
+  case common::ACCELERATION_HDG: {
+    SE3Controller(uav_state, tracker_command, dt, common::ACCELERATION_HDG);
+    break;
+  }
 
-    case common::ACCELERATION_HDG_RATE: {
-      SE3Controller(uav_state, tracker_command, dt, common::ACCELERATION_HDG_RATE);
-      break;
-    }
+  case common::ACCELERATION_HDG_RATE: {
+    SE3Controller(uav_state, tracker_command, dt, common::ACCELERATION_HDG_RATE);
+    break;
+  }
 
-    case common::ATTITUDE: {
-      SE3Controller(uav_state, tracker_command, dt, common::ATTITUDE);
-      break;
-    }
+  case common::ATTITUDE: {
+    SE3Controller(uav_state, tracker_command, dt, common::ATTITUDE);
+    break;
+  }
 
-    case common::ATTITUDE_RATE: {
-      SE3Controller(uav_state, tracker_command, dt, common::ATTITUDE_RATE);
-      break;
-    }
+  case common::ATTITUDE_RATE: {
+    SE3Controller(uav_state, tracker_command, dt, common::ATTITUDE_RATE);
+    break;
+  }
 
-    case common::CONTROL_GROUP: {
-      SE3Controller(uav_state, tracker_command, dt, common::CONTROL_GROUP);
-      break;
-    }
+  case common::CONTROL_GROUP: {
+    SE3Controller(uav_state, tracker_command, dt, common::CONTROL_GROUP);
+    break;
+  }
 
-    case common::ACTUATORS_CMD: {
-      SE3Controller(uav_state, tracker_command, dt, common::ACTUATORS_CMD);
-      break;
-    }
+  case common::ACTUATORS_CMD: {
+    SE3Controller(uav_state, tracker_command, dt, common::ACTUATORS_CMD);
+    break;
+  }
 
-    default: {
-    }
+  default: {
+  }
   }
 
   return last_control_output_;
@@ -722,7 +722,7 @@ const mrs_msgs::msg::ControllerStatus Se3Controller::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void Se3Controller::switchOdometrySource(const mrs_msgs::msg::UavState& new_uav_state) {
+void Se3Controller::switchOdometrySource(const mrs_msgs::msg::UavState &new_uav_state) {
 
   RCLCPP_INFO(node_->get_logger(), "[Se3Controller]: switching the odometry source");
 
@@ -775,8 +775,8 @@ void Se3Controller::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> Se3Controller::setConstraints(
-    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request>& constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+Se3Controller::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
   std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> response = std::make_shared<mrs_msgs::srv::DynamicsConstraintsSrv::Response>();
 
@@ -804,8 +804,8 @@ const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> Se3Contro
 
 /* SE3Controller() //{ */
 
-void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command, const double& dt,
-                                  const common::CONTROL_OUTPUT& output_modality) {
+void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command, const double &dt,
+                                  const common::CONTROL_OUTPUT &output_modality) {
 
   auto drs_params  = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
@@ -892,7 +892,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
   Eigen::Vector3d Ev(0, 0, 0);
 
   if (tracker_command.use_velocity_horizontal || tracker_command.use_velocity_vertical ||
-      tracker_command.use_position_vertical) {  // use_position_vertical == true, not a mistake, this provides dampening
+      tracker_command.use_position_vertical) { // use_position_vertical == true, not a mistake, this provides dampening
     Ev = Rv - Ov;
   }
 
@@ -1070,8 +1070,8 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
   {
     std::scoped_lock lock(mutex_gains_);
 
-    Eigen::Vector2d Ep_fcu_untilted = Eigen::Vector2d(0, 0);  // position error in the untilted frame of the UAV
-    Eigen::Vector2d Ev_fcu_untilted = Eigen::Vector2d(0, 0);  // velocity error in the untilted frame of the UAV
+    Eigen::Vector2d Ep_fcu_untilted = Eigen::Vector2d(0, 0); // position error in the untilted frame of the UAV
+    Eigen::Vector2d Ev_fcu_untilted = Eigen::Vector2d(0, 0); // velocity error in the untilted frame of the UAV
 
     // get the position control error in the fcu_untilted frame
     {
@@ -1365,7 +1365,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
   } else {
 
-    Eigen::Vector3d bxd;  // desired heading vector
+    Eigen::Vector3d bxd; // desired heading vector
 
     if (tracker_command.use_heading) {
       bxd << cos(tracker_command.heading), sin(tracker_command.heading), 0;
@@ -1628,7 +1628,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState& uav_state, cons
 
 /* positionPassthrough() //{ */
 
-void Se3Controller::positionPassthrough(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
+void Se3Controller::positionPassthrough(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
     RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: the tracker did not provide position+hdg reference");
@@ -1677,8 +1677,8 @@ void Se3Controller::positionPassthrough(const mrs_msgs::msg::UavState& uav_state
 
 /* PIDVelocityOutput() //{ */
 
-void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command,
-                                      const common::CONTROL_OUTPUT& control_output, const double& dt) {
+void Se3Controller::PIDVelocityOutput(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command,
+                                      const common::CONTROL_OUTPUT &control_output, const double &dt) {
 
   if (!tracker_command.use_position_vertical || !tracker_command.use_position_horizontal || !tracker_command.use_heading) {
     RCLCPP_ERROR(node_->get_logger(), "[Se3Controller]: the tracker did not provide position+hdg reference");
@@ -1878,7 +1878,7 @@ void Se3Controller::timerGains() {
 /* calculateGainChange() //{ */
 
 double Se3Controller::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
-                                          bool& updated) {
+                                          bool &updated) {
 
   double change = desired_value - current_value;
 
@@ -1925,7 +1925,7 @@ double Se3Controller::calculateGainChange(const double dt, const double current_
 
 /* getHeadingSafely() //{ */
 
-double Se3Controller::getHeadingSafely(const mrs_msgs::msg::UavState& uav_state, const mrs_msgs::msg::TrackerCommand& tracker_command) {
+double Se3Controller::getHeadingSafely(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs::msg::TrackerCommand &tracker_command) {
 
   try {
     return mrs_lib::AttitudeConverter(uav_state.pose.orientation).getHeading();
@@ -1948,9 +1948,9 @@ double Se3Controller::getHeadingSafely(const mrs_msgs::msg::UavState& uav_state,
 
 //}
 
-}  // namespace se3_controller
+} // namespace se3_controller
 
-}  // namespace mrs_uav_controllers
+} // namespace mrs_uav_controllers
 
 #include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::se3_controller::Se3Controller, mrs_uav_managers::Controller)

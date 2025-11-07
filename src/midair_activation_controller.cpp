@@ -45,8 +45,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> setConstraints(
-      const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
+  const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+  setConstraints(const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints);
 
 private:
   rclcpp::Node::SharedPtr  node_;
@@ -218,161 +218,161 @@ MidairActivationController::ControlOutput MidairActivationController::updateActi
 
   switch (highest_modality.value()) {
 
-    case common::POSITION: {
+  case common::POSITION: {
 
-      mrs_msgs::msg::HwApiPositionCmd cmd;
+    mrs_msgs::msg::HwApiPositionCmd cmd;
 
-      cmd.header.stamp    = clock_->now();
-      cmd.header.frame_id = uav_state.header.frame_id;
+    cmd.header.stamp    = clock_->now();
+    cmd.header.frame_id = uav_state.header.frame_id;
 
-      cmd.position.x = uav_state.pose.position.x;
-      cmd.position.y = uav_state.pose.position.y;
-      cmd.position.z = uav_state.pose.position.z;
+    cmd.position.x = uav_state.pose.position.x;
+    cmd.position.y = uav_state.pose.position.y;
+    cmd.position.z = uav_state.pose.position.z;
 
-      cmd.heading = getHeadingSafely(uav_state, tracker_command);
+    cmd.heading = getHeadingSafely(uav_state, tracker_command);
 
-      control_output.control_output = cmd;
+    control_output.control_output = cmd;
 
-      break;
+    break;
+  }
+
+  case common::VELOCITY_HDG: {
+
+    mrs_msgs::msg::HwApiVelocityHdgCmd cmd;
+
+    cmd.header.stamp    = clock_->now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.velocity.x = uav_state.velocity.linear.x;
+    cmd.velocity.y = uav_state.velocity.linear.y;
+    cmd.velocity.z = uav_state.velocity.linear.z;
+
+    cmd.heading = getHeadingSafely(uav_state, tracker_command);
+
+    control_output.control_output = cmd;
+
+    break;
+  }
+
+  case common::VELOCITY_HDG_RATE: {
+
+    mrs_msgs::msg::HwApiVelocityHdgRateCmd cmd;
+
+    cmd.header.stamp    = clock_->now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.velocity.x = uav_state.velocity.linear.x;
+    cmd.velocity.y = uav_state.velocity.linear.y;
+    cmd.velocity.z = uav_state.velocity.linear.z;
+
+    cmd.heading_rate = 0;
+
+    control_output.control_output = cmd;
+
+    break;
+  }
+
+  case common::ACCELERATION_HDG: {
+
+    mrs_msgs::msg::HwApiAccelerationHdgCmd cmd;
+
+    cmd.header.stamp    = clock_->now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.acceleration.x = uav_state.acceleration.linear.x;
+    cmd.acceleration.y = uav_state.acceleration.linear.y;
+    cmd.acceleration.z = uav_state.acceleration.linear.z;
+
+    cmd.heading = getHeadingSafely(uav_state, tracker_command);
+
+    control_output.control_output = cmd;
+
+    break;
+  }
+
+  case common::ACCELERATION_HDG_RATE: {
+
+    mrs_msgs::msg::HwApiAccelerationHdgRateCmd cmd;
+
+    cmd.header.stamp    = clock_->now();
+    cmd.header.frame_id = uav_state.header.frame_id;
+
+    cmd.acceleration.x = uav_state.acceleration.linear.x;
+    cmd.acceleration.y = uav_state.acceleration.linear.y;
+    cmd.acceleration.z = uav_state.acceleration.linear.z;
+
+    cmd.heading_rate = 0;
+
+    control_output.control_output = cmd;
+
+    break;
+  }
+
+  case common::ATTITUDE: {
+
+    mrs_msgs::msg::HwApiAttitudeCmd cmd;
+
+    cmd.stamp = clock_->now();
+
+    cmd.orientation = uav_state.pose.orientation;
+    cmd.throttle    = hover_throttle_;
+
+    control_output.control_output = cmd;
+
+    break;
+  }
+
+  case common::ATTITUDE_RATE: {
+
+    mrs_msgs::msg::HwApiAttitudeRateCmd cmd;
+
+    cmd.stamp = clock_->now();
+
+    cmd.body_rate.x = 0;
+    cmd.body_rate.y = 0;
+    cmd.body_rate.z = 0;
+
+    cmd.throttle = hover_throttle_;
+
+    control_output.control_output = cmd;
+
+    break;
+  }
+
+  case common::CONTROL_GROUP: {
+
+    mrs_msgs::msg::HwApiControlGroupCmd cmd;
+
+    cmd.stamp = clock_->now();
+
+    cmd.roll     = 0;
+    cmd.pitch    = 0;
+    cmd.yaw      = 0;
+    cmd.throttle = hover_throttle_;
+
+    control_output.control_output = cmd;
+
+    break;
+  }
+
+  case common::ACTUATORS_CMD: {
+
+    mrs_msgs::msg::HwApiActuatorCmd cmd;
+
+    cmd.stamp = clock_->now();
+
+    for (int i = 0; i < common_handlers_->throttle_model.n_motors; i++) {
+      cmd.motors.push_back(hover_throttle_);
     }
 
-    case common::VELOCITY_HDG: {
+    control_output.control_output = cmd;
 
-      mrs_msgs::msg::HwApiVelocityHdgCmd cmd;
-
-      cmd.header.stamp    = clock_->now();
-      cmd.header.frame_id = uav_state.header.frame_id;
-
-      cmd.velocity.x = uav_state.velocity.linear.x;
-      cmd.velocity.y = uav_state.velocity.linear.y;
-      cmd.velocity.z = uav_state.velocity.linear.z;
-
-      cmd.heading = getHeadingSafely(uav_state, tracker_command);
-
-      control_output.control_output = cmd;
-
-      break;
-    }
-
-    case common::VELOCITY_HDG_RATE: {
-
-      mrs_msgs::msg::HwApiVelocityHdgRateCmd cmd;
-
-      cmd.header.stamp    = clock_->now();
-      cmd.header.frame_id = uav_state.header.frame_id;
-
-      cmd.velocity.x = uav_state.velocity.linear.x;
-      cmd.velocity.y = uav_state.velocity.linear.y;
-      cmd.velocity.z = uav_state.velocity.linear.z;
-
-      cmd.heading_rate = 0;
-
-      control_output.control_output = cmd;
-
-      break;
-    }
-
-    case common::ACCELERATION_HDG: {
-
-      mrs_msgs::msg::HwApiAccelerationHdgCmd cmd;
-
-      cmd.header.stamp    = clock_->now();
-      cmd.header.frame_id = uav_state.header.frame_id;
-
-      cmd.acceleration.x = uav_state.acceleration.linear.x;
-      cmd.acceleration.y = uav_state.acceleration.linear.y;
-      cmd.acceleration.z = uav_state.acceleration.linear.z;
-
-      cmd.heading = getHeadingSafely(uav_state, tracker_command);
-
-      control_output.control_output = cmd;
-
-      break;
-    }
-
-    case common::ACCELERATION_HDG_RATE: {
-
-      mrs_msgs::msg::HwApiAccelerationHdgRateCmd cmd;
-
-      cmd.header.stamp    = clock_->now();
-      cmd.header.frame_id = uav_state.header.frame_id;
-
-      cmd.acceleration.x = uav_state.acceleration.linear.x;
-      cmd.acceleration.y = uav_state.acceleration.linear.y;
-      cmd.acceleration.z = uav_state.acceleration.linear.z;
-
-      cmd.heading_rate = 0;
-
-      control_output.control_output = cmd;
-
-      break;
-    }
-
-    case common::ATTITUDE: {
-
-      mrs_msgs::msg::HwApiAttitudeCmd cmd;
-
-      cmd.stamp = clock_->now();
-
-      cmd.orientation = uav_state.pose.orientation;
-      cmd.throttle    = hover_throttle_;
-
-      control_output.control_output = cmd;
-
-      break;
-    }
-
-    case common::ATTITUDE_RATE: {
-
-      mrs_msgs::msg::HwApiAttitudeRateCmd cmd;
-
-      cmd.stamp = clock_->now();
-
-      cmd.body_rate.x = 0;
-      cmd.body_rate.y = 0;
-      cmd.body_rate.z = 0;
-
-      cmd.throttle = hover_throttle_;
-
-      control_output.control_output = cmd;
-
-      break;
-    }
-
-    case common::CONTROL_GROUP: {
-
-      mrs_msgs::msg::HwApiControlGroupCmd cmd;
-
-      cmd.stamp = clock_->now();
-
-      cmd.roll     = 0;
-      cmd.pitch    = 0;
-      cmd.yaw      = 0;
-      cmd.throttle = hover_throttle_;
-
-      control_output.control_output = cmd;
-
-      break;
-    }
-
-    case common::ACTUATORS_CMD: {
-
-      mrs_msgs::msg::HwApiActuatorCmd cmd;
-
-      cmd.stamp = clock_->now();
-
-      for (int i = 0; i < common_handlers_->throttle_model.n_motors; i++) {
-        cmd.motors.push_back(hover_throttle_);
-      }
-
-      control_output.control_output = cmd;
-
-      break;
-    }
+    break;
+  }
   }
 
   return control_output;
-}  // namespace midair_activation_controller
+} // namespace midair_activation_controller
 
 //}
 
@@ -405,8 +405,8 @@ void MidairActivationController::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response> MidairActivationController::setConstraints(
-    [[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
+const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Response>
+MidairActivationController::setConstraints([[maybe_unused]] const std::shared_ptr<mrs_msgs::srv::DynamicsConstraintsSrv::Request> &constraints) {
 
   return nullptr;
 }
@@ -438,9 +438,9 @@ double MidairActivationController::getHeadingSafely(const mrs_msgs::msg::UavStat
 
 //}
 
-}  // namespace midair_activation_controller
+} // namespace midair_activation_controller
 
-}  // namespace mrs_uav_controllers
+} // namespace mrs_uav_controllers
 
 #include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::midair_activation_controller::MidairActivationController, mrs_uav_managers::Controller)

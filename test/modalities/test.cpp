@@ -66,7 +66,7 @@ bool Tester::test(void) {
 
 // | ----------------- wait till the UAV lands ---------------- |
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 
   rclcpp::init(argc, argv);
 
