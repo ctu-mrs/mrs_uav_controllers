@@ -191,7 +191,7 @@ bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::sh
 
   // | ----------- calculate the default hover throttle ----------- |
 
-  hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g);
+  hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g, *node_);
 
   // | ------------------------ profiler ------------------------ |
 

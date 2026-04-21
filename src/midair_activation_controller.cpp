@@ -153,7 +153,7 @@ bool MidairActivationController::activate([[maybe_unused]] const ControlOutput &
 
   auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
 
-  hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g);
+  hover_throttle_ = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, _uav_mass_ * common_handlers_->g, *node_);
 
   is_active_ = true;
 

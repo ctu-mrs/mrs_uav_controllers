@@ -519,7 +519,7 @@ bool Se3Controller::activate(const ControlOutput &last_control_output) {
   // rampup check
   if (_rampup_enabled_ && throttle_last_controller) {
 
-    double hover_throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, activation_mass * common_handlers_->g);
+    double hover_throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, activation_mass * common_handlers_->g, *node_);
 
     double throttle_difference = hover_throttle - throttle_last_controller.value();
 
@@ -1413,7 +1413,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState &uav_state, cons
   } else {
 
     if (desired_thrust_force >= 0) {
-      throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, desired_thrust_force);
+      throttle = mrs_lib::quadratic_throttle_model::forceToThrottle(common_handlers_->throttle_model, desired_thrust_force, *node_);
     } else {
       RCLCPP_WARN_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: just so you know, the desired throttle force is negative (%.2f)",
                            desired_thrust_force);
