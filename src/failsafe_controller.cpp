@@ -257,7 +257,7 @@ bool FailsafeController::activate(const ControlOutput &last_control_output) {
     activation_control_output_.diagnostics.controller_enforcing_constraints = false;
 
     hover_throttle_ = _initial_throttle_percentage_ * mrs_lib::quadratic_throttle_model::forceToThrottle(
-                                                          common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g);
+                                                          common_handlers_->throttle_model, (_uav_mass_ + uav_mass_difference_) * common_handlers_->g, *node_);
 
     RCLCPP_INFO(node_->get_logger(), "[FailsafeController]: activated with uav_mass_difference %.2f kg, hover_throttle %.3f", uav_mass_difference_,
                 hover_throttle_);
