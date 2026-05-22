@@ -74,11 +74,11 @@ add_library(MrsUavControllers_MpcController SHARED
 target_link_libraries(MrsUavControllers_MpcController
   rclcpp::rclcpp
   rclcpp_components::component
-  mrs_msgs::mrs_msgs
+  ${mrs_msgs_TARGETS}
   mrs_lib::mrs_lib
   pluginlib::pluginlib
-  geometry_msgs::geometry_msgs
-  sensor_msgs::sensor_msgs
+  ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
   mrs_uav_managers::mrs_uav_managers
   Eigen3::Eigen
   ${mrs_mpc_solvers_TARGETS}
@@ -97,11 +97,11 @@ add_library(MrsUavControllers_Se3Controller SHARED
 target_link_libraries(MrsUavControllers_Se3Controller
   rclcpp::rclcpp
   rclcpp_components::component
-  mrs_msgs::mrs_msgs
+  ${mrs_msgs_TARGETS}
   mrs_lib::mrs_lib
   pluginlib::pluginlib
-  geometry_msgs::geometry_msgs
-  sensor_msgs::sensor_msgs
+  ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
   mrs_uav_managers::mrs_uav_managers
   Eigen3::Eigen
   ${mrs_mpc_solvers_TARGETS}
@@ -120,11 +120,11 @@ add_library(MrsUavControllers_FailsafeController SHARED
 target_link_libraries(MrsUavControllers_FailsafeController
   rclcpp::rclcpp
   rclcpp_components::component
-  mrs_msgs::mrs_msgs
+  ${mrs_msgs_TARGETS}
   mrs_lib::mrs_lib
   pluginlib::pluginlib
-  geometry_msgs::geometry_msgs
-  sensor_msgs::sensor_msgs
+  ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
   mrs_uav_managers::mrs_uav_managers
   Eigen3::Eigen
   ${mrs_mpc_solvers_TARGETS}
@@ -143,11 +143,11 @@ add_library(MrsUavControllers_MidairActivationController SHARED
 target_link_libraries(MrsUavControllers_MidairActivationController
   rclcpp::rclcpp
   rclcpp_components::component
-  mrs_msgs::mrs_msgs
+  ${mrs_msgs_TARGETS}
   mrs_lib::mrs_lib
   pluginlib::pluginlib
-  geometry_msgs::geometry_msgs
-  sensor_msgs::sensor_msgs
+  ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
   mrs_uav_managers::mrs_uav_managers
   Eigen3::Eigen
   mrs_uav_testing::mrs_uav_testing
