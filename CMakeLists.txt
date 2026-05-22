@@ -71,9 +71,18 @@ add_library(MrsUavControllers_MpcController SHARED
   src/common.cpp
   )
 
-ament_target_dependencies(MrsUavControllers_MpcController
-  mrs_mpc_solvers
-  ${DEPENDENCIES}
+target_link_libraries(MrsUavControllers_MpcController
+  rclcpp::rclcpp
+  rclcpp_components::component
+  mrs_msgs::mrs_msgs
+  mrs_lib::mrs_lib
+  pluginlib::pluginlib
+  geometry_msgs::geometry_msgs
+  sensor_msgs::sensor_msgs
+  mrs_uav_managers::mrs_uav_managers
+  Eigen3::Eigen
+  ${mrs_mpc_solvers_TARGETS}
+  mrs_uav_testing::mrs_uav_testing
   )
 
 target_compile_definitions(MrsUavControllers_MpcController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
@@ -85,9 +94,18 @@ add_library(MrsUavControllers_Se3Controller SHARED
   src/common.cpp
   )
 
-ament_target_dependencies(MrsUavControllers_Se3Controller
-  mrs_mpc_solvers
-  ${DEPENDENCIES}
+target_link_libraries(MrsUavControllers_Se3Controller
+  rclcpp::rclcpp
+  rclcpp_components::component
+  mrs_msgs::mrs_msgs
+  mrs_lib::mrs_lib
+  pluginlib::pluginlib
+  geometry_msgs::geometry_msgs
+  sensor_msgs::sensor_msgs
+  mrs_uav_managers::mrs_uav_managers
+  Eigen3::Eigen
+  ${mrs_mpc_solvers_TARGETS}
+  mrs_uav_testing::mrs_uav_testing
   )
 
 target_compile_definitions(MrsUavControllers_Se3Controller PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
@@ -99,8 +117,18 @@ add_library(MrsUavControllers_FailsafeController SHARED
   src/common.cpp
   )
 
-ament_target_dependencies(MrsUavControllers_FailsafeController
-  ${DEPENDENCIES}
+target_link_libraries(MrsUavControllers_FailsafeController
+  rclcpp::rclcpp
+  rclcpp_components::component
+  mrs_msgs::mrs_msgs
+  mrs_lib::mrs_lib
+  pluginlib::pluginlib
+  geometry_msgs::geometry_msgs
+  sensor_msgs::sensor_msgs
+  mrs_uav_managers::mrs_uav_managers
+  Eigen3::Eigen
+  ${mrs_mpc_solvers_TARGETS}
+  mrs_uav_testing::mrs_uav_testing
   )
 
 target_compile_definitions(MrsUavControllers_FailsafeController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
@@ -112,8 +140,17 @@ add_library(MrsUavControllers_MidairActivationController SHARED
   src/common.cpp
   )
 
-ament_target_dependencies(MrsUavControllers_MidairActivationController
-  ${DEPENDENCIES}
+target_link_libraries(MrsUavControllers_MidairActivationController
+  rclcpp::rclcpp
+  rclcpp_components::component
+  mrs_msgs::mrs_msgs
+  mrs_lib::mrs_lib
+  pluginlib::pluginlib
+  geometry_msgs::geometry_msgs
+  sensor_msgs::sensor_msgs
+  mrs_uav_managers::mrs_uav_managers
+  Eigen3::Eigen
+  mrs_uav_testing::mrs_uav_testing
   )
 
 target_compile_definitions(MrsUavControllers_MidairActivationController PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
