@@ -1108,7 +1108,7 @@ void Se3Controller::SE3Controller(const mrs_msgs::msg::UavState &uav_state, cons
 
       if (res) {
         Ev_fcu_untilted(0) = res.value().vector.x;
-        Ev_fcu_untilted(1) = res.value().vector.x;
+        Ev_fcu_untilted(1) = res.value().vector.y;
       } else {
         RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[Se3Controller]: could not transform the velocity error to fcu_untilted");
       }
