@@ -23,8 +23,6 @@ from std_msgs.msg import Bool
 
 def generate_test_description():
 
-    SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
-
     ld = launch.LaunchDescription()
 
     uav_type="x500"
@@ -44,14 +42,18 @@ def generate_test_description():
         description="",
         ))
 
-    # ld.add_action(
-    #         launch_ros.actions.Node(
-    #             package='rmw_zenoh_cpp',
-    #             namespace='',
-    #             executable='rmw_zenohd',
-    #             name='zenoh_router',
-    #         )
-    #     )
+    current_rmw = os.environ.get('RMW_IMPLEMENTATION', '')
+
+    if current_rmw == 'rmw_zenoh_cpp':
+        ld.add_action(
+            launch_ros.actions.Node(
+                package='rmw_zenoh_cpp',
+                namespace='',
+                executable='rmw_zenohd',
+                name='zenoh_router',
+                output='screen'
+            )
+        )
 
     ld.add_action(
         GroupAction([
