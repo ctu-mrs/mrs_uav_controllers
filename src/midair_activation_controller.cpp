@@ -111,10 +111,17 @@ bool MidairActivationController::initialize(const rclcpp::Node::SharedPtr       
 
   // | -------------------- loading my params ------------------- |
 
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
-                                              "/config/private/midair_activation_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
-                                              "/config/public/midair_activation_controller.yaml");
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                                   "/config/private/midair_activation_controller.yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[MidairActivationController]: failed to load the private config file");
+    return false;
+  }
+
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                                   "/config/public/midair_activation_controller.yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[MidairActivationController]: failed to load the public config file");
+    return false;
+  }
 
   if (!private_handlers->param_loader->loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "[MidairActivationController]: Could not load all parameters!");

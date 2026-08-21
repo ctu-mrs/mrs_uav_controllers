@@ -325,12 +325,29 @@ bool MpcController::initialize(const rclcpp::Node::SharedPtr &node, std::shared_
 
   // | -------------------- loading my params ------------------- |
 
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/mpc_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/mpc_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/" +
-                                              private_handlers->name_space + ".yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/" +
-                                              private_handlers->name_space + ".yaml");
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                                   "/config/private/mpc_controller.yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[%s]: failed to load the private config file", name_.c_str());
+    return false;
+  }
+
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                                   "/config/public/mpc_controller.yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[%s]: failed to load the public config file", name_.c_str());
+    return false;
+  }
+
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/" +
+                                                   private_handlers->name_space + ".yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[%s]: failed to load the private namespace config file", name_.c_str());
+    return false;
+  }
+
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/" +
+                                                   private_handlers->name_space + ".yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[%s]: failed to load the public namespace config file", name_.c_str());
+    return false;
+  }
 
   dynparam_mgr_->get_param_provider().copyYamls(private_handlers->param_loader->getParamProvider());
 

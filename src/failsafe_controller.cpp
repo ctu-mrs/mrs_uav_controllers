@@ -153,8 +153,17 @@ bool FailsafeController::initialize(const rclcpp::Node::SharedPtr &node, std::sh
 
   // | -------------------- loading my params ------------------- |
 
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/private/failsafe_controller.yaml");
-  private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") + "/config/public/failsafe_controller.yaml");
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                                   "/config/private/failsafe_controller.yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: failed to load the private config file");
+    return false;
+  }
+
+  if (!private_handlers->param_loader->addYamlFile(ament_index_cpp::get_package_share_directory("mrs_uav_controllers") +
+                                                   "/config/public/failsafe_controller.yaml")) {
+    RCLCPP_ERROR(node_->get_logger(), "[FailsafeController]: failed to load the public config file");
+    return false;
+  }
 
   private_handlers->param_loader->loadParam("throttle_output/throttle_decrease_rate", _throttle_decrease_rate_);
   private_handlers->param_loader->loadParam("throttle_output/initial_throttle_percentage", _initial_throttle_percentage_);
