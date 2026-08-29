@@ -1531,7 +1531,16 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
     } else if (tracker_command.use_position_vertical) {
 
-      uav_mass_difference_ += gains.km * Ep(2) * dt;
+      // antiwindup
+      double temp_gain = gains.km;
+
+      if (rampup_active_ ||
+          (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
+        temp_gain = 0;
+        RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
+      }
+
+      uav_mass_difference_ += temp_gain * Ep(2) * dt;
 
     } else if (tracker_command.use_velocity_vertical) {
 
@@ -1539,7 +1548,7 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
       double temp_gain = gains.km;
 
       if (rampup_active_ ||
-          (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ep(2) > 0 && uav_state.velocity.linear.z > 0) || (Ep(2) < 0 && uav_state.velocity.linear.z < 0)))) {
+          (std::abs(uav_state.velocity.linear.z) > 0.3 && ((Ev(2) > 0 && uav_state.velocity.linear.z > 0) || (Ev(2) < 0 && uav_state.velocity.linear.z < 0)))) {
         temp_gain = 0;
         RCLCPP_DEBUG_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: anti-windup for the mass kicks in", this->name_.c_str());
       }
