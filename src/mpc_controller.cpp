@@ -1031,14 +1031,14 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
     double velocity;
     double coef = 1.5;
 
-    if (std::abs(uav_state.acceleration.linear.z) < coef * max_acceleration_horizontal) {
+    if (std::abs(uav_state.acceleration.linear.z) < coef * max_acceleration_vertical) {
       acceleration = uav_state.acceleration.linear.z;
     } else {
       acceleration = tracker_command.acceleration.z;
 
       RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000,
                             "[%s]: odometry z acceleration exceeds constraints (%.2f > %.1f * %.2f m), using reference for initial condition", name_.c_str(),
-                            std::abs(uav_state.acceleration.linear.z), coef, max_acceleration_horizontal);
+                            std::abs(uav_state.acceleration.linear.z), coef, max_acceleration_vertical);
     }
 
     if (std::abs(uav_state.velocity.linear.z) < coef * max_speed_vertical) {
@@ -1346,7 +1346,7 @@ void MpcController::MPC(const mrs_msgs::msg::UavState &uav_state, const mrs_msgs
 
       if (res) {
         Ev_fcu_untilted(0) = res.value().vector.x;
-        Ev_fcu_untilted(1) = res.value().vector.x;
+        Ev_fcu_untilted(1) = res.value().vector.y;
       } else {
         RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: could not transform the velocity error to fcu_untilted", name_.c_str());
       }
