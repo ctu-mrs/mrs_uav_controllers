@@ -87,7 +87,6 @@ def generate_test_description():
                         'platform_config': platform_config,
                         # 'world_config': launch_dir+"/config/world_config.yaml",
                         'custom_config': [launch_dir,"/config/custom_config_",controller,"_controller.yaml"],
-                        # 'automatic_start_config': launch_dir+"/config/automatic_start.yaml",
                     }.items()
                 )
             ]
