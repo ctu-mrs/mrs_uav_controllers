@@ -1,5 +1,6 @@
-plugin:
-  input_mode:
+mrs_uav_hw_api:
+
+  inputs:
     actuators:             false
     control_group:         true
     attitude_rate:         false
@@ -9,3 +10,4 @@ plugin:
     velocity_hdg_rate:     false
     velocity_hdg:          false
     position:              false
+    feedforward:           true
